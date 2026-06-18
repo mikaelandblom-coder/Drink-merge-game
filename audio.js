@@ -1,0 +1,178 @@
+// All sound synthesis and music control.
+// Sounds are generated via Web Audio API — no file loading needed for SFX.
+
+let actx = null;
+let muted = false;
+let soundProfile = 'default'; // set per map; controls clink/pop timbre
+
+function setSoundProfile(mapId) {
+  soundProfile = mapId === 'saigon' ? 'wood' : 'default';
+}
+
+function ac() {
+  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+  return actx;
+}
+
+function initAudio() {
+  // Call once on first user gesture to unlock AudioContext on mobile.
+  ac();
+}
+
+function pop(tier) {
+  if (muted) return;
+  if (soundProfile === 'wood') { popWood(tier); return; }
+  const a = ac(), t = a.currentTime;
+  const f = 220 * Math.pow(1.18, tier);
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(f, t);
+  o.frequency.exponentialRampToValueAtTime(f * 1.8, t + 0.09);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.25);
+
+  const o2 = a.createOscillator(), g2 = a.createGain();
+  o2.type = 'triangle'; o2.frequency.setValueAtTime(f * 2.5, t);
+  g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(0.08, t + 0.02);
+  g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+  o2.connect(g2).connect(a.destination); o2.start(t); o2.stop(t + 0.32);
+}
+
+// Pho map: bubbly "bloop" merge sound — like soup combining in a pot
+function popWood(tier) {
+  const a = ac(), t = a.currentTime;
+  const f = 110 * Math.pow(1.15, tier);
+  // Warm rounded bubble tone
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(f * 1.4, t);
+  o.frequency.exponentialRampToValueAtTime(f * 0.8, t + 0.18);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.28, t + 0.015);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.3);
+  // Soft thump underneath
+  const o2 = a.createOscillator(), g2 = a.createGain();
+  o2.type = 'triangle'; o2.frequency.setValueAtTime(80 + tier * 12, t);
+  o2.frequency.exponentialRampToValueAtTime(40, t + 0.12);
+  g2.gain.setValueAtTime(0.18, t); g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+  o2.connect(g2).connect(a.destination); o2.start(t); o2.stop(t + 0.15);
+}
+
+function shoot() {
+  if (muted) return;
+  const a = ac(), t = a.currentTime;
+  const len = a.sampleRate * 0.15;
+  const buf = a.createBuffer(1, len, a.sampleRate);
+  const ch = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const src = a.createBufferSource(); src.buffer = buf;
+  const f = a.createBiquadFilter(); f.type = 'bandpass';
+  f.frequency.setValueAtTime(700, t); f.frequency.exponentialRampToValueAtTime(2200, t + 0.12);
+  const g = a.createGain();
+  g.gain.setValueAtTime(0.22, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
+  src.connect(f).connect(g).connect(a.destination); src.start(t);
+
+  const o = a.createOscillator(), g2 = a.createGain();
+  o.type = 'triangle'; o.frequency.setValueAtTime(320, t);
+  o.frequency.exponentialRampToValueAtTime(520, t + 0.08);
+  g2.gain.setValueAtTime(0.1, t); g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+  o.connect(g2).connect(a.destination); o.start(t); o.stop(t + 0.14);
+}
+
+function clink(impact) {
+  if (muted) return;
+  if (soundProfile === 'wood') { clinkWood(impact); return; }
+  const a = ac(), t = a.currentTime;
+  const vol = Math.min(0.14, impact * 0.032);
+  if (vol < 0.012) return;
+  const base = 1800 + Math.random() * 1400;
+  const partials = [1, 2.41, 3.88, 5.2];
+  const decays   = [0.22, 0.16, 0.11, 0.08];
+  partials.forEach((mult, i) => {
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(base * mult, t);
+    o.frequency.exponentialRampToValueAtTime(base * mult * 0.985, t + decays[i]);
+    const pv = vol * (i === 0 ? 1 : 0.45 / i);
+    g.gain.setValueAtTime(pv, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + decays[i]);
+    o.connect(g).connect(a.destination);
+    o.start(t); o.stop(t + decays[i] + 0.02);
+  });
+  const o2 = a.createOscillator(), g2 = a.createGain();
+  o2.type = 'triangle'; o2.frequency.setValueAtTime(base * 6, t);
+  g2.gain.setValueAtTime(vol * 0.5, t); g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.02);
+  o2.connect(g2).connect(a.destination); o2.start(t); o2.stop(t + 0.025);
+}
+
+// Pho map: wooden chopstick/bowl "tok" collision sound
+function clinkWood(impact) {
+  const a = ac(), t = a.currentTime;
+  const vol = Math.min(0.18, impact * 0.04);
+  if (vol < 0.014) return;
+  const base = 380 + Math.random() * 220; // lower, woodier range
+  // Main woody knock — two close partials like hollow wood
+  [1, 1.55].forEach((mult, i) => {
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(base * mult, t);
+    o.frequency.exponentialRampToValueAtTime(base * mult * 0.92, t + 0.06);
+    const pv = vol * (i === 0 ? 1 : 0.5);
+    g.gain.setValueAtTime(pv, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+    o.connect(g).connect(a.destination);
+    o.start(t); o.stop(t + 0.1);
+  });
+  // Short noise burst for the "attack" click
+  const len = Math.floor(a.sampleRate * 0.025);
+  const buf = a.createBuffer(1, len, a.sampleRate);
+  const ch = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const src = a.createBufferSource(); src.buffer = buf;
+  const flt = a.createBiquadFilter(); flt.type = 'bandpass';
+  flt.frequency.value = 900; flt.Q.value = 1.5;
+  const ng = a.createGain(); ng.gain.setValueAtTime(vol * 0.6, t);
+  src.connect(flt).connect(ng).connect(a.destination); src.start(t);
+}
+
+function coinTick() {
+  if (muted) return;
+  const a = ac(), t = a.currentTime;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = 'square'; o.frequency.setValueAtTime(1568, t);
+  o.frequency.setValueAtTime(2093, t + 0.04);
+  g.gain.setValueAtTime(0.05, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.13);
+}
+
+// ---------- music ----------
+let musicOn = true, musicStarted = false;
+let bgmEl = null;
+
+function initMusic(audioEl, volume, src) {
+  bgmEl = audioEl;
+  bgmEl.volume = volume;
+  if (src && bgmEl.getAttribute('src') !== src) {
+    bgmEl.pause();
+    bgmEl.setAttribute('src', src);
+    bgmEl.load();
+    musicStarted = false;
+  }
+}
+
+function startMusic() {
+  if (musicStarted) return;
+  musicStarted = true;
+  if (musicOn) bgmEl.play().catch(() => {});
+}
+
+function toggleMusic(btn) {
+  if (!musicStarted) { startMusic(); btn.textContent = 'music on'; return; }
+  musicOn = !musicOn;
+  btn.textContent = musicOn ? 'music on' : 'music off';
+  if (musicOn) bgmEl.play().catch(() => {}); else bgmEl.pause();
+}
+
+function toggleMute(btn) {
+  muted = !muted;
+  btn.textContent = muted ? 'sound off' : 'sound on';
+}
