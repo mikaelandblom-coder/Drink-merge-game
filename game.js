@@ -160,9 +160,10 @@ wireHUD(state);
 // ---------- render loop ----------
 let running = false;
 let wob = 0;
+let lastTs = 0;
 
-function render() {
-  wob += 0.05;
+function render(dt) {
+  wob += 0.05 * dt;
   drawBackground();
   drawDangerLine(DANGER_WY);
 
@@ -178,27 +179,29 @@ function render() {
   }
 
   if (!state.gameOver) {
-    recoil *= 0.82;
+    recoil *= Math.pow(0.82, dt);
     if (state.canShoot) drawDrink(sl.x, sl.y + recoil, state.nextTier, 1, wob);
   }
 
-  drawParticles(state.particles);
+  drawParticles(state.particles, dt);
   state.particles = state.particles.filter(p => p.life > 0);
 
   drawNextPreview(state.queuedTier);
 
-  drawBag(state.coinCount);
-  state.coins = updateCoins(state.coins, () => {
+  drawBag(state.coinCount, dt);
+  state.coins = updateCoins(state.coins, dt, () => {
     state.coinCount += 10;
     coinTick();
   });
   drawCoins(state.coins);
 }
 
-function loop() {
+function loop(ts) {
   if (!running) return;
+  const dt = lastTs ? Math.min((ts - lastTs) / (1000 / 60), 3) : 1;
+  lastTs = ts;
   Engine.update(engine, 1000 / 60);
-  render();
+  render(dt);
   checkOver();
   requestAnimationFrame(loop);
 }

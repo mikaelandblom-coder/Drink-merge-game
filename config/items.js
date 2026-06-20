@@ -32,7 +32,7 @@ const KYOTO_ITEMS = [
   { name:'dango',          r:26, glass:'#fdf5e6', liq:'#f4a261', sprite:'assets/images/kyoto-dango.png',       bodyRatio:0.50 },
   { name:'taiyaki',        r:31, glass:'#fdebd0', liq:'#e07b39', sprite:'assets/images/kyoto-taiyaki.png',     bodyRatio:0.72 },
   { name:'matcha softserve',r:37,glass:'#eafaf1', liq:'#52b788', sprite:'assets/images/kyoto-softserve.png',   bodyRatio:0.52 },
-  { name:'takoyaki',       r:44, glass:'#fdf3e7', liq:'#c97c3a', sprite:'assets/images/kyoto-takoyaki.png',    bodyRatio:0.80 },
+  { name:'takoyaki',       r:44, glass:'#fdf3e7', liq:'#c97c3a', sprite:'assets/images/kyoto-takoyaki.png',    bodyRatio:0.88 },
   { name:'matcha parfait', r:52, glass:'#f0fff4', liq:'#40916c', sprite:'assets/images/kyoto-parfait.png',     bodyRatio:0.48 },
   { name:'unaju',          r:60, glass:'#1a1a1a', liq:'#8b3a0f', sprite:'assets/images/kyoto-unaju.png',       bodyRatio:0.82 },
   { name:'matcha cake',    r:71, glass:'#eafaf1', liq:'#2d6a4f', sprite:'assets/images/kyoto-matcha-cake.png', bodyRatio:0.85 },

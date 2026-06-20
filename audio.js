@@ -169,25 +169,25 @@ function popCeramic(tier) {
 // Kyoto map: soft food bump — mochi/dango squishing together, no hard edges
 function clinkCeramic(impact) {
   const a = ac(), t = a.currentTime;
-  const vol = Math.min(0.15, impact * 0.035);
-  if (vol < 0.01) return;
-  // Warm low-mid thud — the soft body of the collision
-  const base = 180 + Math.random() * 120;
+  const vol = Math.min(0.35, impact * 0.08);
+  if (vol < 0.02) return;
+  // Warm thud — low-mid body, pitch drops like something soft compressing
+  const base = 200 + Math.random() * 120;
   const o = a.createOscillator(), g = a.createGain();
   o.type = 'sine';
   o.frequency.setValueAtTime(base, t);
-  o.frequency.exponentialRampToValueAtTime(base * 0.6, t + 0.08);
+  o.frequency.exponentialRampToValueAtTime(base * 0.55, t + 0.1);
   g.gain.setValueAtTime(vol, t);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
-  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.14);
-  // Muffled noise layer — the squish texture, heavily low-pass filtered
-  const len = Math.floor(a.sampleRate * 0.06);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.2);
+  // Squish texture — noise burst, less aggressively filtered so it's audible
+  const len = Math.floor(a.sampleRate * 0.07);
   const buf = a.createBuffer(1, len, a.sampleRate);
   const ch = buf.getChannelData(0);
   for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 1.5);
   const src = a.createBufferSource(); src.buffer = buf;
-  const flt = a.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 400;
-  const ng = a.createGain(); ng.gain.setValueAtTime(vol * 0.6, t);
+  const flt = a.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 900;
+  const ng = a.createGain(); ng.gain.setValueAtTime(vol * 0.9, t);
   src.connect(flt).connect(ng).connect(a.destination); src.start(t);
 }
 

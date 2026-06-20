@@ -78,9 +78,9 @@ function drawNextPreview(queuedTier) {
   ctx.fillText('NEXT', nb.x, nb.y + nb.r + 5);
 }
 
-function drawParticles(particles) {
+function drawParticles(particles, dt) {
   for (const p of particles) {
-    p.x += p.vx; p.y += p.vy; p.vy += 0.12; p.life -= 0.03;
+    p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 0.12 * dt; p.life -= 0.03 * dt;
     ctx.globalAlpha = Math.max(0, p.life);
     ctx.fillStyle = p.color;
     ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(0.01, p.size * p.life), 0, Math.PI * 2); ctx.fill();
@@ -111,9 +111,9 @@ function spawnCoins(x, y, n, coins) {
   }
 }
 
-function updateCoins(coins, onCoinLand) {
+function updateCoins(coins, dt, onCoinLand) {
   for (const c of coins) {
-    c.t += 0.010;
+    c.t += 0.010 * dt;
     if (c.t < 0) continue;
     if (c.t >= 1) { coinPop = 0.35; onCoinLand(); }
   }
@@ -142,8 +142,8 @@ function drawCoins(coins) {
   }
 }
 
-function drawBag(coinCount) {
-  coinPop *= 0.85;
+function drawBag(coinCount, dt) {
+  coinPop *= Math.pow(0.85, dt);
   const s2 = 1 + coinPop;
   const d = 64;
   ctx.save(); ctx.translate(BAG_POS.x, BAG_POS.y); ctx.scale(s2, s2);
