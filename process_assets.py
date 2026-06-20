@@ -97,6 +97,22 @@ PIPELINE = {
         {'file': 'bg-saigon.png', 'type': 'copy', 'name': 'bg-saigon'},
     ],
 
+    'kyoto': [
+        {
+            'file':      'sprite collecction.png',
+            'type':      'spritesheet',
+            'grid':      (3, 3),
+            'col_splits': [417, 835],
+            'row_splits': [418, 835],
+            'names':     [
+                'kyoto-ramune', 'kyoto-mochi', 'kyoto-dango',
+                'kyoto-taiyaki', 'kyoto-softserve', 'kyoto-takoyaki',
+                'kyoto-parfait', 'kyoto-unaju', 'kyoto-matcha-cake',
+            ],
+        },
+        {'file': 'background 2.png', 'type': 'copy', 'name': 'bg-kyoto'},
+    ],
+
     # 'teddybears': [
     #     {
     #         'file':      'teddy_drinks.png',

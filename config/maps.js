@@ -36,12 +36,16 @@ const MAPS = [
     id:       'kyoto',
     label:    'Kyoto',
     sublabel: 'Night Market',
-    locked:   true,
+    bg:       'assets/images/bg-kyoto.png',
+    bgm:      'assets/audio/Lantern Alley.mp3',
+    bgmVol:   0.35,
+    itemsData: null,
   },
 ];
 
 // Wire item sets after items.js has defined them.
 MAPS[0].itemsData = HAWAII_ITEMS;
 MAPS[1].itemsData = SAIGON_ITEMS;
+MAPS[2].itemsData = KYOTO_ITEMS;
 
 let ACTIVE_MAP = MAPS[0];

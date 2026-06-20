@@ -26,8 +26,20 @@ const SAIGON_ITEMS = [
   { name:'pho pot',      r:71, glass:'#e8e8e8', liq:'#8b6914', sprite:'assets/images/pho-pot.png',          bodyRatio:0.82 },
 ];
 
+const KYOTO_ITEMS = [
+  { name:'ramune marble',  r:15, glass:'#d0eeff', liq:'#7bc8f0', sprite:'assets/images/kyoto-ramune.png',      bodyRatio:0.82 },
+  { name:'ichigo daifuku', r:20, glass:'#fff0f5', liq:'#ff8fab', sprite:'assets/images/kyoto-mochi.png',       bodyRatio:0.85 },
+  { name:'dango',          r:26, glass:'#fdf5e6', liq:'#f4a261', sprite:'assets/images/kyoto-dango.png',       bodyRatio:0.50 },
+  { name:'taiyaki',        r:31, glass:'#fdebd0', liq:'#e07b39', sprite:'assets/images/kyoto-taiyaki.png',     bodyRatio:0.72 },
+  { name:'matcha softserve',r:37,glass:'#eafaf1', liq:'#52b788', sprite:'assets/images/kyoto-softserve.png',   bodyRatio:0.52 },
+  { name:'takoyaki',       r:44, glass:'#fdf3e7', liq:'#c97c3a', sprite:'assets/images/kyoto-takoyaki.png',    bodyRatio:0.80 },
+  { name:'matcha parfait', r:52, glass:'#f0fff4', liq:'#40916c', sprite:'assets/images/kyoto-parfait.png',     bodyRatio:0.48 },
+  { name:'unaju',          r:60, glass:'#1a1a1a', liq:'#8b3a0f', sprite:'assets/images/kyoto-unaju.png',       bodyRatio:0.82 },
+  { name:'matcha cake',    r:71, glass:'#eafaf1', liq:'#2d6a4f', sprite:'assets/images/kyoto-matcha-cake.png', bodyRatio:0.85 },
+];
+
 // Pre-load all sprites and compute physics radii for every item set at startup.
-[...HAWAII_ITEMS, ...SAIGON_ITEMS].forEach(item => {
+[...HAWAII_ITEMS, ...SAIGON_ITEMS, ...KYOTO_ITEMS].forEach(item => {
   item.img = new Image();
   item.img.src = item.sprite;
   item.physR = item.r * 2.4 * item.bodyRatio / 2 * 0.88;

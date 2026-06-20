@@ -55,7 +55,7 @@ function unpersp(sx, sy) {
 const engine = Engine.create();
 engine.gravity.y = 0; engine.gravity.x = 0;
 const wallOpts = { isStatic: true, restitution: 0.08 };
-const WALL_INSET = 10;
+const WALL_INSET = 0;
 Composite.add(engine.world, [
   Bodies.rectangle(W / 2,               -30,   W * 2, 60,   wallOpts),
   Bodies.rectangle(-30 + WALL_INSET,     H / 2, 60,   H * 2, wallOpts),

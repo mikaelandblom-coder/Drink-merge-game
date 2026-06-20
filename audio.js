@@ -6,7 +6,9 @@ let muted = false;
 let soundProfile = 'default'; // set per map; controls clink/pop timbre
 
 function setSoundProfile(mapId) {
-  soundProfile = mapId === 'saigon' ? 'wood' : 'default';
+  if (mapId === 'saigon') soundProfile = 'wood';
+  else if (mapId === 'kyoto') soundProfile = 'ceramic';
+  else soundProfile = 'default';
 }
 
 function ac() {
@@ -21,7 +23,8 @@ function initAudio() {
 
 function pop(tier) {
   if (muted) return;
-  if (soundProfile === 'wood') { popWood(tier); return; }
+  if (soundProfile === 'wood')    { popWood(tier);    return; }
+  if (soundProfile === 'ceramic') { popCeramic(tier); return; }
   const a = ac(), t = a.currentTime;
   const f = 220 * Math.pow(1.18, tier);
   const o = a.createOscillator(), g = a.createGain();
@@ -80,7 +83,8 @@ function shoot() {
 
 function clink(impact) {
   if (muted) return;
-  if (soundProfile === 'wood') { clinkWood(impact); return; }
+  if (soundProfile === 'wood')    { clinkWood(impact);    return; }
+  if (soundProfile === 'ceramic') { clinkCeramic(impact); return; }
   const a = ac(), t = a.currentTime;
   const vol = Math.min(0.14, impact * 0.032);
   if (vol < 0.012) return;
@@ -130,6 +134,59 @@ function clinkWood(impact) {
   const src = a.createBufferSource(); src.buffer = buf;
   const flt = a.createBiquadFilter(); flt.type = 'bandpass';
   flt.frequency.value = 900; flt.Q.value = 1.5;
+  const ng = a.createGain(); ng.gain.setValueAtTime(vol * 0.6, t);
+  src.connect(flt).connect(ng).connect(a.destination); src.start(t);
+}
+
+// Kyoto map: soft marimba pop — warm wooden tone like a mochi squish
+function popCeramic(tier) {
+  const a = ac(), t = a.currentTime;
+  const base = 320 * Math.pow(1.13, tier);
+  // Warm rounded body — triangle gives marimba softness
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = 'triangle'; o.frequency.setValueAtTime(base, t);
+  o.frequency.exponentialRampToValueAtTime(base * 0.88, t + 0.12);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.3, t + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.32);
+  // Soft harmonic — just a touch of sweetness on top
+  const o2 = a.createOscillator(), g2 = a.createGain();
+  o2.type = 'sine'; o2.frequency.setValueAtTime(base * 2.0, t);
+  g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(0.1, t + 0.01);
+  g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+  o2.connect(g2).connect(a.destination); o2.start(t); o2.stop(t + 0.2);
+  // Tiny soft pop at the front — the merge "squish"
+  const len = Math.floor(a.sampleRate * 0.03);
+  const buf = a.createBuffer(1, len, a.sampleRate);
+  const ch = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2);
+  const src = a.createBufferSource(); src.buffer = buf;
+  const flt = a.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 600;
+  const ng = a.createGain(); ng.gain.setValueAtTime(0.18, t);
+  src.connect(flt).connect(ng).connect(a.destination); src.start(t);
+}
+
+// Kyoto map: soft food bump — mochi/dango squishing together, no hard edges
+function clinkCeramic(impact) {
+  const a = ac(), t = a.currentTime;
+  const vol = Math.min(0.15, impact * 0.035);
+  if (vol < 0.01) return;
+  // Warm low-mid thud — the soft body of the collision
+  const base = 180 + Math.random() * 120;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(base, t);
+  o.frequency.exponentialRampToValueAtTime(base * 0.6, t + 0.08);
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.14);
+  // Muffled noise layer — the squish texture, heavily low-pass filtered
+  const len = Math.floor(a.sampleRate * 0.06);
+  const buf = a.createBuffer(1, len, a.sampleRate);
+  const ch = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 1.5);
+  const src = a.createBufferSource(); src.buffer = buf;
+  const flt = a.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 400;
   const ng = a.createGain(); ng.gain.setValueAtTime(vol * 0.6, t);
   src.connect(flt).connect(ng).connect(a.destination); src.start(t);
 }
