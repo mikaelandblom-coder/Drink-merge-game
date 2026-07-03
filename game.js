@@ -5,26 +5,30 @@ const { Engine, Bodies, Body, Composite, Events } = Matter;
 const canvas = document.getElementById('c');
 const dpr = window.devicePixelRatio || 1;
 
-// fitCanvas() can scale the CSS box up to MAX_SCALE. By rendering at that
-// resolution upfront the browser never has to upscale the canvas, which
-// would cause blurring on desktop. On small screens it simply downscales
-// (even sharper). Game-world coordinates stay at W × H throughout.
-const MAX_SCALE = 1.6;
-canvas.width  = Math.round(W * dpr * MAX_SCALE);
-canvas.height = Math.round(H * dpr * MAX_SCALE);
-canvas.style.width  = W + 'px';
-canvas.style.height = H + 'px';
+// Game-world coordinates stay at W × H throughout; fitCanvas() sizes both the
+// CSS box (up to MAX_SCALE) and the backing store. The backing store is only
+// as large as it needs to be for the display size — the device-pixel-ratio is
+// capped at MAX_PR so high-DPR phones don't render millions of wasted pixels
+// every frame (that oversampling is the biggest source of heat/battery drain).
+const MAX_SCALE = 1.6;  // max CSS upscale of the world box
+const MAX_PR    = 2;    // cap on backing-store pixel ratio
 const ctx = canvas.getContext('2d');
-ctx.scale(dpr * MAX_SCALE, dpr * MAX_SCALE);
-ctx.imageSmoothingEnabled = true;
-ctx.imageSmoothingQuality = 'high';
 
 function fitCanvas() {
-  const availW = window.innerWidth - 16;
+  const availW = window.innerWidth  - 16;
   const availH = window.innerHeight - 16;
-  const scale = Math.min(availW / W, availH / H, 1.6);
-  canvas.style.width  = (W * scale) + 'px';
-  canvas.style.height = (H * scale) + 'px';
+  if (availW <= 0 || availH <= 0) return;  // viewport not ready (e.g. mid orientation change)
+  const disp   = Math.min(availW / W, availH / H, MAX_SCALE);
+  canvas.style.width  = (W * disp) + 'px';
+  canvas.style.height = (H * disp) + 'px';
+
+  const pr = Math.min(dpr, MAX_PR);
+  canvas.width  = Math.round(W * disp * pr);
+  canvas.height = Math.round(H * disp * pr);
+  const s = canvas.width / W;  // uniform world→pixel scale (aspect preserved)
+  ctx.setTransform(s, 0, 0, s, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
 }
 fitCanvas();
 window.addEventListener('resize', fitCanvas);
@@ -54,7 +58,7 @@ function unpersp(sx, sy) {
 // ---------- physics ----------
 const engine = Engine.create();
 engine.gravity.y = 0; engine.gravity.x = 0;
-const wallOpts = { isStatic: true, restitution: 0.08 };
+const wallOpts = { isStatic: true, restitution: 0.02 };
 const WALL_INSET = 0;
 Composite.add(engine.world, [
   Bodies.rectangle(W / 2,               -30,   W * 2, 60,   wallOpts),
@@ -65,13 +69,64 @@ Composite.add(engine.world, [
 // ---------- per-map corner walls ----------
 let mapWalls = [];
 
+// Build the boundary from a dense chain of overlapping static circles rather
+// than angled rectangles. Chained rectangles meet at inner corners that poke
+// toward the play area — those notches are what items snag on. We also smooth
+// the traced polyline with Chaikin corner-cutting first, so the arc is a clean
+// curve rather than a jaggy zigzag, then lay circles (which have no corners of
+// their own) densely along it.
+const WALL_R   = 13;  // circle radius; ×2 gives ~26px effective wall thickness
+const WALL_MIN = 7;   // minimum spacing between adjacent circle centres
+
+// Chaikin corner-cutting: replace each span with two points 1/4 and 3/4 along
+// it, keeping the endpoints. Each pass rounds the polyline; a few passes make
+// it visually smooth.
+function chaikin(pts, passes) {
+  for (let p = 0; p < passes; p++) {
+    const out = [pts[0]];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      out.push({ x: a.x * 0.75 + b.x * 0.25, y: a.y * 0.75 + b.y * 0.25 });
+      out.push({ x: a.x * 0.25 + b.x * 0.75, y: a.y * 0.25 + b.y * 0.75 });
+    }
+    out.push(pts[pts.length - 1]);
+    pts = out;
+  }
+  return pts;
+}
+
 function applyMapWalls(map) {
   mapWalls.forEach(w => Composite.remove(engine.world, w));
   mapWalls = [];
   if (!map.cornerWalls) return;
-  mapWalls = map.cornerWalls.map(c =>
-    Bodies.rectangle(c.x, c.y, c.len, 28, { ...wallOpts, angle: c.angle })
-  );
+
+  // 1. Reconstruct the ordered boundary polyline from the segment endpoints,
+  //    merging the near-duplicate points where consecutive segments join.
+  let pts = [];
+  for (const c of map.cornerWalls) {
+    const hx = Math.cos(c.angle) * c.len / 2;
+    const hy = Math.sin(c.angle) * c.len / 2;
+    pts.push({ x: c.x - hx, y: c.y - hy });
+    pts.push({ x: c.x + hx, y: c.y + hy });
+  }
+  const merged = [];
+  for (const p of pts) {
+    const last = merged[merged.length - 1];
+    if (last && Math.hypot(p.x - last.x, p.y - last.y) < WALL_MIN) {
+      last.x = (last.x + p.x) / 2; last.y = (last.y + p.y) / 2;
+    } else {
+      merged.push({ x: p.x, y: p.y });
+    }
+  }
+
+  // 2. Smooth, then 3. lay circles — thinning any that crowd together.
+  const curve = chaikin(merged, 3);
+  let lastP = null;
+  for (const p of curve) {
+    if (lastP && Math.hypot(p.x - lastP.x, p.y - lastP.y) < WALL_MIN) continue;
+    mapWalls.push(Bodies.circle(p.x, p.y, WALL_R, wallOpts));
+    lastP = p;
+  }
   Composite.add(engine.world, mapWalls);
 }
 
@@ -92,7 +147,7 @@ const state = {
 
 function makeDrink(x, y, tier) {
   const b = Bodies.circle(x, y, ITEMS[tier].physR, {
-    restitution: 0.08, frictionAir: 0.028, friction: 0.3, density: 0.0012,
+    restitution: 0.02, frictionAir: 0.028, friction: 0.3, density: 0.0012,
   });
   b.plugin = { tier, born: performance.now(), merging: false };
   Composite.add(engine.world, b);
@@ -196,15 +251,37 @@ function render(dt) {
   drawCoins(state.coins);
 }
 
+const FRAME_MS = 1000 / 60;
+// Items are shot fast (~27px/step). A single physics step lets them jump deep
+// into a thin wall in one go, which Matter resolves by ejecting them inward
+// with a "pop" — so shots bounced back toward centre instead of sliding along
+// the edge. Splitting the frame into substeps keeps each step's motion small
+// enough to collide cleanly, so items graze and slide instead. Physics is cheap
+// next to drawing, so this costs little heat.
+const SUBSTEPS = 3;
+
 function loop(ts) {
   if (!running) return;
-  const dt = lastTs ? Math.min((ts - lastTs) / (1000 / 60), 3) : 1;
+  requestAnimationFrame(loop);
+  // Cap to ~60fps: on 120Hz phones rAF fires twice as often, so skip the
+  // extra frames rather than doing double the physics + drawing work (heat).
+  if (lastTs && ts - lastTs < FRAME_MS - 1) return;
+  const dt = lastTs ? Math.min((ts - lastTs) / FRAME_MS, 3) : 1;
   lastTs = ts;
-  Engine.update(engine, 1000 / 60);
+  for (let i = 0; i < SUBSTEPS; i++) Engine.update(engine, FRAME_MS / SUBSTEPS);
   render(dt);
   checkOver();
-  requestAnimationFrame(loop);
 }
+
+// Stop burning cycles when the tab/app is backgrounded; resume on return.
+document.addEventListener('visibilitychange', () => {
+  const onGameScreen = document.getElementById('wrap').style.display !== 'none';
+  if (document.hidden) {
+    running = false;
+  } else if (onGameScreen && !running) {
+    running = true; lastTs = 0; requestAnimationFrame(loop);
+  }
+});
 
 function startGame(map) {
   ACTIVE_MAP = map;
@@ -216,7 +293,8 @@ function startGame(map) {
   resetState();
   if (!running) {
     running = true;
-    loop();
+    lastTs = 0;
+    requestAnimationFrame(loop);
   }
 }
 
