@@ -35,7 +35,11 @@ fitCanvas();
 window.addEventListener('resize', fitCanvas);
 
 // ---------- perspective ----------
-const HORIZON   = H * 0.285;
+// The horizon (vanishing row) is per-map: each background's art has its own —
+// set via the hitbox editor and stored in config/hitboxes.js. startGame()
+// applies the active map's value.
+const DEFAULT_HORIZON = H * 0.285;
+let HORIZON     = DEFAULT_HORIZON;
 const NEAR_Y    = H;
 const FAR_SCALE = 0.55;
 const FAR_W     = W * 0.74;
@@ -324,6 +328,7 @@ document.addEventListener('visibilitychange', () => {
 function startGame(map) {
   ACTIVE_MAP = map;
   ITEMS = ACTIVE_MAP.itemsData;
+  HORIZON = (ACTIVE_MAP.horizon !== undefined) ? ACTIVE_MAP.horizon : DEFAULT_HORIZON;
   applyMapWalls(ACTIVE_MAP);
   loadMapAssets(ACTIVE_MAP);
   setSoundProfile(ACTIVE_MAP.id);

@@ -51,7 +51,11 @@ MAPS[3].itemsData = MAGE_ITEMS;
 if (typeof MAP_HITBOXES !== 'undefined') {
   for (const m of MAPS) {
     const hb = MAP_HITBOXES[m.id];
-    if (hb) { m.cornerWalls = hb.cornerWalls; m.sideInset = hb.sideInset || 0; }
+    if (hb) {
+      m.cornerWalls = hb.cornerWalls;
+      m.sideInset = hb.sideInset || 0;
+      if (hb.horizon !== undefined) m.horizon = hb.horizon;
+    }
   }
 }
 
