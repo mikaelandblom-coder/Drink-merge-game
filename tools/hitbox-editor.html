@@ -66,11 +66,14 @@
       <div class="row">
         <button class="ghost" id="undoBtn">Undo (Ctrl+Z)</button>
         <button class="ghost" id="resetBtn">Reset</button>
+        <button class="ghost" id="fitBtn">Fit</button>
       </div>
       <div class="hint">
         Drag knots to move.<br>
         Double-click curve: add knot.<br>
         Double-click knot (or Del): remove.<br>
+        Scroll: zoom · drag empty space or<br>
+        middle-drag: pan · Fit resets view.<br>
         Magenta = generated physics walls.
       </div>
     </fieldset>
@@ -137,11 +140,21 @@ function unpersp(sx, sy) {
 const S = Math.min(1.35, (innerHeight - 30) / H);      // display scale
 const canvas = document.getElementById('c');
 const dpr = devicePixelRatio || 1;
+const BASE = S * dpr;
 canvas.width = W * S * dpr; canvas.height = H * S * dpr;
 canvas.style.width = W * S + 'px'; canvas.style.height = H * S + 'px';
 const ctx = canvas.getContext('2d');
-ctx.setTransform(S * dpr, 0, 0, S * dpr, 0, 0);
+ctx.setTransform(BASE, 0, 0, BASE, 0, 0);
 const status = t => document.getElementById('status').textContent = t;
+
+// map-mode view: scroll-zoom toward the cursor + pan (drag empty space / middle mouse)
+const view = { z: 1, ox: 0, oy: 0 };
+function clampView() {
+  view.z = Math.max(1, Math.min(8, view.z));
+  if (view.z === 1) { view.ox = 0; view.oy = 0; return; }
+  view.ox = Math.max(-30, Math.min(W - W / view.z + 30, view.ox));
+  view.oy = Math.max(-30, Math.min(H - H / view.z + 30, view.oy));
+}
 
 // ───────────────────────── state ─────────────────────────────────────────────
 const WALL_THICK = 24, WALL_OVERLAP = 8;               // must match game.js
@@ -179,6 +192,7 @@ function loadMap(id) {
   document.getElementById('insetVal').textContent = inset;
   document.getElementById('closed').checked = closed;
   selKnot = -1; undoStack = []; dirtyWalls = true;
+  view.z = 1; view.ox = 0; view.oy = 0;
   if (testing) rebuildSim();
   draw();
 }
@@ -242,20 +256,25 @@ function drawWallRect(c) {
   ctx.closePath();
 }
 function drawMap() {
-  ctx.clearRect(0,0,W,H);
+  // clear in device space, then apply the zoom/pan view transform
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#0d0805'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.setTransform(BASE * view.z, 0, 0, BASE * view.z, -view.ox * BASE * view.z, -view.oy * BASE * view.z);
+  const sc = 1 / view.z;  // keeps line widths & handles constant on screen
+
   if (bg.complete && bg.naturalWidth) ctx.drawImage(bg, 0, 0, W, H);
   else { ctx.fillStyle = '#241a10'; ctx.fillRect(0,0,W,H); }
 
   // danger line + launcher, for context
   const d1 = persp(0, H-150), d2 = persp(W, H-150);
-  ctx.setLineDash([7,8]); ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=2;
+  ctx.setLineDash([7*sc,8*sc]); ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=2*sc;
   ctx.beginPath(); ctx.moveTo(d1.x,d1.y); ctx.lineTo(d2.x,d2.y); ctx.stroke(); ctx.setLineDash([]);
   const lp = persp(W/2, H-60);
-  ctx.strokeStyle='#7dff9a'; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.arc(lp.x, lp.y, 8, 0, Math.PI*2); ctx.stroke();
+  ctx.strokeStyle='#7dff9a'; ctx.lineWidth=2*sc;
+  ctx.beginPath(); ctx.arc(lp.x, lp.y, 8*sc, 0, Math.PI*2); ctx.stroke();
 
   // side walls at inset
-  ctx.strokeStyle='rgba(80,220,255,.8)'; ctx.lineWidth=2; ctx.setLineDash([4,5]);
+  ctx.strokeStyle='rgba(80,220,255,.8)'; ctx.lineWidth=2*sc; ctx.setLineDash([4*sc,5*sc]);
   for (const wx of [inset, W - inset]) {
     ctx.beginPath();
     for (let wy = 0; wy <= H; wy += 40) { const p = persp(wx, wy); wy ? ctx.lineTo(p.x,p.y) : ctx.moveTo(p.x,p.y); }
@@ -264,20 +283,20 @@ function drawMap() {
   ctx.setLineDash([]);
 
   // generated physics walls
-  ctx.fillStyle='rgba(255,0,255,.22)'; ctx.strokeStyle='rgba(255,0,255,.9)'; ctx.lineWidth=1.5;
+  ctx.fillStyle='rgba(255,0,255,.22)'; ctx.strokeStyle='rgba(255,0,255,.9)'; ctx.lineWidth=1.5*sc;
   for (const c of walls()) { drawWallRect(c); ctx.fill(); ctx.stroke(); }
 
   // spline + knots
   const pts = sampleSpline();
   if (pts.length) {
-    ctx.strokeStyle='#ffe27a'; ctx.lineWidth=2; ctx.beginPath();
+    ctx.strokeStyle='#ffe27a'; ctx.lineWidth=2*sc; ctx.beginPath();
     pts.forEach((s,i) => i ? ctx.lineTo(s.p[0], s.p[1]) : ctx.moveTo(s.p[0], s.p[1]));
     ctx.stroke();
   }
   knots.forEach((k, i) => {
-    ctx.beginPath(); ctx.arc(k[0], k[1], i === selKnot ? 8 : 6, 0, Math.PI*2);
+    ctx.beginPath(); ctx.arc(k[0], k[1], (i === selKnot ? 8 : 6)*sc, 0, Math.PI*2);
     ctx.fillStyle = i === selKnot ? '#ff7ab8' : '#fff3e0'; ctx.fill();
-    ctx.strokeStyle = '#17100b'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.strokeStyle = '#17100b'; ctx.lineWidth = 2*sc; ctx.stroke();
   });
 
   // sim balls
@@ -286,13 +305,13 @@ function drawMap() {
       const p = persp(b.position.x, b.position.y);
       ctx.beginPath(); ctx.arc(p.x, p.y, b.circleRadius * p.s, 0, Math.PI*2);
       ctx.fillStyle='rgba(125,255,154,.35)'; ctx.fill();
-      ctx.strokeStyle='#7dff9a'; ctx.lineWidth=2; ctx.stroke();
+      ctx.strokeStyle='#7dff9a'; ctx.lineWidth=2*sc; ctx.stroke();
     }
   }
 }
 
 function drawItem() {
-  ctx.clearRect(0,0,W,H);
+  ctx.setTransform(BASE, 0, 0, BASE, 0, 0);   // item mode ignores the map view
   ctx.fillStyle='#1c1209'; ctx.fillRect(0,0,W,H);
   if (!curItem) return;
   const it = curItem, cx = W/2, cy = H*0.55, r = it.r;
@@ -320,13 +339,20 @@ function draw() { mode === 'map' ? drawMap() : drawItem(); }
 // ───────────────────────── map interactions ──────────────────────────────────
 const toWorld = e => {
   const r = canvas.getBoundingClientRect();
-  return [(e.clientX - r.left) / S, (e.clientY - r.top) / S];
+  const px = (e.clientX - r.left) / S, py = (e.clientY - r.top) / S;
+  return mode === 'map' ? [px / view.z + view.ox, py / view.z + view.oy] : [px, py];
 };
 const near = (p, k, d) => Math.hypot(p[0]-k[0], p[1]-k[1]) < d;
 function snapshot() { undoStack.push(JSON.stringify({knots, closed, inset})); if (undoStack.length > 60) undoStack.shift(); }
 function changed() { dirtyWalls = true; if (testing) rebuildSim(); draw(); }
 
+let panning = false, panStart = null;
+
 canvas.addEventListener('pointerdown', e => {
+  if (mode === 'map' && e.button === 1) {          // middle mouse always pans
+    panning = true; panStart = { x: e.clientX, y: e.clientY, ox: view.ox, oy: view.oy };
+    e.preventDefault(); return;
+  }
   if (mode === 'item') {
     const [x,y] = toWorld(e);
     if (curItem && Math.abs(Math.hypot(x - W/2, y - H*0.55) - physR(curItem)*zoom) < 14) dragCircle = true;
@@ -334,12 +360,20 @@ canvas.addEventListener('pointerdown', e => {
   }
   if (testing) { shoot(toWorld(e)); return; }
   const p = toWorld(e);
-  dragKnot = knots.findIndex(k => near(p, k, 10 / S * 1.4));
+  dragKnot = knots.findIndex(k => near(p, k, 12 / view.z));
   selKnot = dragKnot;
   if (dragKnot >= 0) snapshot();
+  else if (view.z > 1) {                            // drag empty space to pan (when zoomed)
+    panning = true; panStart = { x: e.clientX, y: e.clientY, ox: view.ox, oy: view.oy };
+  }
   draw();
 });
 canvas.addEventListener('pointermove', e => {
+  if (panning) {
+    view.ox = panStart.ox - (e.clientX - panStart.x) / (S * view.z);
+    view.oy = panStart.oy - (e.clientY - panStart.y) / (S * view.z);
+    clampView(); draw(); return;
+  }
   const p = toWorld(e);
   if (mode === 'item') {
     if (dragCircle && curItem) {
@@ -356,12 +390,33 @@ canvas.addEventListener('pointermove', e => {
     changed();
   }
 });
-addEventListener('pointerup', () => { dragKnot = -1; dragCircle = false; });
+addEventListener('pointerup', () => { dragKnot = -1; dragCircle = false; panning = false; });
+
+// scroll-zoom: map mode zooms toward the cursor; item mode drives the zoom slider
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (mode === 'item') {
+    zoom = Math.max(1.5, Math.min(5, zoom * (e.deltaY < 0 ? 1.1 : 1/1.1)));
+    document.getElementById('zoom').value = zoom;
+    document.getElementById('zoomVal').textContent = zoom.toFixed(1);
+    draw(); return;
+  }
+  const r = canvas.getBoundingClientRect();
+  const px = (e.clientX - r.left) / S, py = (e.clientY - r.top) / S;
+  const wx = px / view.z + view.ox, wy = py / view.z + view.oy;   // world pt under cursor
+  view.z *= e.deltaY < 0 ? 1.15 : 1/1.15;
+  clampView();
+  view.ox = wx - px / view.z;                                      // keep cursor anchored
+  view.oy = wy - py / view.z;
+  clampView();
+  status(`Zoom ${Math.round(view.z * 100)}%${view.z > 1 ? ' — drag empty space or middle-drag to pan' : ''}`);
+  draw();
+}, { passive: false });
 
 canvas.addEventListener('dblclick', e => {
   if (mode !== 'map' || testing) return;
   const p = toWorld(e);
-  const hit = knots.findIndex(k => near(p, k, 12));
+  const hit = knots.findIndex(k => near(p, k, 12 / view.z));
   if (hit >= 0) {                                        // remove
     if (knots.length <= 3) return status('Need at least 3 knots.');
     snapshot(); knots.splice(hit, 1); selKnot = -1; changed();
@@ -369,7 +424,7 @@ canvas.addEventListener('dblclick', e => {
   }
   // insert on the nearest curve span
   const pts = sampleSpline();
-  let best = -1, bd = 18;
+  let best = -1, bd = 18 / view.z;
   pts.forEach(s => { const d = Math.hypot(s.p[0]-p[0], s.p[1]-p[1]); if (d < bd) { bd = d; best = s.span; } });
   if (best >= 0) { snapshot(); knots.splice(best + 1, 0, [p[0], p[1]]); selKnot = best + 1; changed(); status('Knot added.'); }
 });
@@ -395,6 +450,7 @@ document.getElementById('inset').oninput = e => {
 document.getElementById('closed').onchange = e => { snapshot(); closed = e.target.checked; changed(); };
 document.getElementById('undoBtn').onclick = () => dispatchEvent(new KeyboardEvent('keydown', {key:'z', ctrlKey:true}));
 document.getElementById('resetBtn').onclick = () => { snapshot(); loadMap(mapId); };
+document.getElementById('fitBtn').onclick = () => { view.z = 1; view.ox = 0; view.oy = 0; status('View reset.'); draw(); };
 
 // ───────────────────────── physics test mode ─────────────────────────────────
 const { Engine, Bodies, Body, Composite } = Matter;
