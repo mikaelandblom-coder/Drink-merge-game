@@ -51,7 +51,11 @@ const MAGE_ITEMS = [
 ];
 
 // Pre-load all sprites and compute physics radii for every item set at startup.
+// Collision-circle overrides from config/hitboxes.js (edited visually with
+// tools/hitbox-editor.html) are applied before physR is derived.
 [...HAWAII_ITEMS, ...SAIGON_ITEMS, ...KYOTO_ITEMS, ...MAGE_ITEMS].forEach(item => {
+  const hb = (typeof ITEM_HITBOXES !== 'undefined') && ITEM_HITBOXES[item.sprite];
+  if (hb && hb.bodyRatio) item.bodyRatio = hb.bodyRatio;
   item.img = new Image();
   item.img.src = item.sprite;
   item.physR = item.r * 2.4 * item.bodyRatio / 2 * 0.88;

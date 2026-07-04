@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<!-- Everything (configs, sprites, backgrounds) is referenced relative to the
+     project root, so the tool must be served from the same server as the game:
+     http://localhost:5500/tools/hitbox-editor.html -->
+<base href="../">
+<title>Hitbox Editor — Mixology Merge</title>
+<style>
+  :root { --bar:#17100b; --brass:#c89b5a; --neon:#ff7ab8; --foam:#fff3e0; --line:#3d2d1a; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bar); color:var(--foam); font-family:Georgia,serif; height:100vh;
+         display:flex; overflow:hidden; }
+  #side { width:280px; min-width:280px; border-right:1px solid var(--line); padding:14px;
+          display:flex; flex-direction:column; gap:10px; overflow-y:auto; }
+  h1 { font-size:16px; font-style:italic; color:var(--brass); letter-spacing:.08em; }
+  .tabs { display:flex; gap:6px; }
+  .tabs button { flex:1; background:none; border:1px solid var(--line); color:var(--brass);
+                 font-family:inherit; padding:6px 0; border-radius:8px; cursor:pointer; }
+  .tabs button.on { background:var(--brass); color:var(--bar); font-weight:bold; }
+  fieldset { border:1px solid var(--line); border-radius:10px; padding:10px; display:flex;
+             flex-direction:column; gap:8px; }
+  legend { font-size:11px; color:var(--brass); text-transform:uppercase; letter-spacing:.1em; padding:0 6px; }
+  label { font-size:12px; color:#c8a870; display:flex; align-items:center; gap:8px; justify-content:space-between; }
+  select,input[type=text] { background:#241a10; color:var(--foam); border:1px solid var(--line);
+           border-radius:6px; padding:5px 8px; font-family:inherit; font-size:12px; width:100%; }
+  input[type=range] { flex:1; accent-color:var(--brass); }
+  .val { min-width:34px; text-align:right; font-size:12px; color:var(--foam); }
+  button.act { background:var(--brass); border:none; color:var(--bar); font-family:inherit;
+               font-weight:bold; font-size:13px; padding:8px; border-radius:8px; cursor:pointer; }
+  button.ghost { background:none; border:1px solid var(--line); color:var(--brass);
+                 font-family:inherit; font-size:12px; padding:6px; border-radius:8px; cursor:pointer; }
+  button.on { outline:2px solid var(--neon); }
+  .hint { font-size:11px; color:#8a6f52; line-height:1.5; }
+  #stage { flex:1; display:flex; align-items:center; justify-content:center; background:#0d0805; }
+  canvas { border-radius:10px; box-shadow:0 0 0 2px var(--line), 0 18px 50px rgba(0,0,0,.6); }
+  #status { position:fixed; bottom:0; left:280px; right:0; padding:5px 12px; font-size:11px;
+            color:#8a6f52; background:rgba(13,8,5,.9); border-top:1px solid var(--line); }
+  .row { display:flex; gap:6px; }
+  .row > * { flex:1; }
+  #itemPanel, #mapPanel { display:none; }
+  #itemPanel.show, #mapPanel.show { display:flex; flex-direction:column; gap:10px; }
+  .readout { font-size:12px; color:var(--foam); background:#241a10; border-radius:6px; padding:6px 8px; }
+</style>
+</head>
+<body>
+
+<div id="side">
+  <h1>HITBOX EDITOR</h1>
+  <div class="tabs">
+    <button id="tabMap" class="on">Map</button>
+    <button id="tabItem">Item</button>
+  </div>
+
+  <div id="mapPanel" class="show">
+    <fieldset>
+      <legend>Map</legend>
+      <select id="mapSel"></select>
+      <label>custom bg <input type="file" id="bgFile" accept="image/*" style="width:150px"></label>
+    </fieldset>
+    <fieldset>
+      <legend>Spline</legend>
+      <label>side inset <input type="range" id="inset" min="-24" max="12" step="1"><span class="val" id="insetVal"></span></label>
+      <label>closed loop <input type="checkbox" id="closed"></label>
+      <div class="row">
+        <button class="ghost" id="undoBtn">Undo (Ctrl+Z)</button>
+        <button class="ghost" id="resetBtn">Reset</button>
+      </div>
+      <div class="hint">
+        Drag knots to move.<br>
+        Double-click curve: add knot.<br>
+        Double-click knot (or Del): remove.<br>
+        Magenta = generated physics walls.
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Test physics</legend>
+      <button class="ghost" id="testBtn">Enter test mode</button>
+      <label>ball size <input type="range" id="ballR" min="8" max="45" step="1" value="18"><span class="val" id="ballRVal">18</span></label>
+      <button class="ghost" id="clearBalls">Clear balls</button>
+      <div class="hint">In test mode, click anywhere to shoot a ball from the launcher — exactly like in the game.</div>
+    </fieldset>
+  </div>
+
+  <div id="itemPanel">
+    <fieldset>
+      <legend>Item</legend>
+      <select id="itemSel"></select>
+      <label>zoom <input type="range" id="zoom" min="1.5" max="5" step="0.1" value="3"><span class="val" id="zoomVal">3.0</span></label>
+    </fieldset>
+    <fieldset>
+      <legend>Collision circle</legend>
+      <div class="readout" id="itemRead">–</div>
+      <div class="row">
+        <button class="ghost" id="itemReset">Reset override</button>
+      </div>
+      <div class="hint">Drag the cyan circle's edge to resize the collision body. The dashed line is where the item rests on neighbours.</div>
+    </fieldset>
+  </div>
+
+  <fieldset>
+    <legend>Save</legend>
+    <button class="act" id="saveDisk">Save to config/hitboxes.js…</button>
+    <div class="row">
+      <button class="ghost" id="copyBtn">Copy</button>
+      <button class="ghost" id="dlBtn">Download</button>
+    </div>
+    <div class="hint">“Save to…” asks once for the file, then overwrites it on every save (Chrome/Edge). Reload the game tab to see changes.</div>
+  </fieldset>
+</div>
+
+<div id="stage"><canvas id="c"></canvas></div>
+<div id="status">Ready.</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+<script src="config/constants.js"></script>
+<script src="config/hitboxes.js"></script>
+<script src="config/items.js"></script>
+<script src="config/maps.js"></script>
+<script>
+'use strict';
+// ───────────────────────── perspective (same constants as game.js) ──────────
+const HORIZON = H * 0.285, FAR_SCALE = 0.55, FAR_W = W * 0.74, NEAR_Y = H;
+function persp(wx, wy) {
+  const t = wy / H, rowW = FAR_W + (W - FAR_W) * t;
+  return { x: W/2 + (wx - W/2) * (rowW / W), y: HORIZON + (NEAR_Y - HORIZON) * t,
+           s: FAR_SCALE + (1 - FAR_SCALE) * t };
+}
+function unpersp(sx, sy) {
+  const t = Math.max(0, Math.min(1, (sy - HORIZON) / (NEAR_Y - HORIZON)));
+  const rowW = FAR_W + (W - FAR_W) * t;
+  return { x: W/2 + (sx - W/2) * (W / rowW), y: t * H };
+}
+
+// ───────────────────────── canvas ────────────────────────────────────────────
+const S = Math.min(1.35, (innerHeight - 30) / H);      // display scale
+const canvas = document.getElementById('c');
+const dpr = devicePixelRatio || 1;
+canvas.width = W * S * dpr; canvas.height = H * S * dpr;
+canvas.style.width = W * S + 'px'; canvas.style.height = H * S + 'px';
+const ctx = canvas.getContext('2d');
+ctx.setTransform(S * dpr, 0, 0, S * dpr, 0, 0);
+const status = t => document.getElementById('status').textContent = t;
+
+// ───────────────────────── state ─────────────────────────────────────────────
+const WALL_THICK = 24, WALL_OVERLAP = 8;               // must match game.js
+let mode = 'map';                                       // 'map' | 'item'
+let mapId, knots = [], closed = false, inset = 0;
+let selKnot = -1, dragKnot = -1, undoStack = [];
+let bg = new Image();
+let testing = false, engine = null, balls = [], wallSegs = [];
+let dirtyWalls = true;
+
+// item mode
+let curItem = null, zoom = 3, dragCircle = false;
+
+// ───────────────────────── map data in/out ───────────────────────────────────
+const editableMaps = MAPS.filter(m => m.bg);
+const mapSel = document.getElementById('mapSel');
+editableMaps.forEach(m => mapSel.add(new Option(`${m.label} (${m.id})`, m.id)));
+
+function loadMap(id) {
+  mapId = id;
+  const m = editableMaps.find(x => x.id === id);
+  bg = new Image(); bg.src = m.bg;
+  bg.onload = draw;
+  const hb = MAP_HITBOXES[id];
+  if (hb) {
+    knots  = hb.knots.map(k => [...k]);
+    closed = !!hb.closed;
+    inset  = hb.sideInset || 0;
+  } else {
+    // sensible default: gentle arc across the upper third
+    knots  = [[60, 300], [120, 240], [210, 220], [300, 240], [360, 300]];
+    closed = false; inset = 0;
+  }
+  document.getElementById('inset').value = inset;
+  document.getElementById('insetVal').textContent = inset;
+  document.getElementById('closed').checked = closed;
+  selKnot = -1; undoStack = []; dirtyWalls = true;
+  if (testing) rebuildSim();
+  draw();
+}
+mapSel.onchange = () => loadMap(mapSel.value);
+document.getElementById('bgFile').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  bg = new Image(); bg.src = URL.createObjectURL(f); bg.onload = draw;
+  status(`Custom background loaded (${f.name}) — map id stays "${mapId}".`);
+};
+
+// ───────────────────────── spline (Catmull-Rom) ──────────────────────────────
+function cr(p0, p1, p2, p3, t) {
+  const t2 = t*t, t3 = t2*t;
+  return [
+    0.5*((2*p1[0]) + (-p0[0]+p2[0])*t + (2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t2 + (-p0[0]+3*p1[0]-3*p2[0]+p3[0])*t3),
+    0.5*((2*p1[1]) + (-p0[1]+p2[1])*t + (2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t2 + (-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t3),
+  ];
+}
+// Sampled flat polyline; each sample remembers which knot span it came from.
+function sampleSpline() {
+  const n = knots.length, pts = [];
+  if (n < 2) return pts;
+  const spans = closed ? n : n - 1;
+  for (let i = 0; i < spans; i++) {
+    const P = j => knots[closed ? (j+n)%n : Math.max(0, Math.min(n-1, j))];
+    const p0 = P(i-1), p1 = P(i), p2 = P(i+1), p3 = P(i+2);
+    const steps = Math.max(6, Math.round(Math.hypot(p2[0]-p1[0], p2[1]-p1[1]) / 7));
+    for (let s = 0; s < steps; s++) pts.push({ p: cr(p0,p1,p2,p3, s/steps), span: i });
+  }
+  pts.push({ p: [...knots[closed ? 0 : n-1]], span: spans - 1 });
+  return pts;
+}
+
+// Flat spline → perspective-corrected physics wall segments (game format).
+function buildWalls() {
+  const samples = sampleSpline().map(s => unpersp(s.p[0], s.p[1]));
+  const segs = []; let a = samples[0];
+  for (let i = 1; i < samples.length; i++) {
+    const b = samples[i];
+    const last = i === samples.length - 1;
+    if (Math.hypot(b.x-a.x, b.y-a.y) >= 30 || last) {
+      const len = Math.hypot(b.x-a.x, b.y-a.y);
+      if (len >= 6) segs.push({ x:+((a.x+b.x)/2).toFixed(0), y:+((a.y+b.y)/2).toFixed(0),
+                                len:+len.toFixed(0), angle:+Math.atan2(b.y-a.y, b.x-a.x).toFixed(3) });
+      a = b;
+    }
+  }
+  return segs;
+}
+function walls() { if (dirtyWalls) { wallSegs = buildWalls(); dirtyWalls = false; } return wallSegs; }
+
+// ───────────────────────── drawing ───────────────────────────────────────────
+function drawWallRect(c) {
+  const L2 = (c.len + WALL_OVERLAP)/2, T2 = WALL_THICK/2;
+  const cos = Math.cos(c.angle), sin = Math.sin(c.angle);
+  ctx.beginPath();
+  [[-L2,-T2],[L2,-T2],[L2,T2],[-L2,T2]].forEach(([lx,ly], i) => {
+    const p = persp(c.x + lx*cos - ly*sin, c.y + lx*sin + ly*cos);
+    i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y);
+  });
+  ctx.closePath();
+}
+function drawMap() {
+  ctx.clearRect(0,0,W,H);
+  if (bg.complete && bg.naturalWidth) ctx.drawImage(bg, 0, 0, W, H);
+  else { ctx.fillStyle = '#241a10'; ctx.fillRect(0,0,W,H); }
+
+  // danger line + launcher, for context
+  const d1 = persp(0, H-150), d2 = persp(W, H-150);
+  ctx.setLineDash([7,8]); ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(d1.x,d1.y); ctx.lineTo(d2.x,d2.y); ctx.stroke(); ctx.setLineDash([]);
+  const lp = persp(W/2, H-60);
+  ctx.strokeStyle='#7dff9a'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(lp.x, lp.y, 8, 0, Math.PI*2); ctx.stroke();
+
+  // side walls at inset
+  ctx.strokeStyle='rgba(80,220,255,.8)'; ctx.lineWidth=2; ctx.setLineDash([4,5]);
+  for (const wx of [inset, W - inset]) {
+    ctx.beginPath();
+    for (let wy = 0; wy <= H; wy += 40) { const p = persp(wx, wy); wy ? ctx.lineTo(p.x,p.y) : ctx.moveTo(p.x,p.y); }
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // generated physics walls
+  ctx.fillStyle='rgba(255,0,255,.22)'; ctx.strokeStyle='rgba(255,0,255,.9)'; ctx.lineWidth=1.5;
+  for (const c of walls()) { drawWallRect(c); ctx.fill(); ctx.stroke(); }
+
+  // spline + knots
+  const pts = sampleSpline();
+  if (pts.length) {
+    ctx.strokeStyle='#ffe27a'; ctx.lineWidth=2; ctx.beginPath();
+    pts.forEach((s,i) => i ? ctx.lineTo(s.p[0], s.p[1]) : ctx.moveTo(s.p[0], s.p[1]));
+    ctx.stroke();
+  }
+  knots.forEach((k, i) => {
+    ctx.beginPath(); ctx.arc(k[0], k[1], i === selKnot ? 8 : 6, 0, Math.PI*2);
+    ctx.fillStyle = i === selKnot ? '#ff7ab8' : '#fff3e0'; ctx.fill();
+    ctx.strokeStyle = '#17100b'; ctx.lineWidth = 2; ctx.stroke();
+  });
+
+  // sim balls
+  if (testing && engine) {
+    for (const b of balls) {
+      const p = persp(b.position.x, b.position.y);
+      ctx.beginPath(); ctx.arc(p.x, p.y, b.circleRadius * p.s, 0, Math.PI*2);
+      ctx.fillStyle='rgba(125,255,154,.35)'; ctx.fill();
+      ctx.strokeStyle='#7dff9a'; ctx.lineWidth=2; ctx.stroke();
+    }
+  }
+}
+
+function drawItem() {
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#1c1209'; ctx.fillRect(0,0,W,H);
+  if (!curItem) return;
+  const it = curItem, cx = W/2, cy = H*0.55, r = it.r;
+  // resting line: neighbours touch at the physics circle's edge
+  ctx.setLineDash([6,6]); ctx.strokeStyle='rgba(255,255,255,.25)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(20, cy + physR(it)*zoom); ctx.lineTo(W-20, cy + physR(it)*zoom); ctx.stroke();
+  ctx.setLineDash([]);
+  // sprite exactly as the game draws it (body centre at cx,cy)
+  if (it.img && it.img.complete && it.img.naturalWidth) {
+    const dispH = r * 2.4 * zoom, dispW = dispH * (it.img.naturalWidth / it.img.naturalHeight);
+    ctx.drawImage(it.img, cx - dispW/2, cy + r*0.75*zoom - dispH, dispW, dispH);
+  }
+  // collision circle
+  ctx.beginPath(); ctx.arc(cx, cy, physR(it)*zoom, 0, Math.PI*2);
+  ctx.fillStyle='rgba(80,220,255,.15)'; ctx.fill();
+  ctx.strokeStyle='#50dcff'; ctx.lineWidth=2; ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI*2); ctx.fillStyle='#50dcff'; ctx.fill();
+  document.getElementById('itemRead').textContent =
+    `${it.name} — bodyRatio ${it.bodyRatio.toFixed(3)}  ·  physR ${physR(it).toFixed(1)}px`;
+}
+const physR = it => it.r * 2.4 * it.bodyRatio / 2 * 0.88;
+
+function draw() { mode === 'map' ? drawMap() : drawItem(); }
+
+// ───────────────────────── map interactions ──────────────────────────────────
+const toWorld = e => {
+  const r = canvas.getBoundingClientRect();
+  return [(e.clientX - r.left) / S, (e.clientY - r.top) / S];
+};
+const near = (p, k, d) => Math.hypot(p[0]-k[0], p[1]-k[1]) < d;
+function snapshot() { undoStack.push(JSON.stringify({knots, closed, inset})); if (undoStack.length > 60) undoStack.shift(); }
+function changed() { dirtyWalls = true; if (testing) rebuildSim(); draw(); }
+
+canvas.addEventListener('pointerdown', e => {
+  if (mode === 'item') {
+    const [x,y] = toWorld(e);
+    if (curItem && Math.abs(Math.hypot(x - W/2, y - H*0.55) - physR(curItem)*zoom) < 14) dragCircle = true;
+    return;
+  }
+  if (testing) { shoot(toWorld(e)); return; }
+  const p = toWorld(e);
+  dragKnot = knots.findIndex(k => near(p, k, 10 / S * 1.4));
+  selKnot = dragKnot;
+  if (dragKnot >= 0) snapshot();
+  draw();
+});
+canvas.addEventListener('pointermove', e => {
+  const p = toWorld(e);
+  if (mode === 'item') {
+    if (dragCircle && curItem) {
+      const d = Math.hypot(p[0] - W/2, p[1] - H*0.55);
+      curItem.bodyRatio = Math.max(0.1, Math.min(1.2, (d / zoom) * 2 / (curItem.r * 2.4 * 0.88)));
+      curItem.physR = physR(curItem);
+      ITEM_HITBOXES[curItem.sprite] = { bodyRatio: +curItem.bodyRatio.toFixed(3) };
+      draw();
+    }
+    return;
+  }
+  if (dragKnot >= 0) {
+    knots[dragKnot] = [Math.max(2, Math.min(W-2, p[0])), Math.max(2, Math.min(H-2, p[1]))];
+    changed();
+  }
+});
+addEventListener('pointerup', () => { dragKnot = -1; dragCircle = false; });
+
+canvas.addEventListener('dblclick', e => {
+  if (mode !== 'map' || testing) return;
+  const p = toWorld(e);
+  const hit = knots.findIndex(k => near(p, k, 12));
+  if (hit >= 0) {                                        // remove
+    if (knots.length <= 3) return status('Need at least 3 knots.');
+    snapshot(); knots.splice(hit, 1); selKnot = -1; changed();
+    return status('Knot removed.');
+  }
+  // insert on the nearest curve span
+  const pts = sampleSpline();
+  let best = -1, bd = 18;
+  pts.forEach(s => { const d = Math.hypot(s.p[0]-p[0], s.p[1]-p[1]); if (d < bd) { bd = d; best = s.span; } });
+  if (best >= 0) { snapshot(); knots.splice(best + 1, 0, [p[0], p[1]]); selKnot = best + 1; changed(); status('Knot added.'); }
+});
+addEventListener('keydown', e => {
+  if (e.key === 'Delete' && mode === 'map' && selKnot >= 0 && knots.length > 3) {
+    snapshot(); knots.splice(selKnot, 1); selKnot = -1; changed();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && undoStack.length) {
+    const s = JSON.parse(undoStack.pop());
+    knots = s.knots; closed = s.closed; inset = s.inset;
+    document.getElementById('inset').value = inset;
+    document.getElementById('insetVal').textContent = inset;
+    document.getElementById('closed').checked = closed;
+    changed();
+  }
+});
+
+document.getElementById('inset').oninput = e => {
+  inset = +e.target.value;
+  document.getElementById('insetVal').textContent = inset;
+  changed();
+};
+document.getElementById('closed').onchange = e => { snapshot(); closed = e.target.checked; changed(); };
+document.getElementById('undoBtn').onclick = () => dispatchEvent(new KeyboardEvent('keydown', {key:'z', ctrlKey:true}));
+document.getElementById('resetBtn').onclick = () => { snapshot(); loadMap(mapId); };
+
+// ───────────────────────── physics test mode ─────────────────────────────────
+const { Engine, Bodies, Body, Composite } = Matter;
+function rebuildSim() {
+  engine = Engine.create(); engine.gravity.x = 0; engine.gravity.y = 0;
+  const opts = { isStatic: true, restitution: 0.02 };
+  const statics = [
+    Bodies.rectangle(W/2, -30, W*2, 60, opts),
+    Bodies.rectangle(-30 + inset, H/2, 60, H*2, opts),
+    Bodies.rectangle(W + 30 - inset, H/2, 60, H*2, opts),
+    ...walls().map(c => Bodies.rectangle(c.x, c.y, c.len + WALL_OVERLAP, WALL_THICK,
+        { ...opts, angle: c.angle, chamfer: { radius: WALL_THICK/2 } })),
+  ];
+  Composite.add(engine.world, statics);
+  balls = [];
+}
+function shoot(flat) {
+  const t = unpersp(flat[0], flat[1]);
+  const lx = W/2, ly = H - 60;
+  const dx = t.x - lx, dy = t.y - ly, len = Math.max(1, Math.hypot(dx, dy));
+  const r = +document.getElementById('ballR').value;
+  const b = Bodies.circle(lx, ly - r - 4, r, { restitution: 0.02, frictionAir: 0.028, friction: 0.3, density: 0.0012 });
+  Body.setVelocity(b, { x: dx/len * 27, y: dy/len * 27 });
+  Composite.add(engine.world, b); balls.push(b);
+}
+document.getElementById('testBtn').onclick = function () {
+  testing = !testing;
+  this.textContent = testing ? 'Exit test mode' : 'Enter test mode';
+  this.classList.toggle('on', testing);
+  if (testing) { rebuildSim(); status('Test mode: click to shoot balls at the boundary.'); }
+  else { engine = null; balls = []; status('Edit mode.'); }
+  draw();
+};
+document.getElementById('ballR').oninput = e => document.getElementById('ballRVal').textContent = e.target.value;
+document.getElementById('clearBalls').onclick = () => { if (testing) rebuildSim(); draw(); };
+(function loop() {
+  requestAnimationFrame(loop);
+  if (testing && engine) { for (let i = 0; i < 3; i++) Engine.update(engine, 1000/60/3); draw(); }
+})();
+
+// ───────────────────────── item mode ─────────────────────────────────────────
+const itemSel = document.getElementById('itemSel');
+const allItems = [];
+editableMaps.forEach(m => (m.itemsData || []).forEach(it => {
+  allItems.push(it); itemSel.add(new Option(`${m.label}: ${it.name}`, allItems.length - 1));
+}));
+function loadItem(i) {
+  curItem = allItems[i];
+  if (curItem && curItem.img) curItem.img.onload = draw;
+  draw();
+}
+itemSel.onchange = () => loadItem(+itemSel.value);
+document.getElementById('zoom').oninput = e => {
+  zoom = +e.target.value; document.getElementById('zoomVal').textContent = zoom.toFixed(1); draw();
+};
+document.getElementById('itemReset').onclick = () => {
+  if (!curItem) return;
+  delete ITEM_HITBOXES[curItem.sprite];
+  status('Override removed — set bodyRatio back in config/items.js order. Reload to see original.');
+};
+
+document.getElementById('tabMap').onclick  = () => setMode('map');
+document.getElementById('tabItem').onclick = () => setMode('item');
+function setMode(m) {
+  mode = m;
+  document.getElementById('tabMap').classList.toggle('on', m === 'map');
+  document.getElementById('tabItem').classList.toggle('on', m === 'item');
+  document.getElementById('mapPanel').classList.toggle('show', m === 'map');
+  document.getElementById('itemPanel').classList.toggle('show', m === 'item');
+  draw();
+}
+
+// ───────────────────────── save ──────────────────────────────────────────────
+function serialize() {
+  MAP_HITBOXES[mapId] = {
+    sideInset: inset, closed,
+    knots: knots.map(k => [Math.round(k[0]), Math.round(k[1])]),
+    cornerWalls: walls(),
+  };
+  const mapsSrc = Object.entries(MAP_HITBOXES).map(([id, hb]) => {
+    const kn = hb.knots.map(k => `[${k[0]}, ${k[1]}]`).join(', ');
+    const cw = hb.cornerWalls.map(c =>
+      `      { x: ${String(c.x).padStart(4)}, y: ${String(c.y).padStart(4)}, len: ${String(c.len).padStart(4)}, angle: ${c.angle >= 0 ? ' ' : ''}${c.angle.toFixed(3)} },`).join('\n');
+    return `  ${id}: {\n    sideInset: ${hb.sideInset},\n    closed: ${hb.closed},\n    knots: [\n      ${kn},\n    ],\n    cornerWalls: [\n${cw}\n    ],\n  },`;
+  }).join('\n');
+  const itemsSrc = Object.entries(ITEM_HITBOXES).map(([sprite, hb]) =>
+    `  '${sprite}': { bodyRatio: ${hb.bodyRatio} },`).join('\n');
+  return `// Hitbox data — edited visually with tools/hitbox-editor.html (do not hand-tweak,
+// open the tool instead: http://localhost:5500/tools/hitbox-editor.html).
+//
+// MAP_HITBOXES[mapId]:
+//   knots       — spline control points in FLAT canvas coords (what you see on
+//                 screen). The editor lets you drag/add/remove these.
+//   closed      — false leaves the curve open (bottom opening for the launcher)
+//   sideInset   — left/right wall inset; negative widens the field
+//   cornerWalls — GENERATED from the spline (perspective-corrected physics
+//                 segments consumed by game.js). Regenerated on every save.
+//
+// ITEM_HITBOXES[spritePath]:
+//   bodyRatio   — overrides the item's collision-circle size (see items.js)
+
+const MAP_HITBOXES = {
+${mapsSrc}
+};
+
+const ITEM_HITBOXES = {
+${itemsSrc || '  // (no overrides yet)'}
+};
+`;
+}
+let fileHandle = null;
+document.getElementById('saveDisk').onclick = async () => {
+  const text = serialize();
+  if (!window.showSaveFilePicker) return status('File System API unavailable — use Download or Copy.');
+  try {
+    if (!fileHandle) fileHandle = await showSaveFilePicker({
+      suggestedName: 'hitboxes.js',
+      types: [{ description: 'JavaScript', accept: { 'text/javascript': ['.js'] } }],
+    });
+    const w = await fileHandle.createWritable(); await w.write(text); await w.close();
+    status('Saved. Reload the game tab to play with the new hitbox.');
+  } catch (err) { if (err.name !== 'AbortError') status('Save failed: ' + err.message); }
+};
+document.getElementById('copyBtn').onclick = async () => {
+  await navigator.clipboard.writeText(serialize()); status('Copied config/hitboxes.js contents to clipboard.');
+};
+document.getElementById('dlBtn').onclick = () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([serialize()], { type: 'text/javascript' }));
+  a.download = 'hitboxes.js'; a.click();
+  status('Downloaded — replace config/hitboxes.js with it.');
+};
+
+// ───────────────────────── boot ──────────────────────────────────────────────
+loadMap(MAP_HITBOXES.saigon ? 'saigon' : editableMaps[0].id);
+mapSel.value = mapId;
+loadItem(0);
+setMode('map');
+</script>
+</body>
+</html>

@@ -9,23 +9,51 @@ Physics via Matter.js, rendering via Canvas 2D API.
 ## File structure
 
 ```
-config/constants.js   — W=420, H=620 (physics world size). Loaded first.
+config/constants.js   — W=420, H=620 (physics world size) + GAME_VERSION. Loaded first.
+config/hitboxes.js    — MAP_HITBOXES (spline knots + generated cornerWalls) and
+                         ITEM_HITBOXES (bodyRatio overrides). DO NOT hand-edit —
+                         maintained by tools/hitbox-editor.html.
 config/items.js       — ITEMS array: all drink tiers (sprite, radius, colors, physR)
-config/maps.js        — MAPS array + ACTIVE_MAP (bg, bgm, bgmVol, items ref)
+config/maps.js        — MAPS array + ACTIVE_MAP (bg, bgm, bgmVol, items ref);
+                         applies MAP_HITBOXES overrides at the bottom
 audio.js              — Web Audio API synthesis (pop, shoot, clink, coinTick) + BGM
 render.js             — All canvas drawing (bg, drinks, coins, bag, particles, aim)
 ui.js                 — Pointer input, HUD buttons, game-over overlay, LAUNCH pos
 game.js               — Physics engine, state object, merge logic, render loop
 style.css             — All CSS
-index.html            — Shell: loads scripts in order (constants → items → maps →
-                         audio → render → ui → game)
+index.html            — Shell: loads scripts in order (constants → hitboxes →
+                         items → maps → audio → render → ui → game)
 process_assets.py     — Asset pipeline: source images → game-ready PNGs
+tools/
+  hitbox-editor.html  — Visual hitbox editor (see "Hitbox editing" below)
 assets/
   source/             — Raw AI-generated images (white background). NEVER edit these.
+    _archive/         — Superseded source art, kept for reference
     shared/           — coins_and_bag.png (shared across all maps)
     tikibar/          — Per-map source images
   images/             — Processed output used by the game (git-committed)
 ```
+
+---
+
+## Hitbox editing
+
+Open **http://localhost:5500/tools/hitbox-editor.html** (same server as the game).
+
+- **Map tab:** edit the boundary as a Catmull-Rom spline — drag knots, double-click
+  the curve to add a knot, double-click a knot (or Del) to remove. The magenta
+  shapes are the actual perspective-corrected physics walls, regenerated live.
+  "Enter test mode" runs real Matter.js physics: click to shoot balls at the
+  boundary exactly like in the game. `side inset` moves the straight left/right
+  walls (negative = wider field).
+- **Item tab:** drag the cyan circle to resize an item's collision body
+  (bodyRatio override).
+- **Save:** writes `config/hitboxes.js` (File System API asks for the file once,
+  then overwrites on every save). Reload the game tab to play with the result.
+
+The game consumes hitboxes via `MAP_HITBOXES` / `ITEM_HITBOXES` in
+`config/hitboxes.js`; the spline knots are stored alongside the generated walls
+so the editor can always re-edit from where you left off.
 
 ---
 

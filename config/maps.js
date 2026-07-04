@@ -16,25 +16,8 @@ const MAPS = [
     bgm:       'assets/audio/bgm-saigon.mp3',
     bgmVol:    0.30,
     itemsData: null, // filled below
-    // Round tray: the straight left/right sides are handled by the per-map side
-    // walls (sideInset widens the field a touch so items reach the rim), and
-    // cornerWalls just rounds off the TOP. The arc is traced from the magenta
-    // oval in assets/source/saigon/bg-saigon-hitbox.png (perspective-corrected
-    // via unpersp so it lands on the rim as rendered). Bottom stays open for
-    // the launcher.
-    sideInset: -8,
-    cornerWalls: [
-      { x:   14, y:  180, len:   38, angle: -0.917 },
-      { x:   43, y:  150, len:   48, angle: -0.711 },
-      { x:   80, y:  124, len:   43, angle: -0.484 },
-      { x:  126, y:  106, len:   56, angle: -0.288 },
-      { x:  177, y:   95, len:   48, angle: -0.124 },
-      { x:  227, y:   93, len:   52, angle:  0.038 },
-      { x:  278, y:  100, len:   50, angle:  0.221 },
-      { x:  322, y:  114, len:   43, angle:  0.402 },
-      { x:  364, y:  136, len:   51, angle:  0.577 },
-      { x:  400, y:  167, len:   46, angle:  0.832 },
-    ],
+    // Round tray: boundary lives in config/hitboxes.js (edit visually with
+    // tools/hitbox-editor.html) and is applied below.
   },
   {
     id:       'kyoto',
@@ -62,5 +45,14 @@ MAPS[0].itemsData = HAWAII_ITEMS;
 MAPS[1].itemsData = SAIGON_ITEMS;
 MAPS[2].itemsData = KYOTO_ITEMS;
 MAPS[3].itemsData = MAGE_ITEMS;
+
+// Apply visually-edited boundaries from config/hitboxes.js
+// (maintained with tools/hitbox-editor.html).
+if (typeof MAP_HITBOXES !== 'undefined') {
+  for (const m of MAPS) {
+    const hb = MAP_HITBOXES[m.id];
+    if (hb) { m.cornerWalls = hb.cornerWalls; m.sideInset = hb.sideInset || 0; }
+  }
+}
 
 let ACTIVE_MAP = MAPS[0];
