@@ -38,8 +38,20 @@ const KYOTO_ITEMS = [
   { name:'matcha cake',    r:71, glass:'#eafaf1', liq:'#2d6a4f', sprite:'assets/images/kyoto-matcha-cake.png', bodyRatio:0.85 },
 ];
 
+const MAGE_ITEMS = [
+  { name:'mana shard', r:15, glass:'#dff2ff', liq:'#7bc8f0', sprite:'assets/images/mage-crystal.png', bodyRatio:0.55 },
+  { name:'mana potion',r:20, glass:'#bfe6ff', liq:'#3fa9f5', sprite:'assets/images/mage-potion.png',  bodyRatio:0.60 },
+  { name:'gem ring',   r:26, glass:'#ffe9a8', liq:'#3f7bd0', sprite:'assets/images/mage-ring.png',    bodyRatio:0.62 },
+  { name:'runestone',  r:31, glass:'#c8ccd0', liq:'#6fa8dc', sprite:'assets/images/mage-rune.png',    bodyRatio:0.72 },
+  { name:'arcane orb', r:37, glass:'#d0eaff', liq:'#2f8fe0', sprite:'assets/images/mage-orb.png',     bodyRatio:0.78 },
+  { name:'spell tome', r:44, glass:'#3a4a6a', liq:'#5a8fd0', sprite:'assets/images/mage-tome.png',    bodyRatio:0.70 },
+  { name:'gem wand',   r:52, glass:'#e8d8ff', liq:'#9a6fe8', sprite:'assets/images/mage-wand.png',    bodyRatio:0.50 },
+  { name:'rune portal',r:60, glass:'#e8d0ff', liq:'#8a4fd0', sprite:'assets/images/mage-portal.png',  bodyRatio:0.80 },
+  { name:'archmage orb',r:71,glass:'#ffe8b0', liq:'#ffab3d', sprite:'assets/images/mage-ball.png',    bodyRatio:0.72 },
+];
+
 // Pre-load all sprites and compute physics radii for every item set at startup.
-[...HAWAII_ITEMS, ...SAIGON_ITEMS, ...KYOTO_ITEMS].forEach(item => {
+[...HAWAII_ITEMS, ...SAIGON_ITEMS, ...KYOTO_ITEMS, ...MAGE_ITEMS].forEach(item => {
   item.img = new Image();
   item.img.src = item.sprite;
   item.physR = item.r * 2.4 * item.bodyRatio / 2 * 0.88;

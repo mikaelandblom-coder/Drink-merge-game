@@ -4,12 +4,39 @@ const COIN_IMG = new Image(); COIN_IMG.src = 'assets/images/coin.png';
 const BAG_IMG  = new Image(); BAG_IMG.src  = 'assets/images/moneybag.png';
 const bgImg    = new Image();
 
+// The background never changes during play, but it's a large source image.
+// Rescaling it every frame with high-quality smoothing is a big, needless GPU
+// cost (a major heat source on mobile). Instead we pre-scale it once into an
+// offscreen canvas at the exact backing resolution, then blit that 1:1 each
+// frame — no per-frame resampling.
+const bgCanvas = document.createElement('canvas');
+const bgCtx    = bgCanvas.getContext('2d');
+let bgCacheReady = false;
+
+function rebuildBgCache() {
+  if (!(bgImg.complete && bgImg.naturalWidth) || !canvas.width) { bgCacheReady = false; return; }
+  bgCanvas.width  = canvas.width;
+  bgCanvas.height = canvas.height;
+  bgCtx.imageSmoothingEnabled = true;
+  bgCtx.imageSmoothingQuality = 'high';
+  bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+  bgCtx.drawImage(bgImg, 0, 0, bgCanvas.width, bgCanvas.height);
+  bgCacheReady = true;
+}
+bgImg.onload = rebuildBgCache;
+
 function loadMapAssets(map) {
   bgImg.src = map.bg;  // called once from game.js after DOM is ready
+  if (bgImg.complete && bgImg.naturalWidth) rebuildBgCache();  // already cached by browser
 }
 
 function drawBackground() {
-  if (bgImg.complete && bgImg.naturalWidth) {
+  if (bgCacheReady) {
+    // bgCanvas is already backing-sized, so drawing it to the world rect under
+    // the active transform maps it 1:1 to device pixels — a plain blit with no
+    // resampling (and no per-frame rescale of the large source image).
+    ctx.drawImage(bgCanvas, 0, 0, W, H);
+  } else if (bgImg.complete && bgImg.naturalWidth) {
     ctx.drawImage(bgImg, 0, 0, W, H);
   } else {
     ctx.fillStyle = '#7a4d26'; ctx.fillRect(0, 0, W, H);
@@ -95,20 +122,73 @@ function burst(x, y, color, r, particles) {
   }
 }
 
+// ---------- debug: hitbox overlay ----------
+// Draws every physics body's actual collision shape, projected through persp()
+// so it aligns with the rendered scene. Static walls in magenta, item bodies in
+// cyan. Toggle with the 'h' key or ?hitbox in the URL.
+function drawHitboxes() {
+  const bodies = Matter.Composite.allBodies(engine.world);
+  ctx.save();
+  ctx.lineWidth = 1.5;
+  for (const b of bodies) {
+    const wall = b.isStatic;
+    ctx.strokeStyle = wall ? 'rgba(255,60,220,.95)' : 'rgba(70,220,255,.95)';
+    ctx.fillStyle   = wall ? 'rgba(255,60,220,.16)' : 'rgba(70,220,255,.13)';
+    ctx.beginPath();
+    b.vertices.forEach((v, i) => {
+      const p = persp(v.x, v.y);
+      if (i) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y);
+    });
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 // ---------- coins ----------
 const BAG_POS = { x: 40, y: 40 };
 let coinPop = 0;
 
-function spawnCoins(x, y, n, coins) {
+function spawnCoins(x, y, n, coins, stagger = 0.10) {
   for (let i = 0; i < n; i++) {
     const a = Math.random() * Math.PI * 2, d = 14 + Math.random() * 30;
     coins.push({
       sx: x + Math.cos(a) * d,       sy: y + Math.sin(a) * d,
       cx: x + Math.cos(a) * d * 1.8, cy: y + Math.sin(a) * d * 1.8 - 70,
-      t: -(i * 0.10),
+      t: -(i * stagger),
       spin: Math.random() * 6,
     });
   }
+}
+
+// ---------- floating combo text ----------
+function spawnTextPop(x, y, text, color, pops) {
+  pops.push({ x, y, text, color, life: 1, vy: -0.7 });
+}
+
+function drawTextPops(pops, dt) {
+  for (const p of pops) {
+    p.y  += p.vy * dt;
+    p.vy *= Math.pow(0.94, dt);      // ease the rise to a stop
+    p.life -= 0.016 * dt;
+    const alpha = Math.max(0, Math.min(1, p.life * 1.5));
+    const pop   = p.life > 0.8 ? (1 - p.life) * 5 : 1;   // quick scale-in at spawn
+    const scale = (0.7 + pop * 0.5) + (1 - p.life) * 0.35;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(p.x, p.y);
+    ctx.scale(scale, scale);
+    ctx.font = 'bold 22px Georgia';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.shadowColor = p.color; ctx.shadowBlur = 18;
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(18,10,28,.85)';
+    ctx.strokeText(p.text, 0, 0);
+    ctx.fillStyle = p.color;
+    ctx.fillText(p.text, 0, 0);
+    ctx.restore();
+  }
+  ctx.shadowBlur = 0; ctx.globalAlpha = 1;
 }
 
 function updateCoins(coins, dt, onCoinLand) {

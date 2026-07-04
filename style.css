@@ -51,6 +51,12 @@ html, body { height: 100%; overflow: hidden; background: var(--bar-deep); font-f
   width: 100%; display: flex; flex-direction: column; gap: 12px;
 }
 
+#welcome-version {
+  margin-top: -2px; margin-bottom: 10px;
+  font-size: 12px; letter-spacing: .14em;
+  color: #b8935f; text-shadow: 0 1px 6px rgba(0,0,0,.85);
+}
+
 .map-card {
   background: rgba(10, 6, 3, .82);
   border: 1px solid #3d2d1a;

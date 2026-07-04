@@ -29,6 +29,7 @@ function fitCanvas() {
   ctx.setTransform(s, 0, 0, s, 0, 0);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
+  rebuildBgCache();  // backing size changed — re-scale the cached background
 }
 fitCanvas();
 window.addEventListener('resize', fitCanvas);
@@ -59,73 +60,40 @@ function unpersp(sx, sy) {
 const engine = Engine.create();
 engine.gravity.y = 0; engine.gravity.x = 0;
 const wallOpts = { isStatic: true, restitution: 0.02 };
-const WALL_INSET = 0;
+// Only the top wall is global; the left/right side walls are created per-map in
+// applyMapWalls so a map can widen its field (see map.sideInset).
 Composite.add(engine.world, [
-  Bodies.rectangle(W / 2,               -30,   W * 2, 60,   wallOpts),
-  Bodies.rectangle(-30 + WALL_INSET,     H / 2, 60,   H * 2, wallOpts),
-  Bodies.rectangle(W + 30 - WALL_INSET,  H / 2, 60,   H * 2, wallOpts),
+  Bodies.rectangle(W / 2, -30, W * 2, 60, wallOpts),
 ]);
 
-// ---------- per-map corner walls ----------
+// ---------- per-map walls ----------
 let mapWalls = [];
 
-// Build the boundary from a dense chain of overlapping static circles rather
-// than angled rectangles. Chained rectangles meet at inner corners that poke
-// toward the play area — those notches are what items snag on. We also smooth
-// the traced polyline with Chaikin corner-cutting first, so the arc is a clean
-// curve rather than a jaggy zigzag, then lay circles (which have no corners of
-// their own) densely along it.
-const WALL_R   = 13;  // circle radius; ×2 gives ~26px effective wall thickness
-const WALL_MIN = 7;   // minimum spacing between adjacent circle centres
-
-// Chaikin corner-cutting: replace each span with two points 1/4 and 3/4 along
-// it, keeping the endpoints. Each pass rounds the polyline; a few passes make
-// it visually smooth.
-function chaikin(pts, passes) {
-  for (let p = 0; p < passes; p++) {
-    const out = [pts[0]];
-    for (let i = 0; i < pts.length - 1; i++) {
-      const a = pts[i], b = pts[i + 1];
-      out.push({ x: a.x * 0.75 + b.x * 0.25, y: a.y * 0.75 + b.y * 0.25 });
-      out.push({ x: a.x * 0.25 + b.x * 0.75, y: a.y * 0.25 + b.y * 0.75 });
-    }
-    out.push(pts[pts.length - 1]);
-    pts = out;
-  }
-  return pts;
-}
+// Build the tray boundary directly from the traced polygon: one thin static
+// rectangle per edge (the cornerWalls entries already store each edge as
+// centre/length/angle). Each rectangle is lengthened a little so neighbours
+// overlap at the joints (no gaps), and its corners are chamfered (rounded) so
+// items slide across the joints instead of snagging on a sharp inner corner.
+const WALL_THICK   = 24;  // wall thickness (px)
+const WALL_OVERLAP = 8;   // extra length so adjacent edges overlap at joints
 
 function applyMapWalls(map) {
   mapWalls.forEach(w => Composite.remove(engine.world, w));
   mapWalls = [];
-  if (!map.cornerWalls) return;
 
-  // 1. Reconstruct the ordered boundary polyline from the segment endpoints,
-  //    merging the near-duplicate points where consecutive segments join.
-  let pts = [];
-  for (const c of map.cornerWalls) {
-    const hx = Math.cos(c.angle) * c.len / 2;
-    const hy = Math.sin(c.angle) * c.len / 2;
-    pts.push({ x: c.x - hx, y: c.y - hy });
-    pts.push({ x: c.x + hx, y: c.y + hy });
-  }
-  const merged = [];
-  for (const p of pts) {
-    const last = merged[merged.length - 1];
-    if (last && Math.hypot(p.x - last.x, p.y - last.y) < WALL_MIN) {
-      last.x = (last.x + p.x) / 2; last.y = (last.y + p.y) / 2;
-    } else {
-      merged.push({ x: p.x, y: p.y });
+  // Left/right side walls. A negative sideInset lets items travel slightly past
+  // the normal physics edge, which the perspective transform then renders
+  // further out — i.e. a wider play field (used by round trays like Saigon).
+  const inset = map.sideInset || 0;
+  mapWalls.push(Bodies.rectangle(-30 + inset,     H / 2, 60, H * 2, wallOpts));
+  mapWalls.push(Bodies.rectangle(W + 30 - inset,  H / 2, 60, H * 2, wallOpts));
+
+  if (map.cornerWalls) {
+    for (const c of map.cornerWalls) {
+      mapWalls.push(Bodies.rectangle(c.x, c.y, c.len + WALL_OVERLAP, WALL_THICK, {
+        ...wallOpts, angle: c.angle, chamfer: { radius: WALL_THICK / 2 },
+      }));
     }
-  }
-
-  // 2. Smooth, then 3. lay circles — thinning any that crowd together.
-  const curve = chaikin(merged, 3);
-  let lastP = null;
-  for (const p of curve) {
-    if (lastP && Math.hypot(p.x - lastP.x, p.y - lastP.y) < WALL_MIN) continue;
-    mapWalls.push(Bodies.circle(p.x, p.y, WALL_R, wallOpts));
-    lastP = p;
   }
   Composite.add(engine.world, mapWalls);
 }
@@ -134,16 +102,29 @@ function applyMapWalls(map) {
 const DROP_MAX   = 4;
 const DANGER_WY  = H - 150;
 
+const COMBO_WINDOW = 1400;  // ms; merges within this of each other chain a combo
+
 const state = {
   drinks:     [],
   particles:  [],
   coins:      [],
+  textPops:   [],
   coinCount:  0,
+  combo:      0,
+  lastMergeAt: 0,
   gameOver:   false,
   nextTier:   0,
   queuedTier: 0,
   canShoot:   true,
 };
+
+// Combo tint escalates like RPG loot rarity: blue → purple → magenta → gold.
+function comboColor(m) {
+  if (m >= 5) return '#ffb03d';
+  if (m >= 4) return '#d76be0';
+  if (m >= 3) return '#9a6fe8';
+  return '#5aa8e6';
+}
 
 function makeDrink(x, y, tier) {
   const b = Bodies.circle(x, y, ITEMS[tier].physR, {
@@ -162,11 +143,13 @@ function rollNext() {
 
 function resetState() {
   for (const d of state.drinks) Composite.remove(engine.world, d);
-  state.drinks = []; state.particles = []; state.coins = [];
-  state.coinCount = 0; state.gameOver = false; state.canShoot = true;
+  state.drinks = []; state.particles = []; state.coins = []; state.textPops = [];
+  state.coinCount = 0; state.combo = 0; state.lastMergeAt = 0;
+  state.gameOver = false; state.canShoot = true;
   LAUNCH.x = W / 2;
   state.queuedTier = Math.floor(Math.random() * DROP_MAX);
   rollNext();
+  idleFrames = 0;  // ensure the fresh board draws even if we were idle
 }
 
 // ---------- merging ----------
@@ -187,9 +170,26 @@ Events.on(engine, 'collisionStart', ev => {
       makeDrink(mx, my, tier + 1);
       const sp = persp(mx, my);
       burst(sp.x, sp.y, ITEMS[tier + 1].liq, ITEMS[tier + 1].r * sp.s, state.particles);
-      spawnCoins(sp.x, sp.y, Math.min(6, 2 + tier), state.coins);
       pop(tier);
       triggerShake();
+
+      const base = 2 + tier;
+      let m = 1;
+      if (ACTIVE_MAP.combos) {
+        const now = performance.now();
+        state.combo = (now - state.lastMergeAt < COMBO_WINDOW) ? state.combo + 1 : 1;
+        state.lastMergeAt = now;
+        m = state.combo;
+      }
+      // Coin shower scales with the multiplier; tighten the stagger on big
+      // combos so a large payout still streams to the bag quickly.
+      spawnCoins(sp.x, sp.y, Math.min(20, base * m), state.coins, m >= 3 ? 0.06 : 0.10);
+
+      if (ACTIVE_MAP.combos && m >= 2) {
+        const col = comboColor(m);
+        spawnTextPop(sp.x, sp.y - 24, 'COMBO ×' + m, col, state.textPops);
+        burst(sp.x, sp.y, col, ITEMS[tier + 1].r * sp.s * 1.5, state.particles);
+      }
     }
   }
 });
@@ -217,6 +217,12 @@ let running = false;
 let wob = 0;
 let lastTs = 0;
 
+// Debug hitbox overlay: 'h' key or ?hitbox in the URL.
+let showHitbox = /[?&]hitbox/.test(location.search);
+window.addEventListener('keydown', e => {
+  if (e.key === 'h' || e.key === 'H') showHitbox = !showHitbox;
+});
+
 function render(dt) {
   wob += 0.05 * dt;
   drawBackground();
@@ -241,6 +247,11 @@ function render(dt) {
   drawParticles(state.particles, dt);
   state.particles = state.particles.filter(p => p.life > 0);
 
+  drawTextPops(state.textPops, dt);
+  state.textPops = state.textPops.filter(p => p.life > 0);
+
+  if (showHitbox) drawHitboxes();
+
   drawNextPreview(state.queuedTier);
 
   drawBag(state.coinCount, dt);
@@ -260,6 +271,21 @@ const FRAME_MS = 1000 / 60;
 // next to drawing, so this costs little heat.
 const SUBSTEPS = 3;
 
+// Is anything actually moving/animating? When the board is fully settled and
+// the player is just thinking, there's nothing to simulate or redraw — so we
+// skip physics + drawing entirely, which hugely cuts battery/heat during the
+// long idle stretches a merge game spends waiting for input.
+let idleFrames = 0;
+function sceneBusy() {
+  if (aiming || !state.canShoot) return true;
+  if (state.coins.length || state.particles.length || state.textPops.length) return true;
+  if (recoil > 0.1) return true;
+  for (const d of state.drinks) {
+    if (Math.hypot(d.velocity.x, d.velocity.y) > 0.08) return true;
+  }
+  return false;
+}
+
 function loop(ts) {
   if (!running) return;
   requestAnimationFrame(loop);
@@ -268,10 +294,22 @@ function loop(ts) {
   if (lastTs && ts - lastTs < FRAME_MS - 1) return;
   const dt = lastTs ? Math.min((ts - lastTs) / FRAME_MS, 3) : 1;
   lastTs = ts;
+
+  // Cheap; must run even while idle so a settled drink above the line still
+  // ends the game, and stale combos still expire.
+  checkOver();
+  if (state.combo > 0 && performance.now() - state.lastMergeAt > COMBO_WINDOW) state.combo = 0;
+
+  if (sceneBusy()) idleFrames = 0; else idleFrames++;
+  if (idleFrames > 20) return;  // board is still — skip the expensive work
+
   for (let i = 0; i < SUBSTEPS; i++) Engine.update(engine, FRAME_MS / SUBSTEPS);
   render(dt);
-  checkOver();
 }
+
+// The background may finish loading after we've already gone idle; rebuild its
+// cache and wake the loop for a frame so it actually appears.
+bgImg.onload = () => { rebuildBgCache(); idleFrames = 0; };
 
 // Stop burning cycles when the tab/app is backgrounded; resume on return.
 document.addEventListener('visibilitychange', () => {
@@ -279,7 +317,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     running = false;
   } else if (onGameScreen && !running) {
-    running = true; lastTs = 0; requestAnimationFrame(loop);
+    running = true; lastTs = 0; idleFrames = 0; requestAnimationFrame(loop);
   }
 });
 
@@ -291,6 +329,7 @@ function startGame(map) {
   setSoundProfile(ACTIVE_MAP.id);
   initMusic(document.getElementById('bgm'), ACTIVE_MAP.bgmVol, ACTIVE_MAP.bgm);
   resetState();
+  idleFrames = 0;
   if (!running) {
     running = true;
     lastTs = 0;

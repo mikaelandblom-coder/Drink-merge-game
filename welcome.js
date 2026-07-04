@@ -91,6 +91,7 @@ function wireWelcomeEvents() {
 
 function showWelcome() {
   document.getElementById('map-cards').innerHTML = buildWelcomeCards();
+  document.getElementById('welcome-version').textContent = GAME_VERSION;
   wireWelcomeEvents();
   document.getElementById('welcome').style.display = 'flex';
   document.getElementById('wrap').style.display = 'none';

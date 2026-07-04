@@ -8,6 +8,7 @@ let soundProfile = 'default'; // set per map; controls clink/pop timbre
 function setSoundProfile(mapId) {
   if (mapId === 'saigon') soundProfile = 'wood';
   else if (mapId === 'kyoto') soundProfile = 'ceramic';
+  else if (mapId === 'mage') soundProfile = 'arcane';
   else soundProfile = 'default';
 }
 
@@ -25,6 +26,7 @@ function pop(tier) {
   if (muted) return;
   if (soundProfile === 'wood')    { popWood(tier);    return; }
   if (soundProfile === 'ceramic') { popCeramic(tier); return; }
+  if (soundProfile === 'arcane')  { popArcane(tier);  return; }
   const a = ac(), t = a.currentTime;
   const f = 220 * Math.pow(1.18, tier);
   const o = a.createOscillator(), g = a.createGain();
@@ -85,6 +87,7 @@ function clink(impact) {
   if (muted) return;
   if (soundProfile === 'wood')    { clinkWood(impact);    return; }
   if (soundProfile === 'ceramic') { clinkCeramic(impact); return; }
+  if (soundProfile === 'arcane')  { clinkArcane(impact);  return; }
   const a = ac(), t = a.currentTime;
   const vol = Math.min(0.14, impact * 0.032);
   if (vol < 0.012) return;
@@ -189,6 +192,52 @@ function clinkCeramic(impact) {
   const flt = a.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 900;
   const ng = a.createGain(); ng.gain.setValueAtTime(vol * 0.9, t);
   src.connect(flt).connect(ng).connect(a.destination); src.start(t);
+}
+
+// Mage map: shimmering magical "cast" chime for a merge — a bright bell that
+// sweeps upward with sparkly overtones, like a small spell resolving.
+function popArcane(tier) {
+  const a = ac(), t = a.currentTime;
+  const base = 520 * Math.pow(1.14, tier);
+  // Bell core: rising sine with a long shimmer
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(base, t);
+  o.frequency.exponentialRampToValueAtTime(base * 1.5, t + 0.12);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.24, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.55);
+  // Glassy overtone
+  const o2 = a.createOscillator(), g2 = a.createGain();
+  o2.type = 'sine'; o2.frequency.setValueAtTime(base * 3.02, t);
+  o2.frequency.exponentialRampToValueAtTime(base * 3.8, t + 0.12);
+  g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(0.08, t + 0.015);
+  g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+  o2.connect(g2).connect(a.destination); o2.start(t); o2.stop(t + 0.35);
+  // High sparkle tail
+  const o3 = a.createOscillator(), g3 = a.createGain();
+  o3.type = 'triangle'; o3.frequency.setValueAtTime(base * 5.5, t + 0.04);
+  o3.frequency.exponentialRampToValueAtTime(base * 7, t + 0.2);
+  g3.gain.setValueAtTime(0.0001, t + 0.04); g3.gain.exponentialRampToValueAtTime(0.05, t + 0.07);
+  g3.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+  o3.connect(g3).connect(a.destination); o3.start(t + 0.04); o3.stop(t + 0.3);
+}
+
+// Mage map: soft crystalline "tink" collision — light, glassy, with a quick ring.
+function clinkArcane(impact) {
+  const a = ac(), t = a.currentTime;
+  const vol = Math.min(0.13, impact * 0.03);
+  if (vol < 0.012) return;
+  const base = 2100 + Math.random() * 900;
+  [1, 2.05].forEach((mult, i) => {
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(base * mult, t);
+    o.frequency.exponentialRampToValueAtTime(base * mult * 0.99, t + 0.09);
+    const pv = vol * (i === 0 ? 1 : 0.4);
+    g.gain.setValueAtTime(pv, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+    o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.14);
+  });
 }
 
 function coinTick() {

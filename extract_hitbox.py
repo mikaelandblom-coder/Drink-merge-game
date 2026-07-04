@@ -1,5 +1,10 @@
 """
-Extract tray hitbox from magenta annotation on bg-saigon.png.
+Extract tray hitbox from a magenta annotation drawn over the tray rim.
+
+The annotation is a permanent source file (SRC below): a copy of the clean
+background with a bright-magenta oval traced onto the inner edge of the tray.
+Keeping it as its own file means the rim can be re-extracted any time without
+redrawing, and the game's background is never touched.
 
 Pipeline:
   1. Find magenta pixels in the annotated background image.
@@ -9,19 +14,16 @@ Pipeline:
      Items are rendered with persp(); placing a wall at unpersp(flat) makes it
      look like it is AT the flat background position.
   5. Output cornerWalls config for config/maps.js.
-  6. Restore the clean background from assets/source/.
 
 Usage:
   python extract_hitbox.py
-  (annotated bg must be at SRC path, clean source at CLEAN path)
 """
-import math, shutil
+import math
 import numpy as np
 from PIL import Image
 
 # ── config ────────────────────────────────────────────────────────────────────
-SRC   = 'assets/images/bg-saigon.png'
-CLEAN = 'assets/source/saigon/bg-saigon.png'
+SRC = 'assets/source/saigon/bg-saigon-hitbox.png'   # magenta-annotated rim
 
 PHYSICS_W = 420
 PHYSICS_H = 620
@@ -116,24 +118,34 @@ print("\nPerspective-corrected physics vertices:")
 for (wx, wy) in phys_pts:
     print(f"  ({wx:.0f}, {wy:.0f})")
 
-# ── generate wall segments ────────────────────────────────────────────────────
-MIN_LEN = 4   # skip degenerate zero-length segments
-print("\n// cornerWalls (paste into config/maps.js):")
+# ── open the loop at the drawn gap ────────────────────────────────────────────
+# The launcher shoots items up from the bottom, so the boundary must be open
+# there. If you leave a gap in the magenta oval, the traced vertices have one
+# unusually long span across it — break the loop at that span so the output is
+# an open arc (no wall across the opening). If the oval is fully closed (no gap
+# large enough), emit a closed loop and open it by hand.
+MIN_LEN   = 4    # skip degenerate zero-length segments
+OPEN_GAP  = 70   # a span longer than this (physics px) is treated as the opening
+n = len(phys_pts)
+spans = [math.hypot(phys_pts[(i+1) % n][0] - phys_pts[i][0],
+                    phys_pts[(i+1) % n][1] - phys_pts[i][1]) for i in range(n)]
+gi = max(range(n), key=lambda i: spans[i])
+
+if spans[gi] > OPEN_GAP:
+    ordered = phys_pts[gi+1:] + phys_pts[:gi+1]   # start just after the opening
+    pairs   = list(zip(ordered, ordered[1:]))     # open arc — no wrap segment
+    print(f"\n// opening detected ({spans[gi]:.0f}px span) -> emitting open arc")
+else:
+    pairs = [(phys_pts[i], phys_pts[(i+1) % n]) for i in range(n)]  # closed loop
+    print("\n// no opening found -> emitting closed loop (open the bottom by hand)")
+
 print("cornerWalls: [")
-for i in range(len(phys_pts)):
-    x1, y1 = phys_pts[i]
-    x2, y2 = phys_pts[(i+1) % len(phys_pts)]
-    cx_w   = (x1 + x2) / 2
-    cy_w   = (y1 + y2) / 2
+for (x1, y1), (x2, y2) in pairs:
     length = math.hypot(x2-x1, y2-y1)
     if length < MIN_LEN:
         continue
-    angle  = math.atan2(y2-y1, x2-x1)
-    p1 = f"({x1:.0f},{y1:.0f})"
-    p2 = f"({x2:.0f},{y2:.0f})"
-    print(f"  {{ x:{cx_w:5.0f}, y:{cy_w:5.0f}, len:{length:5.0f}, angle:{angle:7.3f} }}, // {p1}->{p2}")
+    cx_w  = (x1 + x2) / 2
+    cy_w  = (y1 + y2) / 2
+    angle = math.atan2(y2-y1, x2-x1)
+    print(f"  {{ x:{cx_w:5.0f}, y:{cy_w:5.0f}, len:{length:5.0f}, angle:{angle:7.3f} }}, // ({x1:.0f},{y1:.0f})->({x2:.0f},{y2:.0f})")
 print("],")
-
-# ── restore clean background ──────────────────────────────────────────────────
-shutil.copy(CLEAN, SRC)
-print(f"\nRestored {SRC} from {CLEAN}")

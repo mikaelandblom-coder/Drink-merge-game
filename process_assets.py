@@ -113,6 +113,25 @@ PIPELINE = {
         {'file': 'background 2.png', 'type': 'copy', 'name': 'bg-kyoto'},
     ],
 
+    'mage': [
+        {
+            'file':      'merge items.png',
+            'type':      'spritesheet',
+            'grid':      (3, 3),
+            'chroma':    'green',          # AI art on a green-screen background
+            'col_splits': [341, 683],      # even 3×3 of a 1024px sheet
+            'row_splits': [341, 683],
+            'names':     [
+                'mage-crystal', 'mage-potion', 'mage-ring',
+                'mage-rune',    'mage-orb',    'mage-tome',
+                'mage-wand',    'mage-portal', 'mage-ball',
+            ],
+            # Round items whose glow fills the cell — taper it into a round aura.
+            'round_aura': ['mage-potion', 'mage-orb', 'mage-portal'],
+        },
+        {'file': 'bg.png', 'type': 'copy', 'name': 'bg-mage'},
+    ],
+
     # 'teddybears': [
     #     {
     #         'file':      'teddy_drinks.png',
@@ -136,6 +155,8 @@ FEATHER_PX   = 1.5  # edge softening radius (pixels)
 TRIM_PAD     = 6    # padding kept around each cropped item (pixels)
 CELL_MARGIN  = 5    # pixels stripped from each spritesheet cell edge
 MIN_HOLE_PX  = 300  # minimum enclosed-white region size to treat as a hole
+GREEN_MARGIN = 20   # for chroma:'green' — how much G must exceed max(R,B) for
+                    # a pixel to count as green-screen background
 
 SOURCE_ROOT = Path("assets/source")
 OUTPUT_DIR  = Path("assets/images")
@@ -149,6 +170,23 @@ def white_mask(data: np.ndarray, thresh: int) -> np.ndarray:
     return (data[:, :, 0] >= thresh) & \
            (data[:, :, 1] >= thresh) & \
            (data[:, :, 2] >= thresh)
+
+
+def green_bg_mask(data: np.ndarray) -> np.ndarray:
+    """Green-screen background: green channel clearly dominant. Also treats the
+    magenta separator lines (#FF00FF) as background so their remnants at cell
+    edges are removed along with the green."""
+    r = data[:, :, 0].astype(np.int16)
+    g = data[:, :, 1].astype(np.int16)
+    b = data[:, :, 2].astype(np.int16)
+    green   = (g - np.maximum(r, b)) >= GREEN_MARGIN
+    magenta = (r > 140) & (b > 140) & (g < np.minimum(r, b) - 30)
+    return green | magenta
+
+
+def bg_mask(data: np.ndarray, thresh: int, chroma: str) -> np.ndarray:
+    """Dispatch: which pixels are removable background."""
+    return green_bg_mask(data) if chroma == 'green' else white_mask(data, thresh)
 
 
 def _bfs(mask: np.ndarray, seeds: list) -> np.ndarray:
@@ -235,19 +273,99 @@ def find_enclosed_holes(is_white: np.ndarray, background: np.ndarray,
     return result
 
 
+def remove_green_screen(img: Image.Image, round_aura: bool = False) -> Image.Image:
+    """Key out a green-screen background under glowing subjects.
+
+    The AI renders a soft neutral halo behind each item, so the background's
+    'greenness' fades toward zero near the subject — a per-pixel threshold can't
+    tell that faint halo from a grey item and leaves a translucent box. Instead
+    we flood-fill the connected green field inward from the (strongly green)
+    edges: that clears the whole background, including the faint halo, but can't
+    cross into the item. Edges are then feathered and de-matted of green spill.
+    Magenta separator remnants are removed the same way.
+
+    round_aura: for round items whose bright glow fills the whole square cell
+    (orb, potion, portal), flood-fill can't remove that glow so it reads as a
+    hard rectangle. Setting this inscribes a circular fade that tapers the glow
+    to transparent, turning the square into a natural round aura. The aura is
+    purely cosmetic — physics uses each item's separate physR, so a big soft
+    glow never affects collisions."""
+    img  = img.convert("RGBA")
+    data = np.array(img, dtype=np.float32)
+    r, g, b = data[:, :, 0], data[:, :, 1], data[:, :, 2]
+    greenness = g - np.maximum(r, b)
+
+    # Low threshold: catch even faintly-green halo pixels, but stay below any
+    # grey item (whose greenness is <= 0), so the flood can't leak inside.
+    is_bg   = greenness > 4
+    magenta = (r > 140) & (b > 140) & (g < np.minimum(r, b) - 30)
+    seed    = (is_bg | magenta).astype(bool)
+    bg      = flood_fill_background(seed)
+
+    hard_alpha = np.where(bg, 0.0, 255.0).astype(np.uint8)
+    alpha_img  = Image.fromarray(hard_alpha, mode="L")
+    if FEATHER_PX > 0:
+        alpha_img = alpha_img.filter(ImageFilter.GaussianBlur(radius=FEATHER_PX))
+
+    alpha  = np.array(alpha_img).astype(np.float32)
+    a_norm = alpha / 255.0
+    safe_a = np.where(a_norm > 0.01, a_norm, 1.0)
+
+    strong  = greenness > 25
+    dematte = np.median(data[:, :, :3][strong], axis=0) if strong.any() \
+              else np.array([20.0, 110.0, 50.0])
+
+    # De-matte only genuinely green-contaminated edge pixels — blue/cyan glow
+    # legitimately has high green and must be left alone.
+    edge = (a_norm > 0.01) & (a_norm < 0.99) & (greenness > 0)
+    for c in range(3):
+        ch = data[:, :, c]
+        corrected = np.clip((ch - dematte[c] * (1.0 - a_norm)) / safe_a, 0, 255)
+        data[:, :, c] = np.where(edge, corrected, ch)
+
+    # Round items whose glow fills the square cell: inscribe a circular fade so
+    # the square glow tapers into a natural round aura.
+    if round_aura:
+        h, w = alpha.shape
+        cy, cx = h / 2.0, w / 2.0
+        R = 0.5 * min(h, w)
+        yy, xx = np.mgrid[0:h, 0:w]
+        dist = np.hypot(xx - cx, yy - cy)
+        # full opacity within 0.80R, fading to 0 by ~1.02R (just inside the edge)
+        vignette = np.clip(1.0 - (dist - 0.80 * R) / (0.22 * R), 0.0, 1.0)
+        alpha = alpha * vignette
+
+    data[:, :, 3] = alpha
+    return Image.fromarray(data.astype(np.uint8), mode="RGBA")
+
+
 def remove_white_bg(img: Image.Image, thresh: int = WHITE_THRESH,
                     fill_holes: bool = False,
                     min_hole_px: int = MIN_HOLE_PX,
-                    fill_holes_region: str = None) -> Image.Image:
+                    fill_holes_region: str = None,
+                    chroma: str = 'white',
+                    round_aura: bool = False) -> Image.Image:
+    if chroma == 'green':
+        return remove_green_screen(img, round_aura=round_aura)
     img  = img.convert("RGBA")
     data = np.array(img, dtype=np.float32)
-    iw   = white_mask(data.astype(np.uint8), thresh)
+    iw   = bg_mask(data.astype(np.uint8), thresh, chroma)
     bg   = flood_fill_background(iw)
 
     holes = find_enclosed_holes(iw, bg, min_hole_px, fill_holes_region) \
             if fill_holes else np.zeros_like(bg)
 
-    hard_alpha = np.where(bg | holes, 0.0, 255.0).astype(np.uint8)
+    removed = bg | holes
+
+    # De-matte colour: white keys against pure white; a chroma key uses the
+    # actual median colour of the removed background so coloured fringes
+    # (e.g. green spill) are subtracted instead of white.
+    if chroma == 'white' or not removed.any():
+        dematte = np.array([255.0, 255.0, 255.0])
+    else:
+        dematte = np.median(data[:, :, :3][removed], axis=0)
+
+    hard_alpha = np.where(removed, 0.0, 255.0).astype(np.uint8)
     alpha_img  = Image.fromarray(hard_alpha, mode="L")
     if FEATHER_PX > 0:
         alpha_img = alpha_img.filter(ImageFilter.GaussianBlur(radius=FEATHER_PX))
@@ -259,16 +377,16 @@ def remove_white_bg(img: Image.Image, thresh: int = WHITE_THRESH,
 
     for c in range(3):
         ch = data[:, :, c]
-        corrected = np.clip((ch - 255.0 * (1.0 - a_norm)) / safe_a, 0, 255)
+        corrected = np.clip((ch - dematte[c] * (1.0 - a_norm)) / safe_a, 0, 255)
         data[:, :, c] = np.where(edge, corrected, ch)
 
     data[:, :, 3] = alpha
     return Image.fromarray(data.astype(np.uint8), mode="RGBA")
 
 
-def content_bbox(img: Image.Image, thresh: int = WHITE_THRESH):
+def content_bbox(img: Image.Image, thresh: int = WHITE_THRESH, chroma: str = 'white'):
     data      = np.array(img.convert("RGB"))
-    non_white = ~white_mask(data, thresh)
+    non_white = ~bg_mask(data, thresh, chroma)
     rows = np.any(non_white, axis=1)
     cols = np.any(non_white, axis=0)
     if not rows.any():
@@ -339,7 +457,8 @@ def split_grid(img: Image.Image, rows: int, cols: int,
                sep_tol: int = 30,
                sep_threshold: float = 0.05,
                row_splits: list = None,
-               col_splits: list = None) -> list[Image.Image]:
+               col_splits: list = None,
+               chroma: str = 'white') -> list[Image.Image]:
     data = np.array(img.convert("RGBA"))
 
     if separator:
@@ -359,7 +478,7 @@ def split_grid(img: Image.Image, rows: int, cols: int,
             x1, y1 = x_splits[c+1], y_splits[r+1]
             m    = CELL_MARGIN
             cell = img.crop((x0+m, y0+m, x1-m, y1-m))
-            bbox = content_bbox(cell)
+            bbox = content_bbox(cell, chroma=chroma)
             cells.append(cell.crop(bbox) if bbox else cell)
     return cells
 
@@ -383,17 +502,21 @@ def handle_spritesheet(src: Path, cfg: dict):
     names      = cfg['names']
     assert len(names) == rows * cols, \
         f"{src.name}: expected {rows*cols} names, got {len(names)}"
+    chroma     = cfg.get('chroma', 'white')
     cells      = split_grid(Image.open(src), rows, cols,
                             separator=cfg.get('separator'),
                             sep_tol=cfg.get('sep_tol', 30),
                             sep_threshold=cfg.get('sep_threshold', 0.05),
                             row_splits=cfg.get('row_splits'),
-                            col_splits=cfg.get('col_splits'))
+                            col_splits=cfg.get('col_splits'),
+                            chroma=chroma)
     thresh     = cfg.get('white_thresh', WHITE_THRESH)
     fill_holes = cfg.get('fill_holes', False)
     min_hole   = cfg.get('min_hole_px', MIN_HOLE_PX)
+    round_set  = set(cfg.get('round_aura', []))   # item names to give a round aura
     for cell, name in zip(cells, names):
-        remove_white_bg(cell, thresh, fill_holes, min_hole).save(
+        remove_white_bg(cell, thresh, fill_holes, min_hole, chroma=chroma,
+                        round_aura=(name in round_set)).save(
             OUTPUT_DIR / f"{name}.png", "PNG")
         print(f"    {name}.png")
 

@@ -43,6 +43,7 @@ function wireInput(canvas, state) {
     const d = makeDrink(LAUNCH.x, LAUNCH.y - ITEMS[state.nextTier].physR - 4, state.nextTier);
     const speed = 27;
     Body.setVelocity(d, { x: dx / len * speed, y: dy / len * speed });
+    state.combo = 0;  // each throw starts a fresh combo chain
     shoot();
     recoil = 6;
     state.canShoot = false;
