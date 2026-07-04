@@ -119,15 +119,20 @@ PIPELINE = {
             'type':      'spritesheet',
             'grid':      (3, 3),
             'chroma':    'green',          # AI art on a green-screen background
-            'col_splits': [341, 683],      # even 3×3 of a 1024px sheet
-            'row_splits': [341, 683],
+            # Measured positions of the magenta grid lines — the AI did NOT
+            # draw an even 3×3 (rows sit at 310/618, not 341/683). Auto-detect
+            # can't be used here: the portal and wand items are purple enough
+            # to read as separator color.
+            'col_splits': [340, 680],
+            'row_splits': [310, 618],
+            'cell_margin': 9,              # separator anti-aliasing is wide on this sheet
             'names':     [
                 'mage-crystal', 'mage-potion', 'mage-ring',
                 'mage-rune',    'mage-orb',    'mage-tome',
                 'mage-wand',    'mage-portal', 'mage-ball',
             ],
             # Round items whose glow fills the cell — taper it into a round aura.
-            'round_aura': ['mage-potion', 'mage-orb', 'mage-portal'],
+            'round_aura': ['mage-potion', 'mage-orb', 'mage-portal', 'mage-rune', 'mage-ball'],
         },
         {'file': 'bg.png', 'type': 'copy', 'name': 'bg-mage'},
     ],
@@ -458,7 +463,8 @@ def split_grid(img: Image.Image, rows: int, cols: int,
                sep_threshold: float = 0.05,
                row_splits: list = None,
                col_splits: list = None,
-               chroma: str = 'white') -> list[Image.Image]:
+               chroma: str = 'white',
+               cell_margin: int = CELL_MARGIN) -> list[Image.Image]:
     data = np.array(img.convert("RGBA"))
 
     if separator:
@@ -476,7 +482,7 @@ def split_grid(img: Image.Image, rows: int, cols: int,
         for c in range(cols):
             x0, y0 = x_splits[c], y_splits[r]
             x1, y1 = x_splits[c+1], y_splits[r+1]
-            m    = CELL_MARGIN
+            m    = cell_margin
             cell = img.crop((x0+m, y0+m, x1-m, y1-m))
             bbox = content_bbox(cell, chroma=chroma)
             cells.append(cell.crop(bbox) if bbox else cell)
@@ -509,7 +515,8 @@ def handle_spritesheet(src: Path, cfg: dict):
                             sep_threshold=cfg.get('sep_threshold', 0.05),
                             row_splits=cfg.get('row_splits'),
                             col_splits=cfg.get('col_splits'),
-                            chroma=chroma)
+                            chroma=chroma,
+                            cell_margin=cfg.get('cell_margin', CELL_MARGIN))
     thresh     = cfg.get('white_thresh', WHITE_THRESH)
     fill_holes = cfg.get('fill_holes', False)
     min_hole   = cfg.get('min_hole_px', MIN_HOLE_PX)
