@@ -13,6 +13,8 @@
 //
 // ITEM_HITBOXES[spritePath]:
 //   bodyRatio   — overrides the item's collision-circle size (see items.js)
+//   dx, dy      — collision-circle offset from the sprite anchor, in units
+//                 of the item's r (drawDrink shifts the art the other way)
 
 const MAP_HITBOXES = {
   saigon: {
@@ -51,14 +53,14 @@ const MAP_HITBOXES = {
       { x:  446, y:  137, len:   39, angle:  1.109 },
       { x:  458, y:  171, len:   33, angle:  1.401 },
       { x:  461, y:  207, len:   38, angle:  1.541 },
-      { x:  461, y:  241, len:   32, angle:  1.630 },
+      { x:  461, y:  241, len:   32, angle:  1.631 },
       { x:  457, y:  275, len:   35, angle:  1.724 },
-      { x:  450, y:  309, len:   35, angle:  1.827 },
-      { x:  439, y:  343, len:   35, angle:  1.924 },
-      { x:  426, y:  377, len:   39, angle:  1.964 },
-      { x:  411, y:  413, len:   38, angle:  1.978 },
-      { x:  397, y:  445, len:   33, angle:  1.976 },
-      { x:  386, y:  471, len:   23, angle:  1.957 },
+      { x:  450, y:  309, len:   35, angle:  1.826 },
+      { x:  439, y:  343, len:   35, angle:  1.922 },
+      { x:  426, y:  377, len:   39, angle:  1.962 },
+      { x:  411, y:  413, len:   38, angle:  1.975 },
+      { x:  397, y:  445, len:   33, angle:  1.974 },
+      { x:  386, y:  471, len:   23, angle:  1.954 },
     ],
   },
   kyoto: {
@@ -218,5 +220,13 @@ const MAP_HITBOXES = {
 };
 
 const ITEM_HITBOXES = {
-  // (no overrides yet)
+  'assets/images/mage-crystal.png': { bodyRatio: 0.582, dx: -0.015, dy: -0.031 },
+  'assets/images/mage-potion.png': { bodyRatio: 0.66, dx: -0.045, dy: -0.09 },
+  'assets/images/mage-ring.png': { bodyRatio: 0.883, dx: -0.155, dy: -0.372 },
+  'assets/images/mage-rune.png': { bodyRatio: 0.803, dx: -0.029, dy: -0.254 },
+  'assets/images/mage-orb.png': { bodyRatio: 0.759, dx: -0.024, dy: -0.382 },
+  'assets/images/mage-tome.png': { bodyRatio: 0.88, dx: -0.02, dy: -0.429 },
+  'assets/images/mage-wand.png': { bodyRatio: 0.528, dx: -0.199, dy: -0.181 },
+  'assets/images/mage-portal.png': { bodyRatio: 0.935, dx: -0.03, dy: -0.445 },
+  'assets/images/mage-ball.png': { bodyRatio: 0.812, dx: -0.028, dy: -0.228 },
 };
