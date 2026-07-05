@@ -114,13 +114,15 @@ function applyMapWalls(map) {
   mapWalls.push(Bodies.rectangle(-30 + inset,     H / 2, 60, H * 2, wallOpts));
   mapWalls.push(Bodies.rectangle(W + 30 - inset,  H / 2, 60, H * 2, wallOpts));
 
+  trayWalls = [];
   if (map.cornerWalls) {
     for (const c of map.cornerWalls) {
-      mapWalls.push(Bodies.rectangle(c.x, c.y, c.len + WALL_OVERLAP, WALL_THICK, {
+      trayWalls.push(Bodies.rectangle(c.x, c.y, c.len + WALL_OVERLAP, WALL_THICK, {
         ...wallOpts, angle: c.angle, chamfer: { radius: WALL_THICK / 2 },
         collisionFilter: { group: 0, category: CAT_TRAY, mask: -1 },
       }));
     }
+    mapWalls.push(...trayWalls);
   }
   Composite.add(engine.world, mapWalls);
 }
@@ -187,8 +189,8 @@ Events.on(engine, 'collisionStart', ev => {
     const a = pair.bodyA, b = pair.bodyB;
     if (!a.plugin || !b.plugin) continue;
     // touching another item makes a free-zone shot part of the environment
-    if (a.plugin.ghost) solidify(a);
-    if (b.plugin.ghost) solidify(b);
+    if (a.plugin.ghost) trySolidify(a);
+    if (b.plugin.ghost) trySolidify(b);
     const rvx = a.velocity.x - b.velocity.x, rvy = a.velocity.y - b.velocity.y;
     clink(Math.hypot(rvx, rvy));
     if (a.plugin.merging || b.plugin.merging) continue;
@@ -336,11 +338,12 @@ function loop(ts) {
   if (idleFrames > 20) return;  // board is still — skip the expensive work
 
   for (let i = 0; i < SUBSTEPS; i++) Engine.update(engine, FRAME_MS / SUBSTEPS);
-  // free-zone shots solidify when they cross the line, or once they settle
+  // free-zone shots solidify when they cross the line, or once they settle —
+  // but never while overlapping a wall (trySolidify defers until clear)
   for (const d of state.drinks) {
     if (d.plugin.ghost && (d.position.y < FREE_WY ||
         (performance.now() - d.plugin.born > 700 &&
-         Math.hypot(d.velocity.x, d.velocity.y) < 0.5))) solidify(d);
+         Math.hypot(d.velocity.x, d.velocity.y) < 0.5))) trySolidify(d);
   }
   render(dt);
 }

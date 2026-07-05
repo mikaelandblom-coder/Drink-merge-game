@@ -554,16 +554,18 @@ document.getElementById('fitBtn').onclick = () => { view.z = 1; view.ox = 0; vie
 // ───────────────────────── physics test mode ─────────────────────────────────
 const { Engine, Bodies, Body, Composite } = Matter;
 const CAT_TRAY = 0x0002;   // traced walls; ghost shots don't collide with these
+let simTrayWalls = [];
 function rebuildSim() {
   engine = Engine.create(); engine.gravity.x = 0; engine.gravity.y = 0;
   const opts = { isStatic: true, restitution: 0.02 };
+  simTrayWalls = walls().map(c => Bodies.rectangle(c.x, c.y, c.len + WALL_OVERLAP, WALL_THICK,
+      { ...opts, angle: c.angle, chamfer: { radius: WALL_THICK/2 },
+        collisionFilter: { group: 0, category: CAT_TRAY, mask: -1 } }));
   const statics = [
     Bodies.rectangle(W/2, -30, W*2, 60, opts),
     Bodies.rectangle(-30 + inset, H/2, 60, H*2, opts),
     Bodies.rectangle(W + 30 - inset, H/2, 60, H*2, opts),
-    ...walls().map(c => Bodies.rectangle(c.x, c.y, c.len + WALL_OVERLAP, WALL_THICK,
-        { ...opts, angle: c.angle, chamfer: { radius: WALL_THICK/2 },
-          collisionFilter: { group: 0, category: CAT_TRAY, mask: -1 } })),
+    ...simTrayWalls,
   ];
   Composite.add(engine.world, statics);
   // touching another ball also solidifies a ghost (same as the game)
@@ -577,7 +579,12 @@ function rebuildSim() {
   });
   balls = [];
 }
-function solidifyBall(b) { b.ghost = false; b.collisionFilter.mask = -1; }
+// never solidify while overlapping a traced wall — restoring the mask
+// mid-overlap makes Matter eject the ball violently (backwards bounces)
+function solidifyBall(b) {
+  if (Matter.Query.collides(b, simTrayWalls).length) return;   // retry next frame
+  b.ghost = false; b.collisionFilter.mask = -1;
+}
 function shoot(flat) {
   const t = unpersp(flat[0], flat[1]);
   const lx = W/2, ly = H - 60;
