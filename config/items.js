@@ -50,10 +50,22 @@ const MAGE_ITEMS = [
   { name:'archmage orb',r:71,glass:'#ffe8b0', liq:'#ffab3d', sprite:'assets/images/mage-ball.png',    bodyRatio:0.72 },
 ];
 
+const TEDDY_ITEMS = [
+  { name:'button',     r:15, glass:'#cfe4ff', liq:'#3f7bd0', sprite:'assets/images/teddy-button.png',     bodyRatio:0.80 },
+  { name:'yarn ball',  r:20, glass:'#ffe4ee', liq:'#f2a0bd', sprite:'assets/images/teddy-yarn.png',       bodyRatio:0.85 },
+  { name:'pincushion', r:26, glass:'#ffe0dc', liq:'#e04a3a', sprite:'assets/images/teddy-pincushion.png', bodyRatio:0.78 },
+  { name:'stuffing',   r:31, glass:'#ffffff', liq:'#f0ece4', sprite:'assets/images/teddy-stuffing.png',   bodyRatio:0.78 },
+  { name:'chick',      r:37, glass:'#fff6d0', liq:'#f5c542', sprite:'assets/images/teddy-chick.png',      bodyRatio:0.82 },
+  { name:'capybara',   r:44, glass:'#f0e0c8', liq:'#b98a56', sprite:'assets/images/teddy-capybara.png',   bodyRatio:0.80 },
+  { name:'bunny',      r:52, glass:'#efe6ff', liq:'#b9a5e0', sprite:'assets/images/teddy-bunny.png',      bodyRatio:0.68 },
+  { name:'axolotl',    r:60, glass:'#ffe6ef', liq:'#f5a0b8', sprite:'assets/images/teddy-axolotl.png',    bodyRatio:0.80 },
+  { name:'teddy bear', r:71, glass:'#f2dfc4', liq:'#b9814e', sprite:'assets/images/teddy-bear.png',       bodyRatio:0.78 },
+];
+
 // Pre-load all sprites and compute physics radii for every item set at startup.
 // Collision-circle overrides from config/hitboxes.js (edited visually with
 // tools/hitbox-editor.html) are applied before physR is derived.
-[...HAWAII_ITEMS, ...SAIGON_ITEMS, ...KYOTO_ITEMS, ...MAGE_ITEMS].forEach(item => {
+[...HAWAII_ITEMS, ...SAIGON_ITEMS, ...KYOTO_ITEMS, ...MAGE_ITEMS, ...TEDDY_ITEMS].forEach(item => {
   const hb = (typeof ITEM_HITBOXES !== 'undefined') && ITEM_HITBOXES[item.sprite];
   if (hb && hb.bodyRatio) item.bodyRatio = hb.bodyRatio;
   // Collision-circle offset relative to the sprite anchor, in units of r

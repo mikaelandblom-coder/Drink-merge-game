@@ -133,13 +133,28 @@ PIPELINE = {
         {'file': 'bg.png', 'type': 'copy', 'name': 'bg-mage'},
     ],
 
-    # 'teddybears': [
+    'teddy': [
+        {
+            'file':   'merge items.png',
+            'type':   'spritesheet',
+            'grid':   (3, 3),
+            'chroma': 'alpha',        # real transparent background
+            'names':  [
+                'teddy-button',   'teddy-yarn',    'teddy-pincushion',
+                'teddy-stuffing', 'teddy-chick',   'teddy-capybara',
+                'teddy-bunny',    'teddy-axolotl', 'teddy-bear',
+            ],
+        },
+        {'file': 'bg.png', 'type': 'copy', 'name': 'bg-teddy'},
+    ],
+
+    # 'example-map': [
     #     {
-    #         'file':      'teddy_drinks.png',
+    #         'file':      'items.png',
     #         'type':      'spritesheet',
     #         'grid':      (3, 3),
-    #         'separator': [255, 0, 0],   # ask AI for red dividing lines
-    #         'names':     ['teddy-tea', 'teddy-cocoa', ...],
+    #         'chroma':    'alpha',   # generate with a transparent background
+    #         'names':     ['item-a', 'item-b', ...],
     #     },
     #     {'file': 'teddy_background.png', 'type': 'copy', 'name': 'bg-teddybears'},
     # ],

@@ -9,6 +9,7 @@ function setSoundProfile(mapId) {
   if (mapId === 'saigon') soundProfile = 'wood';
   else if (mapId === 'kyoto') soundProfile = 'ceramic';
   else if (mapId === 'mage') soundProfile = 'arcane';
+  else if (mapId === 'teddy') soundProfile = 'plush';
   else soundProfile = 'default';
 }
 
@@ -27,6 +28,7 @@ function pop(tier) {
   if (soundProfile === 'wood')    { popWood(tier);    return; }
   if (soundProfile === 'ceramic') { popCeramic(tier); return; }
   if (soundProfile === 'arcane')  { popArcane(tier);  return; }
+  if (soundProfile === 'plush')   { popPlush(tier);   return; }
   const a = ac(), t = a.currentTime;
   const f = 220 * Math.pow(1.18, tier);
   const o = a.createOscillator(), g = a.createGain();
@@ -88,6 +90,7 @@ function clink(impact) {
   if (soundProfile === 'wood')    { clinkWood(impact);    return; }
   if (soundProfile === 'ceramic') { clinkCeramic(impact); return; }
   if (soundProfile === 'arcane')  { clinkArcane(impact);  return; }
+  if (soundProfile === 'plush')   { clinkPlush(impact);   return; }
   const a = ac(), t = a.currentTime;
   const vol = Math.min(0.14, impact * 0.032);
   if (vol < 0.012) return;
@@ -238,6 +241,59 @@ function clinkArcane(impact) {
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
     o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.14);
   });
+}
+
+// Teddy map: squeaker-toy merge — the classic squeeze-squeak of a plushie,
+// pitch rising then falling, with a soft stuffing poof underneath.
+function popPlush(tier) {
+  const a = ac(), t = a.currentTime;
+  const base = 700 * Math.pow(1.08, tier);
+  // squeak: nasal triangle, quick up-down pitch bend like a squeezed squeaker
+  const o = a.createOscillator(), g = a.createGain();
+  const f = a.createBiquadFilter(); f.type = 'bandpass';
+  f.frequency.setValueAtTime(base * 1.5, t); f.Q.value = 3;
+  o.type = 'triangle';
+  o.frequency.setValueAtTime(base, t);
+  o.frequency.exponentialRampToValueAtTime(base * 1.6, t + 0.07);
+  o.frequency.exponentialRampToValueAtTime(base * 0.9, t + 0.16);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.26, t + 0.015);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+  o.connect(f).connect(g).connect(a.destination); o.start(t); o.stop(t + 0.24);
+  // soft stuffing poof underneath
+  const len = Math.floor(a.sampleRate * 0.09);
+  const buf = a.createBuffer(1, len, a.sampleRate);
+  const ch = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2);
+  const src = a.createBufferSource(); src.buffer = buf;
+  const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500;
+  const ng = a.createGain(); ng.gain.setValueAtTime(0.16, t);
+  src.connect(lp).connect(ng).connect(a.destination); src.start(t);
+}
+
+// Teddy map: fabric poof collision — the softest profile in the game, a plush
+// thump with no hard attack at all.
+function clinkPlush(impact) {
+  const a = ac(), t = a.currentTime;
+  const vol = Math.min(0.3, impact * 0.07);
+  if (vol < 0.02) return;
+  // muffled body thud
+  const base = 130 + Math.random() * 70;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(base, t);
+  o.frequency.exponentialRampToValueAtTime(base * 0.55, t + 0.11);
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.015);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.18);
+  // fabric brush texture
+  const len = Math.floor(a.sampleRate * 0.08);
+  const buf = a.createBuffer(1, len, a.sampleRate);
+  const ch = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 1.8);
+  const src = a.createBufferSource(); src.buffer = buf;
+  const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 650;
+  const ng = a.createGain(); ng.gain.setValueAtTime(vol * 0.8, t);
+  src.connect(lp).connect(ng).connect(a.destination); src.start(t);
 }
 
 function coinTick() {

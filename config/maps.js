@@ -38,6 +38,15 @@ const MAPS = [
     itemsData: null,
     combos:   true,   // this map awards cascade-merge multipliers
   },
+  {
+    id:       'teddy',
+    label:    'Plushie Factory',
+    sublabel: 'Made for Mai',
+    bg:       'assets/images/bg-teddy.png',
+    bgm:      'assets/audio/bgm.mp3',   // placeholder until the plushie track lands
+    bgmVol:   0.35,
+    itemsData: null,
+  },
 ];
 
 // Wire item sets after items.js has defined them.
@@ -45,6 +54,7 @@ MAPS[0].itemsData = HAWAII_ITEMS;
 MAPS[1].itemsData = SAIGON_ITEMS;
 MAPS[2].itemsData = KYOTO_ITEMS;
 MAPS[3].itemsData = MAGE_ITEMS;
+MAPS[4].itemsData = TEDDY_ITEMS;
 
 // Apply visually-edited boundaries from config/hitboxes.js
 // (maintained with tools/hitbox-editor.html).
