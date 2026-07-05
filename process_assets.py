@@ -115,24 +115,20 @@ PIPELINE = {
 
     'mage': [
         {
-            'file':      'merge items.png',
+            # v2 sheet: REAL transparent background (the workflow fix) — split
+            # on alpha gutters, no keying, no separators. The generator drew a
+            # 3x4 grid with a duplicate tome, a duplicate portal and one empty
+            # cell; None skips those.
+            'file':      'merge items v2.png',
             'type':      'spritesheet',
-            'grid':      (3, 3),
-            'chroma':    'green',          # AI art on a green-screen background
-            # Measured positions of the magenta grid lines — the AI did NOT
-            # draw an even 3×3 (rows sit at 310/618, not 341/683). Auto-detect
-            # can't be used here: the portal and wand items are purple enough
-            # to read as separator color.
-            'col_splits': [340, 680],
-            'row_splits': [310, 618],
-            'cell_margin': 9,              # separator anti-aliasing is wide on this sheet
+            'grid':      (4, 3),
+            'chroma':    'alpha',
             'names':     [
                 'mage-crystal', 'mage-potion', 'mage-ring',
                 'mage-rune',    'mage-orb',    'mage-tome',
-                'mage-wand',    'mage-portal', 'mage-ball',
+                'mage-wand',    'mage-portal', None,          # dup tome
+                None,           None,          'mage-ball',   # empty, dup portal
             ],
-            # Round items whose glow fills the cell — taper it into a round aura.
-            'round_aura': ['mage-potion', 'mage-orb', 'mage-portal', 'mage-rune', 'mage-ball'],
         },
         {'file': 'bg.png', 'type': 'copy', 'name': 'bg-mage'},
     ],
@@ -457,6 +453,56 @@ def find_whitespace_splits(data: np.ndarray, n_parts: int,
     return splits
 
 
+def _alpha_bands(mask: np.ndarray, axis: int,
+                 merge_gap: int = 14, min_size: int = 20,
+                 min_px: int = 4) -> list:
+    """Content bands along an axis of a boolean alpha mask. A line only counts
+    as content if it has more than min_px solid pixels — generators sometimes
+    leave faint 1px alpha streaks running across the whole sheet, which would
+    otherwise bridge every gutter. Bands separated by less than merge_gap px
+    are merged (stray glow specks); bands narrower than min_size are dropped."""
+    prof = mask.sum(axis=axis) > min_px
+    bands, inb, s = [], False, 0
+    for i, v in enumerate(prof):
+        if v and not inb: inb, s = True, i
+        elif not v and inb: bands.append([s, i]); inb = False
+    if inb: bands.append([s, len(prof)])
+    merged = []
+    for b in bands:
+        if merged and b[0] - merged[-1][1] < merge_gap: merged[-1][1] = b[1]
+        else: merged.append(b)
+    return [b for b in merged if b[1] - b[0] >= min_size]
+
+
+def split_alpha_grid(img: Image.Image, rows: int, cols: int) -> list:
+    """Split a sheet with a REAL transparent background: cells are found from
+    the fully-transparent gutters between items — no separator lines, no
+    keying, and tolerant of the grid drifting off even spacing. Returns
+    rows*cols cells in reading order (None where a cell is empty)."""
+    img  = img.convert("RGBA")
+    data = np.array(img)
+    mask = data[:, :, 3] > 32          # solid content only; faint streaks ignored
+    col_bands = _alpha_bands(mask, axis=0)
+    row_bands = _alpha_bands(mask, axis=1)
+    assert len(col_bands) == cols and len(row_bands) == rows, (
+        f"expected {cols}x{rows} content bands, found {len(col_bands)}x{len(row_bands)} "
+        f"(cols {col_bands}, rows {row_bands}) -> glow may be bridging a gutter")
+    # pad bands so soft glow (below the solid threshold) is kept with its item
+    GLOW_PAD = 24
+    cells = []
+    for (y0, y1) in row_bands:
+        for (x0, x1) in col_bands:
+            cell = img.crop((max(0, x0-GLOW_PAD), max(0, y0-GLOW_PAD),
+                             min(img.width, x1+GLOW_PAD), min(img.height, y1+GLOW_PAD)))
+            ca = np.array(cell)[:, :, 3] > 32
+            if ca.sum() < 30: cells.append(None); continue
+            ys, xs = np.where(ca)
+            p = TRIM_PAD
+            cells.append(cell.crop((max(0, xs.min()-p), max(0, ys.min()-p),
+                                    min(cell.width, xs.max()+p+1), min(cell.height, ys.max()+p+1))))
+    return cells
+
+
 def split_grid(img: Image.Image, rows: int, cols: int,
                separator: list = None,
                sep_tol: int = 30,
@@ -509,6 +555,18 @@ def handle_spritesheet(src: Path, cfg: dict):
     assert len(names) == rows * cols, \
         f"{src.name}: expected {rows*cols} names, got {len(names)}"
     chroma     = cfg.get('chroma', 'white')
+
+    # Real transparent background: split on alpha gutters, no keying at all.
+    # Use None in 'names' to skip a cell (duplicates / empties in the sheet).
+    if chroma == 'alpha':
+        for cell, name in zip(split_alpha_grid(Image.open(src), rows, cols), names):
+            if name is None:
+                continue
+            assert cell is not None, f"{src.name}: cell for '{name}' is empty"
+            cell.save(OUTPUT_DIR / f"{name}.png", "PNG")
+            print(f"    {name}.png")
+        return
+
     cells      = split_grid(Image.open(src), rows, cols,
                             separator=cfg.get('separator'),
                             sep_tol=cfg.get('sep_tol', 30),
