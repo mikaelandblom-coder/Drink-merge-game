@@ -77,8 +77,9 @@
         or middle-drag: pan · Fit resets view.<br>
         Red dashed line = horizon — drag it to<br>
         reshape the map's perspective (saved).<br>
-        Splines may cross it; walls above it are<br>
-        unreachable in-game.<br>
+        Green dashed line = free-shot line: shots<br>
+        ignore the walls below it (drag to bottom<br>
+        edge to disable). Both saved per map.<br>
         Magenta = generated physics walls.
       </div>
     </fieldset>
@@ -133,6 +134,9 @@
 // into config/hitboxes.js and applied by the game via startGame().
 const DEFAULT_HORIZON = H * 0.285, FAR_SCALE = 0.55, FAR_W = W * 0.74, NEAR_Y = H;
 let horizon = DEFAULT_HORIZON;
+// Free-shot line: below it, freshly shot items ignore the traced walls until
+// they cross it / touch another item. At the bottom edge (= H) it is inactive.
+let freeLine = H;
 function persp(wx, wy) {
   const t = wy / H, rowW = FAR_W + (W - FAR_W) * t;
   return { x: W/2 + (wx - W/2) * (rowW / W), y: horizon + (NEAR_Y - horizon) * t,
@@ -195,14 +199,15 @@ function loadMap(id) {
   bg.onload = draw;
   const hb = MAP_HITBOXES[id];
   if (hb) {
-    knots   = hb.knots.map(k => [...k]);
-    closed  = !!hb.closed;
-    inset   = hb.sideInset || 0;
-    horizon = (hb.horizon !== undefined) ? hb.horizon : DEFAULT_HORIZON;
+    knots    = hb.knots.map(k => [...k]);
+    closed   = !!hb.closed;
+    inset    = hb.sideInset || 0;
+    horizon  = (hb.horizon !== undefined) ? hb.horizon : DEFAULT_HORIZON;
+    freeLine = (hb.freeLine !== undefined) ? hb.freeLine : H;
   } else {
     // sensible default: gentle arc across the upper third
     knots  = [[60, 300], [120, 240], [210, 220], [300, 240], [360, 300]];
-    closed = false; inset = 0; horizon = DEFAULT_HORIZON;
+    closed = false; inset = 0; horizon = DEFAULT_HORIZON; freeLine = H;
   }
   document.getElementById('inset').value = inset;
   document.getElementById('insetVal').textContent = inset;
@@ -291,6 +296,13 @@ function drawMap() {
   ctx.fillStyle = 'rgba(255,120,120,.9)';
   ctx.beginPath(); ctx.arc(W + EXT*0.5, horizon, 5*sc, 0, Math.PI*2); ctx.fill();
 
+  // free-shot line (green): shots ignore the traced walls below it
+  ctx.setLineDash([9*sc,6*sc]); ctx.strokeStyle = 'rgba(125,255,154,.7)'; ctx.lineWidth = 1.5*sc;
+  ctx.beginPath(); ctx.moveTo(-EXT, freeLine); ctx.lineTo(W+EXT, freeLine); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(125,255,154,.9)';
+  ctx.beginPath(); ctx.arc(-EXT*0.5, freeLine, 5*sc, 0, Math.PI*2); ctx.fill();
+
   // danger line + launcher, for context
   const d1 = persp(0, H-150), d2 = persp(W, H-150);
   ctx.setLineDash([7*sc,8*sc]); ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=2*sc;
@@ -330,8 +342,11 @@ function drawMap() {
     for (const b of balls) {
       const p = persp(b.position.x, b.position.y);
       ctx.beginPath(); ctx.arc(p.x, p.y, b.circleRadius * p.s, 0, Math.PI*2);
-      ctx.fillStyle='rgba(125,255,154,.35)'; ctx.fill();
+      ctx.fillStyle = b.ghost ? 'rgba(125,255,154,.12)' : 'rgba(125,255,154,.35)';
+      ctx.fill();
+      if (b.ghost) ctx.setLineDash([5*sc, 4*sc]);   // ghost = still in the free zone
       ctx.strokeStyle='#7dff9a'; ctx.lineWidth=2*sc; ctx.stroke();
+      ctx.setLineDash([]);
     }
   }
 }
@@ -391,10 +406,10 @@ const toWorld = e => {
   return mode === 'map' ? [px / view.z + view.ox, py / view.z + view.oy] : [px, py];
 };
 const near = (p, k, d) => Math.hypot(p[0]-k[0], p[1]-k[1]) < d;
-function snapshot() { undoStack.push(JSON.stringify({knots, closed, inset, horizon})); if (undoStack.length > 60) undoStack.shift(); }
+function snapshot() { undoStack.push(JSON.stringify({knots, closed, inset, horizon, freeLine})); if (undoStack.length > 60) undoStack.shift(); }
 function changed() { dirtyWalls = true; if (testing) rebuildSim(); draw(); }
 
-let panning = false, panStart = null, dragHorizon = false;
+let panning = false, panStart = null, dragHorizon = false, dragFree = false;
 
 canvas.addEventListener('pointerdown', e => {
   try { canvas.setPointerCapture(e.pointerId); } catch {}  // drags keep working outside the canvas
@@ -420,6 +435,9 @@ canvas.addEventListener('pointerdown', e => {
   else if (Math.abs(p[1] - horizon) < 8 / view.z) { // grab the horizon line
     snapshot(); dragHorizon = true;
   }
+  else if (Math.abs(p[1] - freeLine) < 8 / view.z) { // grab the free-shot line
+    snapshot(); dragFree = true;
+  }
   else {                                            // drag empty space to pan
     panning = true; panStart = { x: e.clientX, y: e.clientY, ox: view.ox, oy: view.oy };
   }
@@ -437,6 +455,13 @@ canvas.addEventListener('pointermove', e => {
     horizon = Math.max(0, Math.min(380, toWorld(e)[1]));
     status(`Horizon: ${Math.round(horizon)} (game default ${Math.round(DEFAULT_HORIZON)}) — saved per map`);
     changed(); return;
+  }
+  if (dragFree) {
+    freeLine = Math.max(horizon + 20, Math.min(H, toWorld(e)[1]));
+    status(freeLine >= H - 1
+      ? 'Free-shot line OFF (at bottom edge) — shots collide with walls immediately'
+      : `Free-shot line: ${Math.round(freeLine)} — shots ignore the traced walls below it until they cross or touch an item`);
+    draw(); return;
   }
   const p = toWorld(e);
   if (mode === 'item') {
@@ -462,7 +487,7 @@ canvas.addEventListener('pointermove', e => {
     changed();
   }
 });
-addEventListener('pointerup', () => { dragKnot = -1; dragCircle = false; panning = false; dragHorizon = false; });
+addEventListener('pointerup', () => { dragKnot = -1; dragCircle = false; panning = false; dragHorizon = false; dragFree = false; });
 
 // scroll-zoom: map mode zooms toward the cursor; item mode drives the zoom slider
 canvas.addEventListener('wheel', e => {
@@ -508,6 +533,7 @@ addEventListener('keydown', e => {
     const s = JSON.parse(undoStack.pop());
     knots = s.knots; closed = s.closed; inset = s.inset;
     if (s.horizon !== undefined) horizon = s.horizon;
+    if (s.freeLine !== undefined) freeLine = s.freeLine;
     document.getElementById('inset').value = inset;
     document.getElementById('insetVal').textContent = inset;
     document.getElementById('closed').checked = closed;
@@ -527,6 +553,7 @@ document.getElementById('fitBtn').onclick = () => { view.z = 1; view.ox = 0; vie
 
 // ───────────────────────── physics test mode ─────────────────────────────────
 const { Engine, Bodies, Body, Composite } = Matter;
+const CAT_TRAY = 0x0002;   // traced walls; ghost shots don't collide with these
 function rebuildSim() {
   engine = Engine.create(); engine.gravity.x = 0; engine.gravity.y = 0;
   const opts = { isStatic: true, restitution: 0.02 };
@@ -535,17 +562,31 @@ function rebuildSim() {
     Bodies.rectangle(-30 + inset, H/2, 60, H*2, opts),
     Bodies.rectangle(W + 30 - inset, H/2, 60, H*2, opts),
     ...walls().map(c => Bodies.rectangle(c.x, c.y, c.len + WALL_OVERLAP, WALL_THICK,
-        { ...opts, angle: c.angle, chamfer: { radius: WALL_THICK/2 } })),
+        { ...opts, angle: c.angle, chamfer: { radius: WALL_THICK/2 },
+          collisionFilter: { group: 0, category: CAT_TRAY, mask: -1 } })),
   ];
   Composite.add(engine.world, statics);
+  // touching another ball also solidifies a ghost (same as the game)
+  Matter.Events.on(engine, 'collisionStart', ev => {
+    for (const pr of ev.pairs) {
+      if (!pr.bodyA.isStatic && !pr.bodyB.isStatic) {
+        if (pr.bodyA.ghost) solidifyBall(pr.bodyA);
+        if (pr.bodyB.ghost) solidifyBall(pr.bodyB);
+      }
+    }
+  });
   balls = [];
 }
+function solidifyBall(b) { b.ghost = false; b.collisionFilter.mask = -1; }
 function shoot(flat) {
   const t = unpersp(flat[0], flat[1]);
   const lx = W/2, ly = H - 60;
   const dx = t.x - lx, dy = t.y - ly, len = Math.max(1, Math.hypot(dx, dy));
   const r = +document.getElementById('ballR').value;
-  const b = Bodies.circle(lx, ly - r - 4, r, { restitution: 0.02, frictionAir: 0.028, friction: 0.3, density: 0.0012 });
+  const ghost = freeLine < H - 1;
+  const b = Bodies.circle(lx, ly - r - 4, r, { restitution: 0.02, frictionAir: 0.028, friction: 0.3, density: 0.0012,
+    collisionFilter: { group: 0, category: 0x0001, mask: ghost ? ~CAT_TRAY : -1 } });
+  b.ghost = ghost; b.bornAt = performance.now();
   Body.setVelocity(b, { x: dx/len * 27, y: dy/len * 27 });
   Composite.add(engine.world, b); balls.push(b);
 }
@@ -561,7 +602,16 @@ document.getElementById('ballR').oninput = e => document.getElementById('ballRVa
 document.getElementById('clearBalls').onclick = () => { if (testing) rebuildSim(); draw(); };
 (function loop() {
   requestAnimationFrame(loop);
-  if (testing && engine) { for (let i = 0; i < 3; i++) Engine.update(engine, 1000/60/3); draw(); }
+  if (testing && engine) {
+    for (let i = 0; i < 3; i++) Engine.update(engine, 1000/60/3);
+    const freeWY = unpersp(0, freeLine).y;
+    for (const b of balls) {
+      if (b.ghost && (b.position.y < freeWY ||
+          (performance.now() - b.bornAt > 700 &&
+           Math.hypot(b.velocity.x, b.velocity.y) < 0.5))) solidifyBall(b);
+    }
+    draw();
+  }
 })();
 
 // ───────────────────────── item mode ─────────────────────────────────────────
@@ -612,12 +662,14 @@ function serialize() {
   MAP_HITBOXES[mapId] = {
     sideInset: inset, closed,
     horizon: +horizon.toFixed(1),
+    freeLine: Math.round(freeLine),
     knots: knots.map(k => [Math.round(k[0]), Math.round(k[1])]),
     cornerWalls: walls(),
   };
   const mapsSrc = Object.entries(MAP_HITBOXES).map(([id, hb]) => {
     const kn = hb.knots.map(k => `[${k[0]}, ${k[1]}]`).join(', ');
-    const hz = (hb.horizon !== undefined) ? `\n    horizon: ${hb.horizon},` : '';
+    const hz = ((hb.horizon !== undefined) ? `\n    horizon: ${hb.horizon},` : '') +
+               ((hb.freeLine !== undefined) ? `\n    freeLine: ${hb.freeLine},` : '');
     const cw = hb.cornerWalls.map(c =>
       `      { x: ${String(c.x).padStart(4)}, y: ${String(c.y).padStart(4)}, len: ${String(c.len).padStart(4)}, angle: ${c.angle >= 0 ? ' ' : ''}${c.angle.toFixed(3)} },`).join('\n');
     return `  ${id}: {\n    sideInset: ${hb.sideInset},\n    closed: ${hb.closed},${hz}\n    knots: [\n      ${kn},\n    ],\n    cornerWalls: [\n${cw}\n    ],\n  },`;
@@ -638,6 +690,9 @@ function serialize() {
 //   sideInset   — left/right wall inset; negative widens the field
 //   horizon     — per-map perspective vanishing row (flat px); applied by
 //                 startGame(). Omitted = game default (H * 0.285).
+//   freeLine    — flat y of the free-shot line: freshly shot items ignore the
+//                 traced walls below it (until crossing it / touching an item).
+//                 At the bottom edge (= H) the mechanic is off.
 //   cornerWalls — GENERATED from the spline (perspective-corrected physics
 //                 segments consumed by game.js). Regenerated on every save.
 //

@@ -43,9 +43,10 @@ const MAPS = [
     label:    'Plushie Factory',
     sublabel: 'Made for Mai',
     bg:       'assets/images/bg-teddy.png',
-    bgm:      'assets/audio/bgm.mp3',   // placeholder until the plushie track lands
+    bgm:      'assets/audio/Stuffed with love.mp3',
     bgmVol:   0.35,
     itemsData: null,
+    combos:   true,   // cascade-merge multipliers (like Mage Tower)
   },
 ];
 
@@ -65,6 +66,7 @@ if (typeof MAP_HITBOXES !== 'undefined') {
       m.cornerWalls = hb.cornerWalls;
       m.sideInset = hb.sideInset || 0;
       if (hb.horizon !== undefined) m.horizon = hb.horizon;
+      if (hb.freeLine !== undefined) m.freeLine = hb.freeLine;
     }
   }
 }

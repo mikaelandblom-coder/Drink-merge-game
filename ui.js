@@ -40,7 +40,7 @@ function wireInput(canvas, state) {
     const dx = target.x - LAUNCH.x, dy = target.y - LAUNCH.y;
     const len = Math.max(1, Math.hypot(dx, dy));
     if (dy > -10) return;
-    const d = makeDrink(LAUNCH.x, LAUNCH.y - ITEMS[state.nextTier].physR - 4, state.nextTier);
+    const d = makeDrink(LAUNCH.x, LAUNCH.y - ITEMS[state.nextTier].physR - 4, state.nextTier, true);
     const speed = 27;
     Body.setVelocity(d, { x: dx / len * speed, y: dy / len * speed });
     state.combo = 0;  // each throw starts a fresh combo chain

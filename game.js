@@ -73,6 +73,28 @@ Composite.add(engine.world, [
 // ---------- per-map walls ----------
 let mapWalls = [];
 
+// Free-shot zone: below the per-map free line (map.freeLine, set in the hitbox
+// editor), a freshly SHOT item ignores the traced boundary walls so shooting
+// never clips the shape's lower edges near the launcher. The item turns solid
+// ("interacts with the environment") the moment it crosses above the line,
+// touches another item, or settles — and stays solid forever after.
+const CAT_TRAY = 0x0002;          // collision category of the traced walls
+let FREE_WY = Infinity;           // physics y of the free line (Infinity = off)
+let trayWalls = [];               // just the traced boundary bodies
+
+function solidify(d) {
+  d.plugin.ghost = false;
+  d.collisionFilter.mask = -1;
+}
+
+// Never solidify a ghost while it geometrically overlaps a traced wall —
+// restoring its collision mask mid-overlap makes Matter eject it violently
+// (shots bounced backwards). Deferred ghosts are retried every frame and
+// solidify as soon as they emerge from the wall.
+function trySolidify(d) {
+  if (Matter.Query.collides(d, trayWalls).length === 0) solidify(d);
+}
+
 // Build the tray boundary directly from the traced polygon: one thin static
 // rectangle per edge (the cornerWalls entries already store each edge as
 // centre/length/angle). Each rectangle is lengthened a little so neighbours
@@ -96,6 +118,7 @@ function applyMapWalls(map) {
     for (const c of map.cornerWalls) {
       mapWalls.push(Bodies.rectangle(c.x, c.y, c.len + WALL_OVERLAP, WALL_THICK, {
         ...wallOpts, angle: c.angle, chamfer: { radius: WALL_THICK / 2 },
+        collisionFilter: { group: 0, category: CAT_TRAY, mask: -1 },
       }));
     }
   }
@@ -130,11 +153,13 @@ function comboColor(m) {
   return '#5aa8e6';
 }
 
-function makeDrink(x, y, tier) {
+function makeDrink(x, y, tier, shot = false) {
+  const ghost = shot && isFinite(FREE_WY);   // only launcher shots ghost, never merge spawns
   const b = Bodies.circle(x, y, ITEMS[tier].physR, {
     restitution: 0.02, frictionAir: 0.028, friction: 0.3, density: 0.0012,
+    collisionFilter: { group: 0, category: 0x0001, mask: ghost ? ~CAT_TRAY : -1 },
   });
-  b.plugin = { tier, born: performance.now(), merging: false };
+  b.plugin = { tier, born: performance.now(), merging: false, ghost };
   Composite.add(engine.world, b);
   state.drinks.push(b);
   return b;
@@ -161,6 +186,9 @@ Events.on(engine, 'collisionStart', ev => {
   for (const pair of ev.pairs) {
     const a = pair.bodyA, b = pair.bodyB;
     if (!a.plugin || !b.plugin) continue;
+    // touching another item makes a free-zone shot part of the environment
+    if (a.plugin.ghost) solidify(a);
+    if (b.plugin.ghost) solidify(b);
     const rvx = a.velocity.x - b.velocity.x, rvy = a.velocity.y - b.velocity.y;
     clink(Math.hypot(rvx, rvy));
     if (a.plugin.merging || b.plugin.merging) continue;
@@ -308,6 +336,12 @@ function loop(ts) {
   if (idleFrames > 20) return;  // board is still — skip the expensive work
 
   for (let i = 0; i < SUBSTEPS; i++) Engine.update(engine, FRAME_MS / SUBSTEPS);
+  // free-zone shots solidify when they cross the line, or once they settle
+  for (const d of state.drinks) {
+    if (d.plugin.ghost && (d.position.y < FREE_WY ||
+        (performance.now() - d.plugin.born > 700 &&
+         Math.hypot(d.velocity.x, d.velocity.y) < 0.5))) solidify(d);
+  }
   render(dt);
 }
 
@@ -329,6 +363,10 @@ function startGame(map) {
   ACTIVE_MAP = map;
   ITEMS = ACTIVE_MAP.itemsData;
   HORIZON = (ACTIVE_MAP.horizon !== undefined) ? ACTIVE_MAP.horizon : DEFAULT_HORIZON;
+  // free line is stored in flat (editor) coords; horizontal lines map to a
+  // constant physics y, so convert once here
+  FREE_WY = (ACTIVE_MAP.freeLine !== undefined && ACTIVE_MAP.freeLine < H - 1)
+    ? unpersp(0, ACTIVE_MAP.freeLine).y : Infinity;
   applyMapWalls(ACTIVE_MAP);
   loadMapAssets(ACTIVE_MAP);
   setSoundProfile(ACTIVE_MAP.id);
