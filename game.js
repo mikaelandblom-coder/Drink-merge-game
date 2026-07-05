@@ -81,6 +81,7 @@ let mapWalls = [];
 const CAT_TRAY = 0x0002;          // collision category of the traced walls
 let FREE_WY = Infinity;           // physics y of the free line (Infinity = off)
 let trayWalls = [];               // just the traced boundary bodies
+let trayPoly  = [];               // boundary polygon (physics coords) for the inside test
 
 function solidify(d) {
   d.plugin.ghost = false;
@@ -93,6 +94,31 @@ function solidify(d) {
 // solidify as soon as they emerge from the wall.
 function trySolidify(d) {
   if (Matter.Query.collides(d, trayWalls).length === 0) solidify(d);
+}
+
+// Ordered boundary polygon from the wall segments' endpoints. For open splines
+// the ray-cast implicitly closes last->first, which spans the launcher opening
+// — exactly the "entrance" edge.
+function buildTrayPoly(cornerWalls) {
+  const pts = [];
+  for (const c of cornerWalls) {
+    const hx = Math.cos(c.angle) * c.len / 2, hy = Math.sin(c.angle) * c.len / 2;
+    const a = { x: c.x - hx, y: c.y - hy };
+    if (!pts.length || Math.hypot(a.x - pts[pts.length-1].x, a.y - pts[pts.length-1].y) > 6) pts.push(a);
+    pts.push({ x: c.x + hx, y: c.y + hy });
+  }
+  return pts;
+}
+
+function insideTray(x, y) {
+  const p = trayPoly;
+  if (!p.length) return true;     // no traced boundary -> whole field is interior
+  let inside = false;
+  for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
+    if ((p[i].y > y) !== (p[j].y > y) &&
+        x < (p[j].x - p[i].x) * (y - p[i].y) / (p[j].y - p[i].y) + p[i].x) inside = !inside;
+  }
+  return inside;
 }
 
 // Build the tray boundary directly from the traced polygon: one thin static
@@ -115,6 +141,7 @@ function applyMapWalls(map) {
   mapWalls.push(Bodies.rectangle(W + 30 - inset,  H / 2, 60, H * 2, wallOpts));
 
   trayWalls = [];
+  trayPoly  = [];
   if (map.cornerWalls) {
     for (const c of map.cornerWalls) {
       trayWalls.push(Bodies.rectangle(c.x, c.y, c.len + WALL_OVERLAP, WALL_THICK, {
@@ -123,6 +150,7 @@ function applyMapWalls(map) {
       }));
     }
     mapWalls.push(...trayWalls);
+    trayPoly = buildTrayPoly(map.cornerWalls);
   }
   Composite.add(engine.world, mapWalls);
 }
@@ -156,7 +184,11 @@ function comboColor(m) {
 }
 
 function makeDrink(x, y, tier, shot = false) {
-  const ghost = shot && isFinite(FREE_WY);   // only launcher shots ghost, never merge spawns
+  // Shots always start as ghosts; merge spawns only when they would not yet
+  // qualify as active (e.g. two stray ghosts merging in the dead zone) — the
+  // product then activates the normal way once it gets inside.
+  const ghost = isFinite(FREE_WY) &&
+                (shot || !(y < FREE_WY && insideTray(x, y)));
   const b = Bodies.circle(x, y, ITEMS[tier].physR, {
     restitution: 0.02, frictionAir: 0.028, friction: 0.3, density: 0.0012,
     collisionFilter: { group: 0, category: 0x0001, mask: ghost ? ~CAT_TRAY : -1 },
@@ -188,9 +220,6 @@ Events.on(engine, 'collisionStart', ev => {
   for (const pair of ev.pairs) {
     const a = pair.bodyA, b = pair.bodyB;
     if (!a.plugin || !b.plugin) continue;
-    // touching another item makes a free-zone shot part of the environment
-    if (a.plugin.ghost) trySolidify(a);
-    if (b.plugin.ghost) trySolidify(b);
     const rvx = a.velocity.x - b.velocity.x, rvy = a.velocity.y - b.velocity.y;
     clink(Math.hypot(rvx, rvy));
     if (a.plugin.merging || b.plugin.merging) continue;
@@ -338,12 +367,13 @@ function loop(ts) {
   if (idleFrames > 20) return;  // board is still — skip the expensive work
 
   for (let i = 0; i < SUBSTEPS; i++) Engine.update(engine, FRAME_MS / SUBSTEPS);
-  // free-zone shots solidify when they cross the line, or once they settle —
-  // but never while overlapping a wall (trySolidify defers until clear)
+  // A shot's hitbox activates only once it is past the free line AND inside
+  // the traced shape (and clear of walls, via trySolidify). Nothing can turn
+  // solid out in the dead zone — a stray ghost stays a ghost until a later
+  // nudge carries it inside, so bounce-backs outside the play area are gone.
   for (const d of state.drinks) {
-    if (d.plugin.ghost && (d.position.y < FREE_WY ||
-        (performance.now() - d.plugin.born > 700 &&
-         Math.hypot(d.velocity.x, d.velocity.y) < 0.5))) trySolidify(d);
+    if (d.plugin.ghost && d.position.y < FREE_WY &&
+        insideTray(d.position.x, d.position.y)) trySolidify(d);
   }
   render(dt);
 }

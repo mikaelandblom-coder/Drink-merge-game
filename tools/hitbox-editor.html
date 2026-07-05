@@ -554,13 +554,21 @@ document.getElementById('fitBtn').onclick = () => { view.z = 1; view.ox = 0; vie
 // ───────────────────────── physics test mode ─────────────────────────────────
 const { Engine, Bodies, Body, Composite } = Matter;
 const CAT_TRAY = 0x0002;   // traced walls; ghost shots don't collide with these
-let simTrayWalls = [];
+let simTrayWalls = [], simTrayPoly = [];
 function rebuildSim() {
   engine = Engine.create(); engine.gravity.x = 0; engine.gravity.y = 0;
   const opts = { isStatic: true, restitution: 0.02 };
   simTrayWalls = walls().map(c => Bodies.rectangle(c.x, c.y, c.len + WALL_OVERLAP, WALL_THICK,
       { ...opts, angle: c.angle, chamfer: { radius: WALL_THICK/2 },
         collisionFilter: { group: 0, category: CAT_TRAY, mask: -1 } }));
+  // boundary polygon for the inside test (ray-cast closes across the opening)
+  simTrayPoly = [];
+  for (const c of walls()) {
+    const hx = Math.cos(c.angle)*c.len/2, hy = Math.sin(c.angle)*c.len/2;
+    const a = { x: c.x-hx, y: c.y-hy };
+    if (!simTrayPoly.length || Math.hypot(a.x-simTrayPoly[simTrayPoly.length-1].x, a.y-simTrayPoly[simTrayPoly.length-1].y) > 6) simTrayPoly.push(a);
+    simTrayPoly.push({ x: c.x+hx, y: c.y+hy });
+  }
   const statics = [
     Bodies.rectangle(W/2, -30, W*2, 60, opts),
     Bodies.rectangle(-30 + inset, H/2, 60, H*2, opts),
@@ -568,16 +576,17 @@ function rebuildSim() {
     ...simTrayWalls,
   ];
   Composite.add(engine.world, statics);
-  // touching another ball also solidifies a ghost (same as the game)
-  Matter.Events.on(engine, 'collisionStart', ev => {
-    for (const pr of ev.pairs) {
-      if (!pr.bodyA.isStatic && !pr.bodyB.isStatic) {
-        if (pr.bodyA.ghost) solidifyBall(pr.bodyA);
-        if (pr.bodyB.ghost) solidifyBall(pr.bodyB);
-      }
-    }
-  });
   balls = [];
+}
+function insideSimTray(x, y) {
+  const p = simTrayPoly;
+  if (!p.length) return true;
+  let inside = false;
+  for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
+    if ((p[i].y > y) !== (p[j].y > y) &&
+        x < (p[j].x - p[i].x) * (y - p[i].y) / (p[j].y - p[i].y) + p[i].x) inside = !inside;
+  }
+  return inside;
 }
 // never solidify while overlapping a traced wall — restoring the mask
 // mid-overlap makes Matter eject the ball violently (backwards bounces)
@@ -613,9 +622,8 @@ document.getElementById('clearBalls').onclick = () => { if (testing) rebuildSim(
     for (let i = 0; i < 3; i++) Engine.update(engine, 1000/60/3);
     const freeWY = unpersp(0, freeLine).y;
     for (const b of balls) {
-      if (b.ghost && (b.position.y < freeWY ||
-          (performance.now() - b.bornAt > 700 &&
-           Math.hypot(b.velocity.x, b.velocity.y) < 0.5))) solidifyBall(b);
+      if (b.ghost && b.position.y < freeWY &&
+          insideSimTray(b.position.x, b.position.y)) solidifyBall(b);
     }
     draw();
   }
