@@ -64,6 +64,9 @@ function drawDrink(sx, sy, tier, scale, wobble) {
   const r = item.r * scale;
   ctx.save(); ctx.translate(sx, sy);
   ctx.rotate(Math.sin(wobble) * 0.02);
+  // The collision circle may be offset from the sprite anchor (set in the
+  // hitbox editor); the body IS the circle, so shift the art the other way.
+  ctx.translate(-item.hbOffX * r, -item.hbOffY * r);
 
   // shadow
   ctx.save();

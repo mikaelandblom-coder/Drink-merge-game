@@ -56,6 +56,11 @@ const MAGE_ITEMS = [
 [...HAWAII_ITEMS, ...SAIGON_ITEMS, ...KYOTO_ITEMS, ...MAGE_ITEMS].forEach(item => {
   const hb = (typeof ITEM_HITBOXES !== 'undefined') && ITEM_HITBOXES[item.sprite];
   if (hb && hb.bodyRatio) item.bodyRatio = hb.bodyRatio;
+  // Collision-circle offset relative to the sprite anchor, in units of r
+  // (the sprite is drawn shifted the other way so the circle lands where
+  // the editor placed it).
+  item.hbOffX = (hb && hb.dx) || 0;
+  item.hbOffY = (hb && hb.dy) || 0;
   item.img = new Image();
   item.img.src = item.sprite;
   item.physR = item.r * 2.4 * item.bodyRatio / 2 * 0.88;
