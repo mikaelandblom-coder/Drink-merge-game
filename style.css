@@ -97,6 +97,16 @@ html, body { height: 100%; overflow: hidden; background: var(--bar-deep); font-f
 .play-btn:hover { filter: brightness(1.12); }
 .play-btn:focus-visible { outline: 3px solid var(--neon); outline-offset: 2px; }
 
+/* Per-map option toggles (table size, combo multipliers) */
+.map-options { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.map-opt-toggle {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: #9a7a52; letter-spacing: .04em;
+  cursor: pointer; user-select: none;
+}
+.map-opt-toggle input { accent-color: var(--brass); width: 15px; height: 15px; cursor: pointer; }
+.map-opt-toggle:hover { color: var(--brass); }
+
 /* Scores inside map card */
 .card-scores { display: flex; flex-direction: column; gap: 6px; }
 
@@ -108,49 +118,20 @@ html, body { height: 100%; overflow: hidden; background: var(--bar-deep); font-f
   font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--brass); opacity: .6;
 }
 
-.add-score-btn {
-  background: none; border: 1px solid #4a3520; color: var(--brass);
-  font-family: inherit; font-size: 11px; padding: 2px 8px;
-  border-radius: 999px; cursor: pointer; opacity: .7;
-  transition: opacity .15s;
+/* One row per variant: label on the left, its top-3 scores on the right.
+   No player names — these are local scores, so the space goes to the values. */
+.csr-variant {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  padding: 2px 6px; margin: 0 -6px; border-radius: 6px;
+  font-size: 13px; color: #c8a870;
 }
-.add-score-btn:hover { opacity: 1; }
+.csr-variant.active { background: rgba(230, 190, 120, .12); }
+.csr-variant.active .cv-label { color: var(--brass); opacity: 1; }
 
-.card-score-row {
-  display: flex; align-items: center; gap: 6px; font-size: 13px; color: #c8a870; padding: 1px 0;
-}
-
-.csr-rank { width: 14px; text-align: right; font-size: 11px; opacity: .45; }
-.csr-name { flex: 1; }
-.csr-val  { font-size: 13px; }
-
-.card-no-scores { font-size: 12px; color: #5a4630; font-style: italic; }
-
-/* Add-score inline form */
-.add-score-form {
-  display: none; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px;
-}
-
-.asf-name, .asf-score {
-  background: rgba(255,255,255,.07); border: 1px solid #4a3520;
-  color: var(--foam); font-family: inherit; font-size: 13px;
-  padding: 5px 9px; border-radius: 8px; outline: none;
-}
-.asf-name  { width: 110px; }
-.asf-score { width: 80px; }
-.asf-name:focus, .asf-score:focus { border-color: var(--brass); }
-
-.asf-save {
-  background: var(--brass); border: none; color: var(--bar-deep);
-  font-family: inherit; font-size: 12px; font-weight: bold;
-  padding: 5px 14px; border-radius: 999px; cursor: pointer;
-}
-
-.asf-cancel {
-  background: none; border: 1px solid #4a3520; color: #8a6f52;
-  font-family: inherit; font-size: 12px;
-  padding: 5px 12px; border-radius: 999px; cursor: pointer;
-}
+.cv-label  { font-size: 11px; letter-spacing: .02em; color: #9a7a52; white-space: nowrap; }
+.cv-scores { text-align: right; font-variant-numeric: tabular-nums; }
+.csr-sep   { opacity: .3; margin: 0 5px; }
+.csr-empty { opacity: .4; }
 
 /* ── Game screen ────────────────────────────────────────────── */
 #wrap {
@@ -181,6 +162,25 @@ canvas { display: block; touch-action: none; border-radius: 14px; }
 }
 
 #over h2 { font-size: 28px; font-style: italic; color: var(--neon); }
+
+/* Celebration banner when the variant's best score is beaten */
+.new-best {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  font-size: 19px; font-weight: bold; font-style: italic; color: var(--neon);
+  text-shadow: 0 0 14px rgba(255, 120, 180, .55);
+  animation: nbPop .5s cubic-bezier(.2, 1.4, .4, 1) both;
+}
+.new-best .nb-sub {
+  font-size: 12px; font-weight: normal; font-style: normal;
+  color: var(--brass); opacity: .85;
+}
+.new-best.subtle { font-size: 16px; color: var(--brass); text-shadow: none; }
+
+@keyframes nbPop {
+  from { opacity: 0; transform: scale(.7); }
+  60%  { transform: scale(1.08); }
+  to   { opacity: 1; transform: scale(1); }
+}
 
 .final-coins { font-size: 15px; opacity: .9; }
 

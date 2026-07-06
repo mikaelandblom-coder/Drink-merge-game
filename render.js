@@ -25,8 +25,9 @@ function rebuildBgCache() {
 }
 bgImg.onload = rebuildBgCache;
 
-function loadMapAssets(map) {
-  bgImg.src = map.bg;  // called once from game.js after DOM is ready
+function loadMapAssets(map, bgSrc) {
+  // bgSrc lets startGame pick a size variant (map.sizes); falls back to map.bg.
+  bgImg.src = bgSrc || map.bg;  // called once from game.js after DOM is ready
   if (bgImg.complete && bgImg.naturalWidth) rebuildBgCache();  // already cached by browser
 }
 

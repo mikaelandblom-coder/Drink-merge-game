@@ -191,13 +191,32 @@ let curItem = null, zoom = 3, dragCircle = false;
 
 // ───────────────────────── map data in/out ───────────────────────────────────
 const editableMaps = MAPS.filter(m => m.bg);
+
+// One editing target per boundary. Maps with size variants (config/maps.js
+// `sizes`) get one target per framing — each with its own background image and
+// its own MAP_HITBOXES key (via hitboxKey) — so the alternative sizes are
+// editable here. Single-background maps get one target keyed by the map id.
+const editTargets = [];
+editableMaps.forEach(m => {
+  if (m.sizes) {
+    const order = (m.defaultSize === 'small') ? ['small', 'large'] : ['large', 'small'];
+    order.forEach(sz => editTargets.push({
+      key:   hitboxKey(m, sz),
+      label: `${m.label} — ${sz[0].toUpperCase() + sz.slice(1)} (${hitboxKey(m, sz)})`,
+      bg:    m.sizes[sz],
+    }));
+  } else {
+    editTargets.push({ key: m.id, label: `${m.label} (${m.id})`, bg: m.bg });
+  }
+});
+
 const mapSel = document.getElementById('mapSel');
-editableMaps.forEach(m => mapSel.add(new Option(`${m.label} (${m.id})`, m.id)));
+editTargets.forEach(t => mapSel.add(new Option(t.label, t.key)));
 
 function loadMap(id) {
-  mapId = id;
-  const m = editableMaps.find(x => x.id === id);
-  bg = new Image(); bg.src = m.bg;
+  mapId = id;                                   // now a MAP_HITBOXES key
+  const t = editTargets.find(x => x.key === id);
+  bg = new Image(); bg.src = t.bg;
   bg.onload = draw;
   const hb = MAP_HITBOXES[id];
   if (hb) {
@@ -770,7 +789,7 @@ document.getElementById('dlBtn').onclick = () => {
 };
 
 // ───────────────────────── boot ──────────────────────────────────────────────
-loadMap(MAP_HITBOXES.saigon ? 'saigon' : editableMaps[0].id);
+loadMap(MAP_HITBOXES.saigon ? 'saigon' : editTargets[0].key);
 mapSel.value = mapId;
 loadItem(0);
 setMode('map');

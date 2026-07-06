@@ -80,6 +80,8 @@ let mapWalls = [];
 // touches another item, or settles — and stays solid forever after.
 const CAT_TRAY = 0x0002;          // collision category of the traced walls
 let FREE_WY = Infinity;           // physics y of the free line (Infinity = off)
+let COMBOS_ENABLED = false;       // cascade-merge multipliers (set per run in startGame)
+let ACTIVE_SIZE = null;           // table-size variant of the current run (for score keys)
 let trayWalls = [];               // just the traced boundary bodies
 let trayPoly  = [];               // boundary polygon (physics coords) for the inside test
 
@@ -238,7 +240,7 @@ Events.on(engine, 'collisionStart', ev => {
 
       const base = 2 + tier;
       let m = 1;
-      if (ACTIVE_MAP.combos) {
+      if (COMBOS_ENABLED) {
         const now = performance.now();
         state.combo = (now - state.lastMergeAt < COMBO_WINDOW) ? state.combo + 1 : 1;
         state.lastMergeAt = now;
@@ -248,7 +250,7 @@ Events.on(engine, 'collisionStart', ev => {
       // combos so a large payout still streams to the bag quickly.
       spawnCoins(sp.x, sp.y, Math.min(20, base * m), state.coins, m >= 3 ? 0.06 : 0.10);
 
-      if (ACTIVE_MAP.combos && m >= 2) {
+      if (COMBOS_ENABLED && m >= 2) {
         const col = comboColor(m);
         spawnTextPop(sp.x, sp.y - 24, 'COMBO ×' + m, col, state.textPops);
         burst(sp.x, sp.y, col, ITEMS[tier + 1].r * sp.s * 1.5, state.particles);
@@ -266,7 +268,7 @@ function checkOver() {
     const speed = Math.hypot(d.velocity.x, d.velocity.y);
     if (d.position.y + ITEMS[d.plugin.tier].physR > DANGER_WY && speed < 0.15) {
       state.gameOver = true;
-      showGameOver(state, ACTIVE_MAP.id);
+      showGameOver(state, scoreKey(ACTIVE_MAP, ACTIVE_SIZE, COMBOS_ENABLED));
     }
   }
 }
@@ -392,16 +394,33 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-function startGame(map) {
+function startGame(map, opts = {}) {
   ACTIVE_MAP = map;
   ITEMS = ACTIVE_MAP.itemsData;
+  // Pick the backdrop for the requested size (map.sizes), else default art.
+  const chosenSize = opts.size || map.defaultSize;
+  const bgSrc = (map.sizes && chosenSize && map.sizes[chosenSize]) || map.bg;
+  ACTIVE_SIZE = chosenSize;
+  // Combo multipliers: per-run override from the menu, else the map's default.
+  COMBOS_ENABLED = (opts.combos !== undefined) ? !!opts.combos : !!map.combos;
+  // Apply the active size variant's traced boundary (each framing has its own).
+  // Falls back to the map's base boundary if this size wasn't traced yet.
+  if (typeof MAP_HITBOXES !== 'undefined') {
+    const hb = MAP_HITBOXES[hitboxKey(ACTIVE_MAP, chosenSize)] || MAP_HITBOXES[ACTIVE_MAP.id];
+    if (hb) {
+      ACTIVE_MAP.cornerWalls = hb.cornerWalls;
+      ACTIVE_MAP.sideInset   = hb.sideInset || 0;
+      ACTIVE_MAP.horizon     = hb.horizon;   // undefined -> game default below
+      ACTIVE_MAP.freeLine    = hb.freeLine;  // undefined -> free-line off below
+    }
+  }
   HORIZON = (ACTIVE_MAP.horizon !== undefined) ? ACTIVE_MAP.horizon : DEFAULT_HORIZON;
   // free line is stored in flat (editor) coords; horizontal lines map to a
   // constant physics y, so convert once here
   FREE_WY = (ACTIVE_MAP.freeLine !== undefined && ACTIVE_MAP.freeLine < H - 1)
     ? unpersp(0, ACTIVE_MAP.freeLine).y : Infinity;
   applyMapWalls(ACTIVE_MAP);
-  loadMapAssets(ACTIVE_MAP);
+  loadMapAssets(ACTIVE_MAP, bgSrc);
   setSoundProfile(ACTIVE_MAP.id);
   initMusic(document.getElementById('bgm'), ACTIVE_MAP.bgmVol, ACTIVE_MAP.bgm);
   resetState();

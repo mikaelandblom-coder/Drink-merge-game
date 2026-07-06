@@ -296,6 +296,40 @@ function clinkPlush(impact) {
   src.connect(lp).connect(ng).connect(a.destination); src.start(t);
 }
 
+// Triumphant flourish for a beaten high score — a bright rising major arpeggio
+// with a shimmering sparkle tail. Map-agnostic: always celebratory.
+function fanfare() {
+  if (muted) return;
+  const a = ac(), t = a.currentTime;
+  const notes = [1047, 1319, 1568, 2093]; // C6 · E6 · G6 · C7
+  notes.forEach((f, i) => {
+    const st = t + i * 0.10;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = 'triangle'; o.frequency.setValueAtTime(f, st);
+    g.gain.setValueAtTime(0.0001, st);
+    g.gain.exponentialRampToValueAtTime(0.22, st + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, st + 0.32);
+    o.connect(g).connect(a.destination); o.start(st); o.stop(st + 0.34);
+    // sine octave underneath for body
+    const o2 = a.createOscillator(), g2 = a.createGain();
+    o2.type = 'sine'; o2.frequency.setValueAtTime(f * 0.5, st);
+    g2.gain.setValueAtTime(0.0001, st);
+    g2.gain.exponentialRampToValueAtTime(0.10, st + 0.02);
+    g2.gain.exponentialRampToValueAtTime(0.0001, st + 0.24);
+    o2.connect(g2).connect(a.destination); o2.start(st); o2.stop(st + 0.26);
+  });
+  // sparkle tail once the arpeggio lands
+  const ts = t + notes.length * 0.10;
+  const o3 = a.createOscillator(), g3 = a.createGain();
+  o3.type = 'triangle';
+  o3.frequency.setValueAtTime(2093, ts);
+  o3.frequency.exponentialRampToValueAtTime(3136, ts + 0.20); // sweep up to G7
+  g3.gain.setValueAtTime(0.0001, ts);
+  g3.gain.exponentialRampToValueAtTime(0.13, ts + 0.02);
+  g3.gain.exponentialRampToValueAtTime(0.0001, ts + 0.45);
+  o3.connect(g3).connect(a.destination); o3.start(ts); o3.stop(ts + 0.48);
+}
+
 function coinTick() {
   if (muted) return;
   const a = ac(), t = a.currentTime;

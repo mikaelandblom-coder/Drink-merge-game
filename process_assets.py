@@ -110,7 +110,8 @@ PIPELINE = {
                 'kyoto-parfait', 'kyoto-unaju', 'kyoto-matcha-cake',
             ],
         },
-        {'file': 'background 2.png', 'type': 'copy', 'name': 'bg-kyoto'},
+        {'file': 'background 2.png',     'type': 'copy', 'name': 'bg-kyoto'},        # large (tray fills frame)
+        {'file': 'background small.png', 'type': 'copy', 'name': 'bg-kyoto-small'},  # small (more scene visible)
     ],
 
     'mage': [
@@ -145,7 +146,8 @@ PIPELINE = {
                 'teddy-bunny',    'teddy-axolotl', 'teddy-bear',
             ],
         },
-        {'file': 'bg.png', 'type': 'copy', 'name': 'bg-teddy'},
+        {'file': 'bg.png',       'type': 'copy', 'name': 'bg-teddy'},        # small (heart fits frame)
+        {'file': 'bg_large.png', 'type': 'copy', 'name': 'bg-teddy-large'},  # large (heart fills frame)
     ],
 
     # 'example-map': [

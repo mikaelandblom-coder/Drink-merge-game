@@ -80,9 +80,22 @@ function wireHUD(state) {
   };
 }
 
-function showGameOver(state, mapId) {
-  const result = saveScore(mapId, state.coinCount);
-  const scores = getScores(mapId);
+function showGameOver(state, key) {
+  const score = state.coinCount;
+  const prevBest = getScores(key)[0]?.score ?? 0;   // best on this variant BEFORE this run
+  const result = saveScore(key, score);
+  const scores = getScores(key);
+
+  // Celebrate topping the board: a beaten record, or the very first score set.
+  let banner = '';
+  if (score > 0 && score > prevBest && prevBest > 0) {
+    banner = `<div class="new-best">🏆 New high score!
+      <span class="nb-sub">You topped the previous best of ${prevBest.toLocaleString()}</span>
+    </div>`;
+    fanfare();
+  } else if (score > 0 && prevBest === 0 && result.rank === 1) {
+    banner = `<div class="new-best subtle">✨ First score on the board!</div>`;
+  }
 
   const rowsHtml = scores.map((e, i) => {
     const highlight = result.inTop && i === result.rank - 1;
@@ -95,7 +108,8 @@ function showGameOver(state, mapId) {
   }).join('');
 
   document.getElementById('finalScore').innerHTML =
-    `<div class="final-coins">You earned <strong>${state.coinCount.toLocaleString()}</strong> coins</div>
+    `${banner}
+     <div class="final-coins">You earned <strong>${score.toLocaleString()}</strong> coins</div>
      ${scores.length ? `<div class="score-list"><div class="score-list-title">Top scores</div>${rowsHtml}</div>` : ''}`;
 
   document.getElementById('over').style.display = 'flex';

@@ -27,6 +27,11 @@ const MAPS = [
     bgm:      'assets/audio/Lantern Alley.mp3',
     bgmVol:   0.35,
     itemsData: null,
+    // Two table framings share the same play field / hitboxes; only the
+    // backdrop art changes. See the size checkbox in the main menu.
+    sizes:       { large: 'assets/images/bg-kyoto.png',
+                   small: 'assets/images/bg-kyoto-small.png' },
+    defaultSize: 'large',
   },
   {
     id:       'mage',
@@ -47,6 +52,9 @@ const MAPS = [
     bgmVol:   0.35,
     itemsData: null,
     combos:   true,   // cascade-merge multipliers (like Mage Tower)
+    sizes:       { large: 'assets/images/bg-teddy-large.png',
+                   small: 'assets/images/bg-teddy.png' },
+    defaultSize: 'small',
   },
 ];
 
@@ -57,8 +65,21 @@ MAPS[2].itemsData = KYOTO_ITEMS;
 MAPS[3].itemsData = MAGE_ITEMS;
 MAPS[4].itemsData = TEDDY_ITEMS;
 
+// Storage key for a map's boundary in MAP_HITBOXES. Size-variant maps trace a
+// separate boundary per table framing (the tray/heart sits differently in each
+// background). The DEFAULT size keeps the plain map id — so existing tuned
+// hitboxes are reused untouched — while a non-default size gets a suffix.
+// Shared by startGame() (game.js) and the hitbox editor. Mirrors scoreKey().
+function hitboxKey(map, size) {
+  if (!map.sizes) return map.id;
+  const defSize = map.defaultSize || 'large';
+  const s = size || defSize;
+  return (s === defSize) ? map.id : (map.id + '__' + s);
+}
+
 // Apply visually-edited boundaries from config/hitboxes.js
-// (maintained with tools/hitbox-editor.html).
+// (maintained with tools/hitbox-editor.html). This seeds each map's DEFAULT
+// boundary; startGame() re-applies the active size variant's boundary at play.
 if (typeof MAP_HITBOXES !== 'undefined') {
   for (const m of MAPS) {
     const hb = MAP_HITBOXES[m.id];
