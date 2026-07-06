@@ -78,8 +78,10 @@
         Red dashed line = horizon — drag it to<br>
         reshape the map's perspective (saved).<br>
         Green dashed line = free-shot line: shots<br>
-        ignore the walls below it (drag to bottom<br>
-        edge to disable). Both saved per map.<br>
+        stay ghosts until past it AND inside the<br>
+        outline (drag to bottom edge to disable).<br>
+        Amber dotted = opening chord: where an<br>
+        open spline's outline closes itself.<br>
         Magenta = generated physics walls.
       </div>
     </fieldset>
@@ -323,6 +325,25 @@ function drawMap() {
   // generated physics walls
   ctx.fillStyle='rgba(255,0,255,.22)'; ctx.strokeStyle='rgba(255,0,255,.9)'; ctx.lineWidth=1.5*sc;
   for (const c of walls()) { drawWallRect(c); ctx.fill(); ctx.stroke(); }
+
+  // opening chord (open splines only): the boundary implicitly closes across
+  // this edge for the ghost-activation inside-test. It is a straight line in
+  // PHYSICS space, so it renders slightly curved — sample it through persp().
+  if (!closed) {
+    const w = walls();
+    if (w.length > 1) {
+      const f = w[0], l = w[w.length - 1];
+      const a = { x: f.x - Math.cos(f.angle)*f.len/2, y: f.y - Math.sin(f.angle)*f.len/2 };
+      const b = { x: l.x + Math.cos(l.angle)*l.len/2, y: l.y + Math.sin(l.angle)*l.len/2 };
+      ctx.setLineDash([3*sc, 6*sc]); ctx.strokeStyle = 'rgba(255,176,61,.85)'; ctx.lineWidth = 2*sc;
+      ctx.beginPath();
+      for (let i = 0; i <= 16; i++) {
+        const p = persp(a.x + (b.x - a.x)*i/16, a.y + (b.y - a.y)*i/16);
+        i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y);
+      }
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+  }
 
   // spline + knots
   const pts = sampleSpline();
