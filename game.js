@@ -268,6 +268,12 @@ function checkOver() {
     const speed = Math.hypot(d.velocity.x, d.velocity.y);
     if (d.position.y + ITEMS[d.plugin.tier].physR > DANGER_WY && speed < 0.15) {
       state.gameOver = true;
+      // Coins still flying to the bag haven't landed, so their value isn't in
+      // coinCount yet. Settle them now so the saved/displayed score matches what
+      // the player earned (otherwise the bag keeps ticking up behind the overlay
+      // while the recorded high score is short by 10 per in-flight coin).
+      state.coinCount += state.coins.length * 10;
+      state.coins = [];
       showGameOver(state, scoreKey(ACTIVE_MAP, ACTIVE_SIZE, COMBOS_ENABLED));
     }
   }
