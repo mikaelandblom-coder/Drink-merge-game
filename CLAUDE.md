@@ -20,7 +20,9 @@ config/maps.js        — MAPS array + ACTIVE_MAP (bg, bgm, bgmVol, items ref,
 scores.js             — Per-variant high scores in localStorage; scoreKey() maps a
                          (map, size, combos) run to a storage key
 audio.js              — Web Audio API synthesis (pop, shoot, clink, coinTick,
-                         fanfare) + BGM
+                         fanfare) + BGM. pop/clink/coinTick are per-map via
+                         `soundProfile` (wood/ceramic/arcane/plush/music); add a
+                         profile branch + synth fns to theme a new map's sounds.
 render.js             — All canvas drawing (bg, drinks, coins, bag, particles, aim)
 ui.js                 — Pointer input, HUD buttons, game-over overlay, LAUNCH pos
 welcome.js            — Main menu: map cards, size/combo checkboxes, score lists
@@ -32,6 +34,10 @@ index.html            — Shell: loads scripts in order (constants → hitboxes 
 process_assets.py     — Asset pipeline: source images → game-ready PNGs
 tools/
   hitbox-editor.html  — Visual hitbox editor (see "Hitbox editing" below)
+  sound-lab.html      — Standalone sound-audition sandbox (open in the same
+                         server). Prototype/compare synth sounds here BEFORE
+                         wiring them into audio.js — used to design the music
+                         map's merge/coin/collision/personal-best sounds.
 assets/
   source/             — Raw AI-generated images (white background). NEVER edit these.
     _archive/         — Superseded source art, kept for reference
@@ -46,14 +52,20 @@ assets/
 
 Open **http://localhost:5500/tools/hitbox-editor.html** (same server as the game).
 
-- **Map tab:** edit the boundary as a Catmull-Rom spline — drag knots, double-click
-  the curve to add a knot, double-click a knot (or Del) to remove. The magenta
-  shapes are the actual perspective-corrected physics walls, regenerated live.
-  "Enter test mode" runs real Matter.js physics: click to shoot balls at the
-  boundary exactly like in the game. `side inset` moves the straight left/right
-  walls (negative = wider field).
-- **Item tab:** drag the cyan circle to resize an item's collision body
-  (bodyRatio override).
+Pick a map from the top **Map** dropdown, then choose **Background** or
+**Merge items**:
+- **Background tab:** edit the boundary as a Catmull-Rom spline — drag knots,
+  double-click the curve to add a knot, double-click a knot (or Del) to remove.
+  The magenta shapes are the actual perspective-corrected physics walls,
+  regenerated live. "Enter test mode" runs real Matter.js physics: click to
+  shoot balls at the boundary exactly like in the game. `side inset` moves the
+  straight left/right walls (negative = wider field). Size-variant maps show a
+  **framing** selector here (one boundary per framing).
+- **Merge items tab:** shows **all of the map's items at once** at true relative
+  scale, so hitbox sizes are comparable across tiers. Click an item to select;
+  drag its circle **edge/square** to resize (bodyRatio) or **inside** to move
+  (dx/dy offset). Scroll to **zoom** toward the cursor, drag empty space to
+  **pan**, double-click to reset zoom (needed to tune small circles precisely).
 - **Save:** writes `config/hitboxes.js` (File System API asks for the file once,
   then overwrites on every save). Reload the game tab to play with the result.
 
@@ -146,6 +158,17 @@ Key per-entry options:
 - `fill_holes_region` — restrict hole detection to `'left'`, `'right'`, `'top'`,
   or `'bottom'` half of the image. Beer uses `'right'` so foam on the left side
   is never touched, while the handle hole on the right is made transparent.
+- `min_component_frac` (spritesheet + `chroma:'alpha'` only) — after splitting,
+  erase disconnected alpha blobs smaller than this fraction of an item's area.
+  Clears stray bits a grid cell grabbed from a neighbour (the melody grid uses
+  0.05 to drop the trumpet's leftover). Use a fraction WELL below any real
+  separate part (the violin's bow is ~13%, so 0.05 keeps it) — never a plain
+  "keep largest component", which would delete the bow.
+
+**Transparent grids are the standard now** (`type:'spritesheet'`, `chroma:'alpha'`).
+ChatGPT/AI CAN generate a real transparent background; ask for one clean grid,
+generous gaps, and **NO drop shadows** (a shadow bridging a gutter breaks the
+band-count assert in `split_alpha_grid`). Beats the white/magenta-keying path.
 
 ### Spritesheet tip (saves AI generations)
 
@@ -176,7 +199,15 @@ The background stays white as normal; only the separator line changes.
 Optional per-map fields (see "Menu options"): `combos: true` to default the combo
 checkbox on; `sizes: {large, small}` + `defaultSize` to offer a Large-table
 toggle (add the extra background via a `copy` entry in the pipeline, then trace
-each size's boundary in the hitbox editor).
+each size's boundary in the hitbox editor); `coin:` / `bag:` to override the
+shared coin/money-bag art with map-specific PNGs (omit to use the shared art);
+a `soundProfile` branch in audio.js (`setSoundProfile`) + `popX`/`clinkX`/
+`coinTickX` synth fns to theme the map's sounds. Melody Lane (music shop) is the
+worked example of all of these.
+
+Temporarily hiding the Large-table toggle (e.g. its art isn't ready): comment
+out the `sizes`/`defaultSize` lines — the checkbox keys off `map.sizes`, and if
+`defaultSize` was the size that maps to the plain map-id key, no scores are lost.
 
 ---
 
@@ -185,13 +216,21 @@ each size's boundary in the hitbox editor).
 Edit `config/items.js`. Each item:
 
 ```js
-{ name:'...',  r: 30,          // visual radius
+{ name:'...',  r: 30,          // visual radius (drives BOTH draw size and physR)
   glass:'#hex', liq:'#hex',    // fallback colours if sprite missing
   sprite:'assets/images/drink-xxx.png',
-  bodyRatio: 0.55 }            // glass-body width / sprite height (measure from art)
+  bodyRatio: 0.55,             // glass-body width / sprite height (measure from art)
+  vis: 0.6 }                   // OPTIONAL visual-scale (default 1), physics-independent
 ```
 
 `physR` is computed automatically: `r * 2.4 * bodyRatio / 2 * 0.88`
+
+**`vis`** scales only the DRAWN sprite (in drawDrink + the editor + the next
+preview), not the physics circle. Sprites are sized by HEIGHT (`r*2.4`), so wide
+shapes (a harmonica, a trumpet) render huge and break the tier size-ramp. Set
+`vis ≈ 1/aspect` on wide items so every item's on-screen extent lands on the `r`
+ramp. Default 1 = no change (all other maps untouched). The melody instruments
+use it; recompute if art proportions change.
 
 `DROP_MAX` in `game.js` controls how many of the lowest tiers can be shot.
 Currently 4 — increase when adding more tiers.
@@ -208,10 +247,24 @@ Currently 4 — increase when adding more tiers.
   instant, zero-size, procedurally variable by tier.
 - **No Node.js installed**: use `python -m http.server 5500` to serve locally.
   Install Node.js to use `npx serve .` and enable the Claude Code preview panel.
-- **Screenshot tools time out on the game page** (rAF loop blocks capture, even
-  when paused). Verify changes with `preview_eval` — numeric assertions, or a
-  small canvas `toDataURL` snapshot. Physics behavior can be tested headlessly
-  by stepping `Matter.Engine.update` in eval.
+- **Screenshot tools time out on any rAF page** — the game, the hitbox editor,
+  AND sound-lab all run animation loops that block capture (even when paused).
+  Verify with `preview_eval` — numeric assertions, or a `canvas.toDataURL`
+  snapshot. Physics can be tested headlessly by stepping `Matter.Engine.update`.
+- **Read-tool image preview composites transparent PNGs on a dark background** —
+  a properly-transparent sprite/grid can look like it has "a painted dark
+  backdrop with glows". Do NOT conclude transparency failed from the preview:
+  check `img.mode` + alpha stats (fraction with alpha==0) and run
+  `split_alpha_grid` before telling Mikael the art is broken. (This burned us
+  twice.)
+- **Preview env has a degenerate `innerHeight`** — the hitbox editor's display
+  scale `S` comes out invalid there, so synthetic *screen-coordinate* mouse
+  events don't map to the right world point. Test the editor's LOGIC directly
+  (drive state/handlers) rather than dispatching coordinate-based events.
+- **AI restyle-regeneration shrinks/simplifies detail** — asking ChatGPT to redo
+  an existing item grid in a new finish comes back smaller and less intricate
+  than a first-pass gen. Nail the target STYLE in the first prompt (or attach an
+  existing game sprite as a style reference) rather than iterating a restyle.
 - **Deploy checklist**: bump BOTH `GAME_VERSION` in config/constants.js (to
   today's date — shown on the welcome screen so Mai can verify she's current)
   AND every `?v=` cache-buster in index.html. Stale-cache bugs are frequent
