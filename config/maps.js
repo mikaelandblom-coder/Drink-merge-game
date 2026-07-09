@@ -56,6 +56,26 @@ const MAPS = [
                    small: 'assets/images/bg-teddy.png' },
     defaultSize: 'small',
   },
+  {
+    id:       'melody',
+    label:    'Melody Lane',
+    sublabel: 'Music Shop',
+    bg:       'assets/images/bg-melody-small.png',
+    bgm:      'assets/audio/Melody Lane.mp3',   // TODO: add track (or reuse another map's bgm)
+    bgmVol:   0.35,
+    itemsData: null,
+    combos:   true,   // combos default on — a cascade rings out as a rising arpeggio
+    coin:     'assets/images/melody-coin.png',  // custom coin/bag; maps that omit these use the shared art
+    bag:      'assets/images/melody-bag.png',
+    // TEMP: Large-table framing disabled until the large background art exists —
+    // omitting `sizes` hides the "Large table" checkbox and plays only the small
+    // framing (bg above). Restore both lines + the bg-melody-large copy entry in
+    // process_assets.py once the large art is in. (defaultSize was 'small', so the
+    // score/hitbox key stays 'melody' either way — no scores lost by toggling.)
+    // sizes:       { large: 'assets/images/bg-melody-large.png',
+    //                small: 'assets/images/bg-melody-small.png' },
+    // defaultSize: 'small',
+  },
 ];
 
 // Wire item sets after items.js has defined them.
@@ -64,6 +84,7 @@ MAPS[1].itemsData = SAIGON_ITEMS;
 MAPS[2].itemsData = KYOTO_ITEMS;
 MAPS[3].itemsData = MAGE_ITEMS;
 MAPS[4].itemsData = TEDDY_ITEMS;
+MAPS[5].itemsData = MELODY_ITEMS;
 
 // Storage key for a map's boundary in MAP_HITBOXES. Size-variant maps trace a
 // separate boundary per table framing (the tray/heart sits differently in each

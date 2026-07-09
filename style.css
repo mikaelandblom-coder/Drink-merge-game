@@ -19,7 +19,10 @@ html, body { height: 100%; overflow: hidden; background: var(--bar-deep); font-f
 }
 
 #welcome-art {
-  position: absolute; inset: 0;
+  /* Fixed (not absolute) so the art stays pinned to the viewport and covers the
+     whole screen while the map list scrolls over it — otherwise it scrolls away
+     with the content and the lower cards sit on the bare background colour. */
+  position: fixed; inset: 0;
   /* Drop welcome-bg.png into assets/images/ to show a background image */
   background: url('assets/images/bg-main-menu.png') center / cover no-repeat,
               radial-gradient(ellipse at 50% 80%, #2a1a0e 0%, #17100b 100%);

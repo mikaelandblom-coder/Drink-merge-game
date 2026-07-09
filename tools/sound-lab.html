@@ -1,0 +1,452 @@
+<meta charset="utf-8">
+<title>Sound Lab — musical merge audition</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 28px;
+    font: 15px/1.5 -apple-system, Segoe UI, Roboto, sans-serif;
+    background: #14121a; color: #e8e4f0;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: #9b93b0; margin: 0 0 24px; font-size: 13px; }
+  .lab {
+    max-width: 720px; margin: 0 auto;
+  }
+  .card {
+    background: #1e1b28; border: 1px solid #2e2a3d; border-radius: 14px;
+    padding: 18px 20px; margin-bottom: 18px;
+  }
+  .card h2 { font-size: 16px; margin: 0 0 2px; }
+  .card .desc { color: #9b93b0; font-size: 12.5px; margin: 0 0 14px; }
+  .tiers { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
+  button {
+    font: inherit; cursor: pointer; border: none; border-radius: 9px;
+    padding: 9px 13px; background: #322c45; color: #e8e4f0;
+    transition: transform .05s, background .12s;
+  }
+  button:hover { background: #3f3757; }
+  button:active { transform: scale(.94); }
+  .tier-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    min-width: 52px; padding: 8px 6px;
+  }
+  .tier-btn .n { font-size: 11px; color: #9b93b0; }
+  .tier-btn .note { font-weight: 600; }
+  .row { display: flex; gap: 9px; flex-wrap: wrap; }
+  .accent { background: #6d4fd0; }
+  .accent:hover { background: #7d5fe0; }
+  .global {
+    display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+    margin-bottom: 22px; padding: 14px 18px; background: #1a1824;
+    border-radius: 12px; border: 1px solid #2e2a3d;
+  }
+  label { display: flex; align-items: center; gap: 7px; font-size: 13px; }
+  select, input[type=range] { accent-color: #6d4fd0; }
+  select { background: #322c45; color: #e8e4f0; border: 1px solid #443c5c;
+    border-radius: 7px; padding: 5px 8px; font: inherit; }
+  code { background: #2a2636; padding: 1px 6px; border-radius: 5px; font-size: 12.5px; }
+  .note-small { color: #7d7590; font-size: 12px; margin-top: 6px; }
+</style>
+
+<div class="lab">
+  <h1>🎵 Sound Lab</h1>
+  <p class="sub">Auditioning merge sounds for the music-shop map. Each tier maps to a
+  scale degree — climbing tiers climbs the scale. Winner gets lifted into <code>audio.js</code>.</p>
+
+  <div class="global">
+    <label>Scale
+      <select id="scale">
+        <option value="pent-maj">Major pentatonic (safe)</option>
+        <option value="major">Major (prettier, riskier)</option>
+        <option value="pent-min">Minor pentatonic (moodier)</option>
+      </select>
+    </label>
+    <label>Root
+      <select id="root">
+        <option value="220.00">A3</option>
+        <option value="261.63" selected>C4</option>
+        <option value="329.63">E4</option>
+      </select>
+    </label>
+    <label>Direction
+      <select id="dir">
+        <option value="up" selected>Ascending (triumphant)</option>
+        <option value="down">Descending (realistic)</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="card" data-timbre="musicbox">
+    <h2>A · Music box / celesta</h2>
+    <p class="desc">Sine fundamental + bright inharmonic bell partials. Toy-like, twinkly, clearly "musical."</p>
+    <div class="tiers"></div>
+    <div class="row">
+      <button class="accent" data-act="cascade">▶ Play cascade (combo)</button>
+      <button data-act="chord">Play random multi-merge</button>
+    </div>
+  </div>
+
+  <div class="card" data-timbre="pluck">
+    <h2>B · Plucked string (ukulele / harp)</h2>
+    <p class="desc">Sawtooth through a decaying lowpass with a tiny noise pluck. Warm, organic, folk-instrument feel.</p>
+    <div class="tiers"></div>
+    <div class="row">
+      <button class="accent" data-act="cascade">▶ Play cascade (combo)</button>
+      <button data-act="chord">Play random multi-merge</button>
+    </div>
+  </div>
+
+  <div class="card" data-timbre="marimba">
+    <h2>C · Marimba / vibraphone</h2>
+    <p class="desc">Triangle fundamental + strong 4th harmonic (marimba's signature). Round, woody, mellow.</p>
+    <div class="tiers"></div>
+    <div class="row">
+      <button class="accent" data-act="cascade">▶ Play cascade (combo)</button>
+      <button data-act="chord">Play random multi-merge</button>
+    </div>
+  </div>
+
+  <div class="card" style="border-color:#4a3f6b">
+    <h2>🪙 Coin &amp; collision (Melody Lane)</h2>
+    <p class="desc">The coin shower plays an ascending pentatonic run (one octave above the merges) instead of a
+    repeated blip — a small merge is a short rise, a big combo payout is a long harp cascade. Collisions get a
+    soft hollow-body knock instead of a metallic tink. Coins land ~110ms apart, matching the real game tempo.</p>
+    <label style="margin-bottom:12px">Long-run behavior
+      <select id="coinmode">
+        <option value="shepard">Shepard — endless rise (illusion)</option>
+        <option value="zigzag">Zigzag — climb &amp; turn around</option>
+        <option value="hold">Hold — climb then repeat top note</option>
+      </select>
+    </label>
+    <div class="row" style="margin-bottom:12px">
+      <button data-coins="2">2 coins (small merge)</button>
+      <button data-coins="6">6 coins</button>
+      <button class="accent" data-coins="12">12 coins (combo)</button>
+      <button class="accent" data-coins="20">20 coins (big combo)</button>
+    </div>
+    <div class="row">
+      <button data-knock="4">Soft collision</button>
+      <button data-knock="10">Medium collision</button>
+      <button data-knock="18">Hard collision</button>
+    </div>
+  </div>
+
+  <div class="card" style="border-color:#6b5a3f">
+    <h2>🏆 Personal best (high-score flourish)</h2>
+    <p class="desc">Plays on the game-over screen when a run beats that variant's best (the game's
+    <code>fanfare()</code>, currently map-agnostic). "Current" mirrors what ships today; the others are
+    alternatives — the harp and brass options would also tie into Melody Lane's musical theme.</p>
+    <div class="row">
+      <button class="accent" data-pb="current">▶ Current (rising bells)</button>
+      <button data-pb="brass">Brass fanfare</button>
+      <button data-pb="harp">Harp run + chord</button>
+      <button data-pb="musicbox">Music-box sparkle</button>
+    </div>
+  </div>
+
+  <p class="note-small">Tip: hit "Play cascade" on each card to compare how a 9-chain combo sounds — that's the
+  sound you'll hear most in a good run. Then try a couple of single tiers to judge the timbre up close.</p>
+</div>
+
+<script>
+let actx;
+const ac = () => (actx ||= new (window.AudioContext || window.webkitAudioContext)());
+
+const SCALES = {
+  'pent-maj': [0, 2, 4, 7, 9, 12, 14, 16, 19, 21],
+  'major':    [0, 2, 4, 5, 7, 9, 11, 12, 14, 16],
+  'pent-min': [0, 3, 5, 7, 10, 12, 15, 17, 19, 22],
+};
+const NAMES_SHARP = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const TIERS = 9;
+
+function semis(tier) {
+  const scale = SCALES[document.getElementById('scale').value];
+  const dir = document.getElementById('dir').value;
+  const idx = dir === 'up' ? tier : (TIERS - 1 - tier);
+  return scale[idx];
+}
+function freq(tier) {
+  const root = parseFloat(document.getElementById('root').value);
+  return root * Math.pow(2, semis(tier) / 12);
+}
+function noteName(tier) {
+  const root = parseFloat(document.getElementById('root').value);
+  // midi of root
+  const rootMidi = Math.round(69 + 12 * Math.log2(root / 440));
+  const m = rootMidi + semis(tier);
+  return NAMES_SHARP[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1);
+}
+
+// ---- timbres. Each: play(f, tGain, when) ----
+function musicbox(f, vol, t) {
+  const a = ac();
+  const parts = [[1, 1, 0.7], [4.1, 0.28, 0.5], [6.7, 0.12, 0.35]];
+  parts.forEach(([mult, amp, dec]) => {
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(f * mult, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol * amp, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
+    o.connect(g).connect(a.destination); o.start(t); o.stop(t + dec + 0.05);
+  });
+}
+function pluck(f, vol, t, tier = 0) {
+  const a = ac();
+  // higher tiers open the filter more (bigger merges feel brighter) and ring longer
+  const bright = 1 + tier * 0.12;
+  const sustain = 0.5 + tier * 0.03;
+  const o = a.createOscillator(), g = a.createGain();
+  const lp = a.createBiquadFilter(); lp.type = 'lowpass';
+  lp.frequency.setValueAtTime(f * 6 * bright, t);
+  lp.frequency.exponentialRampToValueAtTime(f * 1.5, t + 0.25);
+  o.type = 'sawtooth'; o.frequency.setValueAtTime(f, t);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.004);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + sustain);
+  o.connect(lp).connect(g).connect(a.destination); o.start(t); o.stop(t + sustain + 0.05);
+  // warm body — pure fundamental under the bright saw so single merges aren't thin
+  const ob = a.createOscillator(), gb = a.createGain();
+  ob.type = 'sine'; ob.frequency.setValueAtTime(f, t);
+  gb.gain.setValueAtTime(0.0001, t);
+  gb.gain.exponentialRampToValueAtTime(vol * 0.45, t + 0.01);
+  gb.gain.exponentialRampToValueAtTime(0.0001, t + sustain * 0.9);
+  ob.connect(gb).connect(a.destination); ob.start(t); ob.stop(t + sustain);
+  // tiny pluck noise
+  const len = Math.floor(a.sampleRate * 0.012);
+  const buf = a.createBuffer(1, len, a.sampleRate);
+  const ch = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const src = a.createBufferSource(); src.buffer = buf;
+  const ng = a.createGain(); ng.gain.setValueAtTime(vol * 0.5, t);
+  src.connect(ng).connect(a.destination); src.start(t);
+}
+function marimba(f, vol, t) {
+  const a = ac();
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = 'triangle'; o.frequency.setValueAtTime(f, t);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.006);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
+  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.46);
+  // strong 4th harmonic — marimba signature
+  const o2 = a.createOscillator(), g2 = a.createGain();
+  o2.type = 'sine'; o2.frequency.setValueAtTime(f * 4, t);
+  g2.gain.setValueAtTime(0.0001, t);
+  g2.gain.exponentialRampToValueAtTime(vol * 0.35, t + 0.006);
+  g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+  o2.connect(g2).connect(a.destination); o2.start(t); o2.stop(t + 0.16);
+}
+const TIMBRES = { musicbox, pluck, marimba };
+
+function playTier(timbre, tier, when) {
+  TIMBRES[timbre](freq(tier), 0.32, when ?? ac().currentTime, tier);
+}
+
+// ---- build UI ----
+document.querySelectorAll('.card[data-timbre]').forEach(card => {
+  const timbre = card.dataset.timbre;
+  const tiers = card.querySelector('.tiers');
+  function rebuild() {
+    tiers.innerHTML = '';
+    for (let i = 0; i < TIERS; i++) {
+      const b = document.createElement('button');
+      b.className = 'tier-btn';
+      b.innerHTML = `<span class="n">tier ${i}</span><span class="note">${noteName(i)}</span>`;
+      b.onclick = () => playTier(timbre, i);
+      tiers.appendChild(b);
+    }
+  }
+  card._rebuild = rebuild;
+  rebuild();
+  card.querySelector('[data-act=cascade]').onclick = () => {
+    const t0 = ac().currentTime + 0.02;
+    for (let i = 0; i < TIERS; i++) playTier(timbre, i, t0 + i * 0.11);
+  };
+  card.querySelector('[data-act=chord]').onclick = () => {
+    const t0 = ac().currentTime + 0.02;
+    const n = 3 + Math.floor(Math.random() * 3);
+    for (let k = 0; k < n; k++) {
+      const tier = Math.floor(Math.random() * TIERS);
+      playTier(timbre, tier, t0 + k * 0.015); // near-simultaneous
+    }
+  };
+});
+// ---- coin run + collision knock (mirror audio.js coinTickMusical / clinkMusical) ----
+const COIN_SCALE = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21]; // pentatonic, always (not the dropdown)
+function coinRunSemi(i) { // zigzag: climb, then turn around at the top (no octave snap-back)
+  const L = COIN_SCALE.length, period = 2 * (L - 1);
+  const p = i % period;
+  return COIN_SCALE[p < L ? p : period - p];
+}
+// one plucked coin note at a given pentatonic semitone above C5
+function coinPluck(semi, when) {
+  const a = ac(), t = when;
+  const f = 523.25 * Math.pow(2, semi / 12); // C5 root
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = 'triangle'; o.frequency.setValueAtTime(f, t);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.09, t + 0.006);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.2);
+  const o2 = a.createOscillator(), g2 = a.createGain();
+  o2.type = 'sine'; o2.frequency.setValueAtTime(f * 2, t);
+  g2.gain.setValueAtTime(0.0001, t);
+  g2.gain.exponentialRampToValueAtTime(0.028, t + 0.006);
+  g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+  o2.connect(g2).connect(a.destination); o2.start(t); o2.stop(t + 0.13);
+}
+// Shepard pluck: same pitch class stacked across octaves, weighted by a bell
+// curve FIXED in pitch (centered ~C6). Stepping the pitch class up the pentatonic
+// each coin makes the run seem to rise forever — the top octave fades out as a
+// new one fades in at the bottom, masking the octave wrap.
+const SHEP_PENT = [0, 2, 4, 7, 9];
+function shepardNote(i, when) {
+  const a = ac(), t = when;
+  const frac = SHEP_PENT[((i % 5) + 5) % 5] / 12;   // position within the octave
+  const FMIN = 65.41, OCT = 7;                        // C2 .. C8
+  const centerLog = Math.log2(1046.5), sigma = 1.4;  // bell anchored at C6, ~1.4 oct wide
+  for (let k = 0; k < OCT; k++) {
+    const f = FMIN * Math.pow(2, frac + k);
+    const w = Math.exp(-0.5 * Math.pow((Math.log2(f) - centerLog) / sigma, 2));
+    if (w < 0.04) continue;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = 'triangle'; o.frequency.setValueAtTime(f, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.06 * w, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.19);
+    o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.21);
+  }
+}
+function coinNoteFor(i, when, mode) {
+  if (mode === 'shepard') return shepardNote(i, when);
+  const semi = (mode === 'hold')
+    ? COIN_SCALE[Math.min(i, COIN_SCALE.length - 1)]  // climb, then repeat the top note
+    : coinRunSemi(i);                                  // zigzag (default)
+  coinPluck(semi, when);
+}
+function coinBurst(n) {
+  const mode = document.getElementById('coinmode').value;
+  const t0 = ac().currentTime + 0.02;
+  for (let i = 0; i < n; i++) coinNoteFor(i, t0 + i * 0.11, mode); // ~110ms apart, real game tempo
+}
+function knock(impact, when) {
+  const a = ac(), t = when ?? ac().currentTime;
+  const vol = Math.min(0.16, impact * 0.035);
+  if (vol < 0.013) return;
+  const base = 220 + Math.random() * 160;
+  [1, 1.5].forEach((mult, i) => {
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(base * mult, t);
+    o.frequency.exponentialRampToValueAtTime(base * mult * 0.9, t + 0.07);
+    const pv = vol * (i === 0 ? 1 : 0.4);
+    g.gain.setValueAtTime(pv, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
+    o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.11);
+  });
+  const len = Math.floor(a.sampleRate * 0.02);
+  const buf = a.createBuffer(1, len, a.sampleRate);
+  const ch = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const src = a.createBufferSource(); src.buffer = buf;
+  const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 700;
+  const ng = a.createGain(); ng.gain.setValueAtTime(vol * 0.5, t);
+  src.connect(lp).connect(ng).connect(a.destination); src.start(t);
+}
+document.querySelectorAll('[data-coins]').forEach(b =>
+  b.onclick = () => coinBurst(+b.dataset.coins));
+document.querySelectorAll('[data-knock]').forEach(b =>
+  b.onclick = () => knock(+b.dataset.knock));
+
+// ---- personal-best flourishes ----
+// A · Current: mirrors fanfare() in audio.js exactly (rising major arpeggio + sparkle tail)
+function pbCurrent() {
+  const a = ac(), t = a.currentTime + 0.02;
+  const notes = [1047, 1319, 1568, 2093]; // C6 E6 G6 C7
+  notes.forEach((f, i) => {
+    const st = t + i * 0.10;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = 'triangle'; o.frequency.setValueAtTime(f, st);
+    g.gain.setValueAtTime(0.0001, st);
+    g.gain.exponentialRampToValueAtTime(0.22, st + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, st + 0.32);
+    o.connect(g).connect(a.destination); o.start(st); o.stop(st + 0.34);
+    const o2 = a.createOscillator(), g2 = a.createGain();
+    o2.type = 'sine'; o2.frequency.setValueAtTime(f * 0.5, st);
+    g2.gain.setValueAtTime(0.0001, st);
+    g2.gain.exponentialRampToValueAtTime(0.10, st + 0.02);
+    g2.gain.exponentialRampToValueAtTime(0.0001, st + 0.24);
+    o2.connect(g2).connect(a.destination); o2.start(st); o2.stop(st + 0.26);
+  });
+  const ts = t + notes.length * 0.10;
+  const o3 = a.createOscillator(), g3 = a.createGain();
+  o3.type = 'triangle';
+  o3.frequency.setValueAtTime(2093, ts);
+  o3.frequency.exponentialRampToValueAtTime(3136, ts + 0.20); // sweep to G7
+  g3.gain.setValueAtTime(0.0001, ts);
+  g3.gain.exponentialRampToValueAtTime(0.13, ts + 0.02);
+  g3.gain.exponentialRampToValueAtTime(0.0001, ts + 0.45);
+  o3.connect(g3).connect(a.destination); o3.start(ts); o3.stop(ts + 0.48);
+}
+// B · Brass fanfare: detuned sawtooth through a bright lowpass — a triumphant "ta-ta-ta-DAA"
+function brassNote(f, st, dur, vol = 0.15) {
+  const a = ac();
+  const o = a.createOscillator(), o2 = a.createOscillator(), g = a.createGain();
+  const lp = a.createBiquadFilter(); lp.type = 'lowpass';
+  lp.frequency.setValueAtTime(f * 2.2, st);
+  lp.frequency.exponentialRampToValueAtTime(f * 4.5, st + 0.06);
+  o.type = 'sawtooth';  o.frequency.setValueAtTime(f, st);
+  o2.type = 'sawtooth'; o2.frequency.setValueAtTime(f * 1.006, st); // detune for body
+  g.gain.setValueAtTime(0.0001, st);
+  g.gain.exponentialRampToValueAtTime(vol, st + 0.03);
+  g.gain.setValueAtTime(vol, st + dur * 0.6);
+  g.gain.exponentialRampToValueAtTime(0.0001, st + dur);
+  o.connect(lp); o2.connect(lp); lp.connect(g).connect(a.destination);
+  o.start(st); o2.start(st); o.stop(st + dur + 0.02); o2.stop(st + dur + 0.02);
+}
+function pbBrass() {
+  const t = ac().currentTime + 0.02;
+  brassNote(784, t,       0.12);          // G5
+  brassNote(784, t + 0.15, 0.12);         // G5
+  brassNote(1047, t + 0.30, 0.16);        // C6
+  [1047, 1319, 1568].forEach(f => brassNote(f, t + 0.52, 0.7, 0.12)); // C-major bloom
+}
+// C · Harp run + chord: fast ascending pentatonic pluck resolving on a bright major chord
+function harpPluck(f, st, vol = 0.13) {
+  const a = ac();
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = 'triangle'; o.frequency.setValueAtTime(f, st);
+  g.gain.setValueAtTime(0.0001, st);
+  g.gain.exponentialRampToValueAtTime(vol, st + 0.006);
+  g.gain.exponentialRampToValueAtTime(0.0001, st + 0.5);
+  o.connect(g).connect(a.destination); o.start(st); o.stop(st + 0.55);
+  const o2 = a.createOscillator(), g2 = a.createGain();
+  o2.type = 'sine'; o2.frequency.setValueAtTime(f * 2, st);
+  g2.gain.setValueAtTime(0.0001, st);
+  g2.gain.exponentialRampToValueAtTime(vol * 0.3, st + 0.006);
+  g2.gain.exponentialRampToValueAtTime(0.0001, st + 0.22);
+  o2.connect(g2).connect(a.destination); o2.start(st); o2.stop(st + 0.25);
+}
+function pbHarp() {
+  const t = ac().currentTime + 0.02;
+  const run = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24]; // C4 major pentatonic, up 2 octaves
+  run.forEach((s, i) => harpPluck(261.63 * Math.pow(2, s / 12), t + i * 0.05));
+  const tc = t + run.length * 0.05 + 0.04;
+  [1047, 1319, 1568, 2093].forEach(f => harpPluck(f, tc, 0.14)); // C6 E6 G6 C7 chord
+}
+// D · Music-box sparkle: reuse the celesta timbre, rising then a shimmering high chord
+function pbMusicbox() {
+  const t = ac().currentTime + 0.02;
+  const notes = [1047, 1319, 1568, 2093, 2637]; // C6 E6 G6 C7 E7
+  notes.forEach((f, i) => musicbox(f, 0.30, t + i * 0.11));
+  [2093, 2637, 3136].forEach(f => musicbox(f, 0.16, t + notes.length * 0.11 + 0.05));
+}
+const PB = { current: pbCurrent, brass: pbBrass, harp: pbHarp, musicbox: pbMusicbox };
+document.querySelectorAll('[data-pb]').forEach(b => b.onclick = () => PB[b.dataset.pb]());
+
+['scale', 'root', 'dir'].forEach(id =>
+  document.getElementById(id).addEventListener('change', () =>
+    document.querySelectorAll('.card[data-timbre]').forEach(c => c._rebuild())));
+</script>

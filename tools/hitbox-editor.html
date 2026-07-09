@@ -48,15 +48,19 @@
 
 <div id="side">
   <h1>HITBOX EDITOR</h1>
+  <fieldset>
+    <legend>Map</legend>
+    <select id="mapPick"></select>
+  </fieldset>
   <div class="tabs">
-    <button id="tabMap" class="on">Map</button>
-    <button id="tabItem">Item</button>
+    <button id="tabMap" class="on">Background</button>
+    <button id="tabItem">Merge items</button>
   </div>
 
   <div id="mapPanel" class="show">
     <fieldset>
-      <legend>Map</legend>
-      <select id="mapSel"></select>
+      <legend>Background</legend>
+      <label id="sizeRow">framing <select id="sizePick" style="width:150px"></select></label>
       <label>custom bg <input type="file" id="bgFile" accept="image/*" style="width:150px"></label>
     </fieldset>
     <fieldset>
@@ -96,17 +100,19 @@
 
   <div id="itemPanel">
     <fieldset>
-      <legend>Item</legend>
-      <select id="itemSel"></select>
-      <label>zoom <input type="range" id="zoom" min="1.5" max="5" step="0.1" value="3"><span class="val" id="zoomVal">3.0</span></label>
+      <legend>Merge items</legend>
+      <div class="hint">Every item for this map, shown at true relative size so you can
+        compare hitboxes across tiers at a glance. Click an item to select it.</div>
     </fieldset>
     <fieldset>
-      <legend>Collision circle</legend>
+      <legend>Selected item</legend>
       <div class="readout" id="itemRead">–</div>
       <div class="row">
         <button class="ghost" id="itemReset">Reset override</button>
       </div>
-      <div class="hint">Drag inside the circle to MOVE it · drag the edge or square handle to RESIZE · wheel zooms. Dashed line = where the item rests on neighbours.</div>
+      <div class="hint">Drag a circle's edge or square handle to RESIZE · drag inside it to MOVE.
+        Scroll to zoom toward the cursor (great for small items) · drag empty space or middle-drag to
+        pan · double-click to reset zoom. Changes apply to that one item only.</div>
     </fieldset>
   </div>
 
@@ -180,45 +186,56 @@ function clampView() {
 // ───────────────────────── state ─────────────────────────────────────────────
 const WALL_THICK = 24, WALL_OVERLAP = 8;               // must match game.js
 let mode = 'map';                                       // 'map' | 'item'
-let mapId, knots = [], closed = false, inset = 0;
+let curMap = null, curSize = null;                      // selected map + framing
+let mapId, knots = [], closed = false, inset = 0;       // mapId = the MAP_HITBOXES key
 let selKnot = -1, dragKnot = -1, undoStack = [];
 let bg = new Image();
 let testing = false, engine = null, balls = [], wallSegs = [];
 let dirtyWalls = true;
 
-// item mode
-let curItem = null, zoom = 3, dragCircle = false;
+// item mode — every item of the current map, laid out at true relative size
+let itemLayout = [], activeItem = null, itemDrag = null;
 
 // ───────────────────────── map data in/out ───────────────────────────────────
 const editableMaps = MAPS.filter(m => m.bg);
 
-// One editing target per boundary. Maps with size variants (config/maps.js
-// `sizes`) get one target per framing — each with its own background image and
-// its own MAP_HITBOXES key (via hitboxKey) — so the alternative sizes are
-// editable here. Single-background maps get one target keyed by the map id.
-const editTargets = [];
-editableMaps.forEach(m => {
-  if (m.sizes) {
-    const order = (m.defaultSize === 'small') ? ['small', 'large'] : ['large', 'small'];
-    order.forEach(sz => editTargets.push({
-      key:   hitboxKey(m, sz),
-      label: `${m.label} — ${sz[0].toUpperCase() + sz.slice(1)} (${hitboxKey(m, sz)})`,
-      bg:    m.sizes[sz],
-    }));
+// Top-level picker: one entry per map. Size-variant maps (config/maps.js
+// `sizes`) then expose a framing selector, so each framing's boundary — its own
+// MAP_HITBOXES key via hitboxKey — stays editable under the Background tab.
+const mapPick  = document.getElementById('mapPick');
+const sizePick = document.getElementById('sizePick');
+const sizeRow  = document.getElementById('sizeRow');
+editableMaps.forEach((m, i) => mapPick.add(new Option(m.label, i)));
+
+function boundaryKey() { return curMap.sizes ? hitboxKey(curMap, curSize) : curMap.id; }
+
+function selectMap(i) {
+  curMap = editableMaps[i];
+  mapPick.value = i;
+  if (curMap.sizes) {
+    sizePick.innerHTML = '';
+    const order = (curMap.defaultSize === 'small') ? ['small', 'large'] : ['large', 'small'];
+    order.forEach(sz => sizePick.add(new Option(
+      `${sz[0].toUpperCase() + sz.slice(1)} (${hitboxKey(curMap, sz)})`, sz)));
+    curSize = order[0]; sizePick.value = curSize; sizeRow.style.display = '';
   } else {
-    editTargets.push({ key: m.id, label: `${m.label} (${m.id})`, bg: m.bg });
+    curSize = null; sizeRow.style.display = 'none';
   }
-});
+  loadBackground();
+  rebuildItemsLayout();            // keep the item view ready for a tab switch
+}
+mapPick.onchange  = () => selectMap(+mapPick.value);
+sizePick.onchange = () => { curSize = sizePick.value; loadBackground(); };
 
-const mapSel = document.getElementById('mapSel');
-editTargets.forEach(t => mapSel.add(new Option(t.label, t.key)));
-
-function loadMap(id) {
-  mapId = id;                                   // now a MAP_HITBOXES key
-  const t = editTargets.find(x => x.key === id);
-  bg = new Image(); bg.src = t.bg;
+function loadBackground() {
+  const key = boundaryKey();
+  mapId = key;                                  // the MAP_HITBOXES key we save under
+  bg = new Image();
+  bg.src = curMap.sizes ? curMap.sizes[curSize] : curMap.bg;
   bg.onload = draw;
-  const hb = MAP_HITBOXES[id];
+  // Seed from this framing's own boundary; if a size hasn't been traced yet,
+  // start from the map's base boundary rather than the generic arc.
+  const hb = MAP_HITBOXES[key] || MAP_HITBOXES[curMap.id];
   if (hb) {
     knots    = hb.knots.map(k => [...k]);
     closed   = !!hb.closed;
@@ -238,7 +255,6 @@ function loadMap(id) {
   if (testing) rebuildSim();
   draw();
 }
-mapSel.onchange = () => loadMap(mapSel.value);
 document.getElementById('bgFile').onchange = e => {
   const f = e.target.files[0]; if (!f) return;
   bg = new Image(); bg.src = URL.createObjectURL(f); bg.onload = draw;
@@ -394,41 +410,78 @@ function drawMap() {
 // Sprite anchor is fixed on screen; the collision circle sits at the anchor
 // plus the item's offset (hbOffX/hbOffY, in units of r). In the game the body
 // IS the circle, so drawDrink shifts the art the other way.
-function itemGeom() {
-  const it = curItem, ax = W/2, ay = H*0.55, r = it.r;
-  const ccx = ax + (it.hbOffX || 0) * r * zoom;
-  const ccy = ay + (it.hbOffY || 0) * r * zoom;
-  return { it, ax, ay, r, ccx, ccy, pr: physR(it) * zoom };
+// Lay every item of the current map into a grid at ONE shared scale, so the
+// relative sizes of their collision circles are honest and comparable at a
+// glance. The scale is set so the largest item fits its cell.
+function rebuildItemsLayout() {
+  itemLayout = [];
+  const items = (curMap && curMap.itemsData) || [];
+  const N = items.length; if (!N) return;
+  const MX = 18, MY = 14, LABEL = 15;
+  const cols = Math.min(N, Math.ceil(Math.sqrt(N)));
+  const rows = Math.ceil(N / cols);
+  const cellW = (W - 2*MX) / cols, cellH = (H - 2*MY) / rows;
+  let k = Infinity;
+  items.forEach(it => {
+    const asp  = (it.img && it.img.naturalWidth) ? it.img.naturalWidth / it.img.naturalHeight : 1;
+    const natH = it.r * 2.4, natW = natH * asp;
+    k = Math.min(k, cellW * 0.82 / natW, (cellH - LABEL) * 0.78 / natH);
+  });
+  if (!isFinite(k) || k <= 0) k = 1;
+  items.forEach((it, idx) => {
+    const col = idx % cols, row = Math.floor(idx / cols);
+    const ax = MX + col*cellW + cellW/2;
+    const ay = MY + row*cellH + (cellH - LABEL)/2;
+    itemLayout.push({
+      it, ax, ay, k,
+      ccx: ax + (it.hbOffX||0) * it.r * k,
+      ccy: ay + (it.hbOffY||0) * it.r * k,
+      pr:  physR(it) * k,
+      cellX: MX + col*cellW, cellY: MY + row*cellH, cellW, cellH,
+    });
+  });
 }
 
-function drawItem() {
-  ctx.setTransform(BASE, 0, 0, BASE, 0, 0);   // item mode ignores the map view
-  ctx.fillStyle='#1c1209'; ctx.fillRect(0,0,W,H);
-  if (!curItem) return;
-  const { it, ax, ay, r, ccx, ccy, pr } = itemGeom();
-  // resting line: neighbours touch at the physics circle's edge
-  ctx.setLineDash([6,6]); ctx.strokeStyle='rgba(255,255,255,.25)'; ctx.lineWidth=1;
-  ctx.beginPath(); ctx.moveTo(20, ccy + pr); ctx.lineTo(W-20, ccy + pr); ctx.stroke();
-  ctx.setLineDash([]);
-  // sprite exactly as the game draws it, anchored at (ax, ay)
-  if (it.img && it.img.complete && it.img.naturalWidth) {
-    const dispH = r * 2.4 * zoom, dispW = dispH * (it.img.naturalWidth / it.img.naturalHeight);
-    ctx.drawImage(it.img, ax - dispW/2, ay + r*0.75*zoom - dispH, dispW, dispH);
+function drawItems() {
+  // clear in device space, then apply the SAME zoom/pan view transform as map mode
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle='#1c1209'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.setTransform(BASE * view.z, 0, 0, BASE * view.z, -view.ox * BASE * view.z, -view.oy * BASE * view.z);
+  const sc = 1 / view.z;   // keep handles & labels a constant size on screen
+  if (!itemLayout.length) rebuildItemsLayout();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  for (const g of itemLayout) {
+    const it = g.it, active = it === activeItem;
+    // sprite exactly as the game draws it (incl. per-item vis scale), anchored at (ax, ay)
+    if (it.img && it.img.complete && it.img.naturalWidth) {
+      const dispH = it.r * 2.4 * (it.vis || 1) * g.k, dispW = dispH * (it.img.naturalWidth / it.img.naturalHeight);
+      ctx.drawImage(it.img, g.ax - dispW/2, g.ay + it.r*0.75*g.k - dispH, dispW, dispH);
+    }
+    // collision circle + move/resize handles (active item highlighted pink)
+    const col = active ? '#ff7ab8' : '#50dcff';
+    ctx.beginPath(); ctx.arc(g.ccx, g.ccy, g.pr, 0, Math.PI*2);
+    ctx.fillStyle = active ? 'rgba(255,122,184,.16)' : 'rgba(80,220,255,.13)'; ctx.fill();
+    ctx.strokeStyle = col; ctx.lineWidth = (active ? 2.5 : 1.5) * sc; ctx.stroke();
+    ctx.beginPath(); ctx.arc(g.ccx, g.ccy, 4*sc, 0, Math.PI*2); ctx.fillStyle = col; ctx.fill();
+    ctx.fillStyle='#fff3e0'; ctx.fillRect(g.ccx + g.pr - 4*sc, g.ccy - 4*sc, 8*sc, 8*sc);
+    ctx.strokeStyle='#17100b'; ctx.lineWidth=1*sc; ctx.strokeRect(g.ccx + g.pr - 4*sc, g.ccy - 4*sc, 8*sc, 8*sc);
+    // label
+    ctx.fillStyle = active ? '#ff7ab8' : '#c8a870'; ctx.font = (11*sc) + 'px Georgia';
+    ctx.fillText(it.name, g.ax, g.cellY + g.cellH - 2*sc);
   }
-  // collision circle + handles
-  ctx.beginPath(); ctx.arc(ccx, ccy, pr, 0, Math.PI*2);
-  ctx.fillStyle='rgba(80,220,255,.15)'; ctx.fill();
-  ctx.strokeStyle='#50dcff'; ctx.lineWidth=2; ctx.stroke();
-  ctx.beginPath(); ctx.arc(ccx, ccy, 5, 0, Math.PI*2);        // move handle
-  ctx.fillStyle='#50dcff'; ctx.fill();
-  ctx.fillStyle='#fff3e0';                                     // resize handle
-  ctx.fillRect(ccx + pr - 5, ccy - 5, 10, 10);
-  ctx.strokeStyle='#17100b'; ctx.lineWidth=1.5; ctx.strokeRect(ccx + pr - 5, ccy - 5, 10, 10);
-  document.getElementById('itemRead').textContent =
-    `${it.name} — bodyRatio ${it.bodyRatio.toFixed(3)} · physR ${physR(it).toFixed(1)}px` +
-    ` · offset (${(it.hbOffX||0).toFixed(2)}, ${(it.hbOffY||0).toFixed(2)})r`;
+  ctx.textAlign = 'left';
+  document.getElementById('itemRead').textContent = activeItem
+    ? `${activeItem.name} — bodyRatio ${activeItem.bodyRatio.toFixed(3)} · physR ${physR(activeItem).toFixed(1)}px`
+      + ` · offset (${(activeItem.hbOffX||0).toFixed(2)}, ${(activeItem.hbOffY||0).toFixed(2)})r`
+    : 'Click an item to select it, then drag its circle to resize/move.';
 }
 const physR = it => it.r * 2.4 * it.bodyRatio / 2 * 0.88;
+
+function ensureOrig(it) {
+  if (it._orig) return;   // page-load snapshot, for Reset override
+  it._orig = { bodyRatio: it.bodyRatio, dx: it.hbOffX || 0, dy: it.hbOffY || 0,
+               hb: ITEM_HITBOXES[it.sprite] ? { ...ITEM_HITBOXES[it.sprite] } : undefined };
+}
 
 function pushItemHB(it) {
   const hb = { bodyRatio: +it.bodyRatio.toFixed(3) };
@@ -437,34 +490,47 @@ function pushItemHB(it) {
   ITEM_HITBOXES[it.sprite] = hb;
 }
 
-function draw() { mode === 'map' ? drawMap() : drawItem(); }
+function draw() { mode === 'map' ? drawMap() : drawItems(); }
 
 // ───────────────────────── map interactions ──────────────────────────────────
 const toWorld = e => {
   const r = canvas.getBoundingClientRect();
   const px = (e.clientX - r.left) / S, py = (e.clientY - r.top) / S;
-  return mode === 'map' ? [px / view.z + view.ox, py / view.z + view.oy] : [px, py];
+  return [px / view.z + view.ox, py / view.z + view.oy];   // both modes share the zoom/pan view
 };
 const near = (p, k, d) => Math.hypot(p[0]-k[0], p[1]-k[1]) < d;
 function snapshot() { undoStack.push(JSON.stringify({knots, closed, inset, horizon, freeLine})); if (undoStack.length > 60) undoStack.shift(); }
 function changed() { dirtyWalls = true; if (testing) rebuildSim(); draw(); }
 
 let panning = false, panStart = null, dragHorizon = false, dragFree = false;
+let panMoved = false, pendingSelect = null;   // click-vs-drag on empty item space
 
 canvas.addEventListener('pointerdown', e => {
   try { canvas.setPointerCapture(e.pointerId); } catch {}  // drags keep working outside the canvas
-  if (mode === 'map' && e.button === 1) {          // middle mouse always pans
+  if (e.button === 1) {                            // middle mouse always pans (either mode)
     panning = true; panStart = { x: e.clientX, y: e.clientY, ox: view.ox, oy: view.oy };
     e.preventDefault(); return;
   }
   if (mode === 'item') {
-    if (!curItem) return;
     const [x, y] = toWorld(e);
-    const { ccx, ccy, pr } = itemGeom();
-    const d = Math.hypot(x - ccx, y - ccy);
-    const onSquare = Math.abs(x - (ccx + pr)) < 12 && Math.abs(y - ccy) < 12;
-    if (onSquare || Math.abs(d - pr) < 16) dragCircle = 'resize';
-    else if (d < pr) dragCircle = 'move';
+    const band = 12 / view.z, sq = 10 / view.z;         // hit tolerances constant on screen
+    for (const g of itemLayout) {
+      const d = Math.hypot(x - g.ccx, y - g.ccy);
+      const onSquare = Math.abs(x - (g.ccx + g.pr)) < sq && Math.abs(y - g.ccy) < sq;
+      // resize on the square handle or the outer edge ring; the inner core is MOVE
+      if (onSquare || (Math.abs(d - g.pr) < band && d > g.pr * 0.5)) {
+        activeItem = g.it; ensureOrig(g.it); itemDrag = { g, kind: 'resize' }; draw(); return;
+      }
+      if (d < g.pr) { activeItem = g.it; ensureOrig(g.it); itemDrag = { g, kind: 'move' }; draw(); return; }
+    }
+    // not on a circle: start a pan, but remember this cell's item so a click (no
+    // drag) still selects it — otherwise the tiled cells would swallow every drag
+    pendingSelect = null;
+    for (const g of itemLayout) {
+      if (x >= g.cellX && x < g.cellX + g.cellW && y >= g.cellY && y < g.cellY + g.cellH) { pendingSelect = g.it; break; }
+    }
+    panning = true; panMoved = false;
+    panStart = { x: e.clientX, y: e.clientY, ox: view.ox, oy: view.oy };
     return;
   }
   if (testing) { shoot(toWorld(e)); return; }
@@ -485,6 +551,7 @@ canvas.addEventListener('pointerdown', e => {
 });
 canvas.addEventListener('pointermove', e => {
   if (panning) {
+    if (Math.abs(e.clientX - panStart.x) + Math.abs(e.clientY - panStart.y) > 3) panMoved = true;
     view.ox = panStart.ox - (e.clientX - panStart.x) / (S * view.z);
     view.oy = panStart.oy - (e.clientY - panStart.y) / (S * view.z);
     clampView(); draw(); return;
@@ -505,17 +572,20 @@ canvas.addEventListener('pointermove', e => {
   }
   const p = toWorld(e);
   if (mode === 'item') {
-    if (!dragCircle || !curItem) return;
-    const g = itemGeom();
-    if (dragCircle === 'resize') {
+    if (!itemDrag) return;
+    const g = itemDrag.g, it = g.it;
+    if (itemDrag.kind === 'resize') {
       const d = Math.hypot(p[0] - g.ccx, p[1] - g.ccy);
-      curItem.bodyRatio = Math.max(0.1, Math.min(1.4, (d / zoom) * 2 / (curItem.r * 2.4 * 0.88)));
-      curItem.physR = physR(curItem);
+      it.bodyRatio = Math.max(0.1, Math.min(1.4, (d / g.k) * 2 / (it.r * 2.4 * 0.88)));
+      it.physR = physR(it);
+      g.pr = physR(it) * g.k;                  // track live so the circle follows the cursor
     } else {                                   // move: offset in units of r
-      curItem.hbOffX = Math.max(-1.5, Math.min(1.5, (p[0] - g.ax) / (g.r * zoom)));
-      curItem.hbOffY = Math.max(-1.5, Math.min(1.5, (p[1] - g.ay) / (g.r * zoom)));
+      it.hbOffX = Math.max(-1.5, Math.min(1.5, (p[0] - g.ax) / (it.r * g.k)));
+      it.hbOffY = Math.max(-1.5, Math.min(1.5, (p[1] - g.ay) / (it.r * g.k)));
+      g.ccx = g.ax + it.hbOffX * it.r * g.k;
+      g.ccy = g.ay + it.hbOffY * it.r * g.k;
     }
-    pushItemHB(curItem);
+    pushItemHB(it);
     draw();
     return;
   }
@@ -527,17 +597,15 @@ canvas.addEventListener('pointermove', e => {
     changed();
   }
 });
-addEventListener('pointerup', () => { dragKnot = -1; dragCircle = false; panning = false; dragHorizon = false; dragFree = false; });
+addEventListener('pointerup', () => {
+  if (panning && !panMoved && pendingSelect) { activeItem = pendingSelect; draw(); }  // click (no drag) = select
+  pendingSelect = null; panMoved = false;
+  dragKnot = -1; itemDrag = null; panning = false; dragHorizon = false; dragFree = false;
+});
 
-// scroll-zoom: map mode zooms toward the cursor; item mode drives the zoom slider
+// scroll-zoom toward the cursor — shared by map and item modes
 canvas.addEventListener('wheel', e => {
-  e.preventDefault();
-  if (mode === 'item') {
-    zoom = Math.max(1.5, Math.min(5, zoom * (e.deltaY < 0 ? 1.1 : 1/1.1)));
-    document.getElementById('zoom').value = zoom;
-    document.getElementById('zoomVal').textContent = zoom.toFixed(1);
-    draw(); return;
-  }
+  e.preventDefault();   // zoom toward cursor in both map and item modes
   const r = canvas.getBoundingClientRect();
   const px = (e.clientX - r.left) / S, py = (e.clientY - r.top) / S;
   const wx = px / view.z + view.ox, wy = py / view.z + view.oy;   // world pt under cursor
@@ -551,6 +619,7 @@ canvas.addEventListener('wheel', e => {
 }, { passive: false });
 
 canvas.addEventListener('dblclick', e => {
+  if (mode === 'item') { view.z = 1; view.ox = 0; view.oy = 0; status('Zoom reset.'); draw(); return; }
   if (mode !== 'map' || testing) return;
   const p = toWorld(e);
   const hit = knots.findIndex(k => near(p, k, 12 / view.z));
@@ -588,7 +657,7 @@ document.getElementById('inset').oninput = e => {
 };
 document.getElementById('closed').onchange = e => { snapshot(); closed = e.target.checked; changed(); };
 document.getElementById('undoBtn').onclick = () => dispatchEvent(new KeyboardEvent('keydown', {key:'z', ctrlKey:true}));
-document.getElementById('resetBtn').onclick = () => { snapshot(); loadMap(mapId); };
+document.getElementById('resetBtn').onclick = () => { snapshot(); loadBackground(); };
 document.getElementById('fitBtn').onclick = () => { view.z = 1; view.ox = 0; view.oy = 0; status('View reset.'); draw(); };
 
 // ───────────────────────── physics test mode ─────────────────────────────────
@@ -670,35 +739,17 @@ document.getElementById('clearBalls').onclick = () => { if (testing) rebuildSim(
 })();
 
 // ───────────────────────── item mode ─────────────────────────────────────────
-const itemSel = document.getElementById('itemSel');
-const allItems = [];
+// Re-fit the grid once sprites finish decoding (their aspect ratios feed the scale).
 editableMaps.forEach(m => (m.itemsData || []).forEach(it => {
-  allItems.push(it); itemSel.add(new Option(`${m.label}: ${it.name}`, allItems.length - 1));
+  if (it.img) it.img.addEventListener('load', () => { if (mode === 'item') { rebuildItemsLayout(); draw(); } });
 }));
-function loadItem(i) {
-  curItem = allItems[i];
-  if (curItem && !curItem._orig) {   // page-load state, for Reset
-    curItem._orig = { bodyRatio: curItem.bodyRatio,
-                      dx: curItem.hbOffX || 0, dy: curItem.hbOffY || 0,
-                      hb: ITEM_HITBOXES[curItem.sprite] ? { ...ITEM_HITBOXES[curItem.sprite] } : undefined };
-  }
-  if (curItem && curItem.img) curItem.img.onload = draw;
-  draw();
-}
-itemSel.onchange = () => loadItem(+itemSel.value);
-document.getElementById('zoom').oninput = e => {
-  zoom = +e.target.value; document.getElementById('zoomVal').textContent = zoom.toFixed(1); draw();
-};
 document.getElementById('itemReset').onclick = () => {
-  if (!curItem || !curItem._orig) return;
-  const o = curItem._orig;
-  curItem.bodyRatio = o.bodyRatio;
-  curItem.hbOffX = o.dx; curItem.hbOffY = o.dy;
-  curItem.physR = physR(curItem);
-  if (o.hb) ITEM_HITBOXES[curItem.sprite] = { ...o.hb };
-  else delete ITEM_HITBOXES[curItem.sprite];
-  draw();
-  status('Item restored to page-load state.');
+  const it = activeItem; if (!it || !it._orig) return;
+  const o = it._orig;
+  it.bodyRatio = o.bodyRatio; it.hbOffX = o.dx; it.hbOffY = o.dy; it.physR = physR(it);
+  if (o.hb) ITEM_HITBOXES[it.sprite] = { ...o.hb }; else delete ITEM_HITBOXES[it.sprite];
+  rebuildItemsLayout(); draw();
+  status(`"${it.name}" restored to page-load state.`);
 };
 
 document.getElementById('tabMap').onclick  = () => setMode('map');
@@ -709,6 +760,8 @@ function setMode(m) {
   document.getElementById('tabItem').classList.toggle('on', m === 'item');
   document.getElementById('mapPanel').classList.toggle('show', m === 'map');
   document.getElementById('itemPanel').classList.toggle('show', m === 'item');
+  view.z = 1; view.ox = 0; view.oy = 0;   // each mode starts at 1× (shared zoom/pan view)
+  if (m === 'item') rebuildItemsLayout();
   draw();
 }
 
@@ -789,9 +842,7 @@ document.getElementById('dlBtn').onclick = () => {
 };
 
 // ───────────────────────── boot ──────────────────────────────────────────────
-loadMap(MAP_HITBOXES.saigon ? 'saigon' : editTargets[0].key);
-mapSel.value = mapId;
-loadItem(0);
+selectMap(Math.max(0, editableMaps.findIndex(m => m.id === 'saigon')));
 setMode('map');
 </script>
 </body>

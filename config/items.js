@@ -62,10 +62,31 @@ const TEDDY_ITEMS = [
   { name:'teddy bear', r:71, glass:'#f2dfc4', liq:'#b9814e', sprite:'assets/images/teddy-bear.png',       bodyRatio:0.78 },
 ];
 
+// Melody Lane (music shop). Instruments small -> large; the merge SOUND climbs a
+// pentatonic scale by tier (see popMusical in audio.js), independent of the
+// instrument's real-world pitch. bodyRatio values are first-pass guesses —
+// retrace each in tools/hitbox-editor.html once the art exists.
+// `vis` (visual scale, default 1) shrinks the DRAWN sprite only (not the physics
+// circle): instruments are drawn by height, so wide shapes (harmonica, trumpet)
+// blow up in width. vis ~= 1/aspect lands every item's drawn extent on the same
+// r-based ramp so sizes read by tier. Recompute if the art's proportions change.
+const MELODY_ITEMS = [
+  { name:'harmonica',   r:15, glass:'#eef1f4', liq:'#b8c0c8', sprite:'assets/images/melody-harmonica.png', bodyRatio:0.70, vis:0.28 },
+  { name:'ocarina',     r:19, glass:'#e6f4ff', liq:'#5aa8e6', sprite:'assets/images/melody-ocarina.png',   bodyRatio:0.70, vis:0.67 },
+  { name:'recorder',    r:23, glass:'#fdf9ee', liq:'#c9a86a', sprite:'assets/images/melody-recorder.png',  bodyRatio:0.32 },
+  { name:'ukulele',     r:28, glass:'#fdf1dd', liq:'#d89a4e', sprite:'assets/images/melody-ukulele.png',   bodyRatio:0.52 },
+  { name:'trumpet',     r:33, glass:'#fff6db', liq:'#e0a92e', sprite:'assets/images/melody-trumpet.png',   bodyRatio:0.55, vis:0.43 },
+  { name:'violin',      r:39, glass:'#f7e6cf', liq:'#a0522d', sprite:'assets/images/melody-violin.png',    bodyRatio:0.46, vis:0.83 },
+  { name:'accordion',   r:45, glass:'#ffe3e0', liq:'#d0384e', sprite:'assets/images/melody-accordion.png', bodyRatio:0.62, vis:0.64 },
+  { name:'electric guitar', r:52, glass:'#dbeaf7', liq:'#2e6fb0', sprite:'assets/images/melody-electric-guitar.png', bodyRatio:0.42 },
+  { name:'saxophone',   r:61, glass:'#fff3cf', liq:'#d4a017', sprite:'assets/images/melody-saxophone.png', bodyRatio:0.52 },
+  { name:'grand piano', r:71, glass:'#e8e8ec', liq:'#1a1a1a', sprite:'assets/images/melody-piano.png',     bodyRatio:0.78, vis:0.93 },
+];
+
 // Pre-load all sprites and compute physics radii for every item set at startup.
 // Collision-circle overrides from config/hitboxes.js (edited visually with
 // tools/hitbox-editor.html) are applied before physR is derived.
-[...HAWAII_ITEMS, ...SAIGON_ITEMS, ...KYOTO_ITEMS, ...MAGE_ITEMS, ...TEDDY_ITEMS].forEach(item => {
+[...HAWAII_ITEMS, ...SAIGON_ITEMS, ...KYOTO_ITEMS, ...MAGE_ITEMS, ...TEDDY_ITEMS, ...MELODY_ITEMS].forEach(item => {
   const hb = (typeof ITEM_HITBOXES !== 'undefined') && ITEM_HITBOXES[item.sprite];
   if (hb && hb.bodyRatio) item.bodyRatio = hb.bodyRatio;
   // Collision-circle offset relative to the sprite anchor, in units of r

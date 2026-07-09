@@ -150,6 +150,32 @@ PIPELINE = {
         {'file': 'bg_large.png', 'type': 'copy', 'name': 'bg-teddy-large'},  # large (heart fills frame)
     ],
 
+    'melody': [
+        # All 12 items in ONE transparent grid from ChatGPT (real alpha bg, no
+        # white keying). split_alpha_grid finds cells from the transparent gutters
+        # and tight-crops each — tolerant of uneven spacing, but every row/column
+        # gutter must stay clear: the art needs generous gaps and NO drop shadows
+        # (a shadow bridging a gutter breaks the band-count assert). Confirm the
+        # grid dims against the real image; if the generator drifts, fall back to
+        # hardcoded col_splits/row_splits (see the mage/kyoto notes above).
+        {
+            'file':   'items_grid.png',
+            'type':   'spritesheet',
+            'grid':   (3, 4),   # (rows, cols) — names below are row-major reading order
+            'chroma': 'alpha',
+            'min_component_frac': 0.05,   # drop stray bits a cell grabbed from a neighbour
+                                          # (trumpet's leftover); keeps real parts like the violin bow
+            'names':  [
+                'melody-harmonica', 'melody-ocarina',  'melody-recorder',  'melody-ukulele',
+                'melody-trumpet',   'melody-violin',    'melody-accordion', 'melody-electric-guitar',
+                'melody-saxophone', 'melody-piano',     'melody-coin',      'melody-bag',
+            ],
+        },
+        {'file': 'bg.png',       'type': 'copy', 'name': 'bg-melody-small'},  # small (more shop visible)
+        # TODO tomorrow: larger framing (mat fills the frame). Save as bg-large.png:
+        # {'file': 'bg-large.png', 'type': 'copy', 'name': 'bg-melody-large'},
+    ],
+
     # 'example-map': [
     #     {
     #         'file':      'items.png',
@@ -566,6 +592,42 @@ def split_pair(img: Image.Image, thresh: int = WHITE_THRESH):
 # Handlers per type
 # ===========================================================================
 
+def drop_specks(cell: Image.Image, min_frac: float) -> Image.Image:
+    """Erase disconnected alpha blobs smaller than min_frac of the item's total
+    alpha area — clears stray fragments a grid cell grabbed from a neighbour.
+    A legitimately separate part (e.g. a violin's bow) survives if it's big
+    enough, so keep min_frac well below any real part (~0.05 works for melody)."""
+    from collections import deque
+    data = np.array(cell.convert("RGBA"))
+    mask = data[:, :, 3] > 32
+    total = int(mask.sum())
+    if total == 0:
+        return cell
+    h, w = mask.shape
+    seen = np.zeros((h, w), bool)
+    keep = np.zeros((h, w), bool)
+    thresh = total * min_frac
+    for y in range(h):
+        for x in range(w):
+            if mask[y, x] and not seen[y, x]:
+                q = deque([(y, x)]); seen[y, x] = True; comp = [(y, x)]
+                while q:
+                    cy, cx = q.popleft()
+                    for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                        ny, nx = cy + dy, cx + dx
+                        if 0 <= ny < h and 0 <= nx < w and mask[ny, nx] and not seen[ny, nx]:
+                            seen[ny, nx] = True; q.append((ny, nx)); comp.append((ny, nx))
+                if len(comp) >= thresh:
+                    for cy, cx in comp:
+                        keep[cy, cx] = True
+    data[:, :, 3] = np.where(keep, data[:, :, 3], 0)
+    # re-crop to the surviving content so the sprite anchor stays centred
+    ys, xs = np.where(data[:, :, 3] > 0)
+    if len(xs):
+        data = data[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+    return Image.fromarray(data, "RGBA")
+
+
 def handle_spritesheet(src: Path, cfg: dict):
     rows, cols = cfg['grid']
     names      = cfg['names']
@@ -576,10 +638,13 @@ def handle_spritesheet(src: Path, cfg: dict):
     # Real transparent background: split on alpha gutters, no keying at all.
     # Use None in 'names' to skip a cell (duplicates / empties in the sheet).
     if chroma == 'alpha':
+        speck = cfg.get('min_component_frac')   # drop stray fragments from neighbours
         for cell, name in zip(split_alpha_grid(Image.open(src), rows, cols), names):
             if name is None:
                 continue
             assert cell is not None, f"{src.name}: cell for '{name}' is empty"
+            if speck:
+                cell = drop_specks(cell, speck)
             cell.save(OUTPUT_DIR / f"{name}.png", "PNG")
             print(f"    {name}.png")
         return

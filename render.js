@@ -29,6 +29,10 @@ function loadMapAssets(map, bgSrc) {
   // bgSrc lets startGame pick a size variant (map.sizes); falls back to map.bg.
   bgImg.src = bgSrc || map.bg;  // called once from game.js after DOM is ready
   if (bgImg.complete && bgImg.naturalWidth) rebuildBgCache();  // already cached by browser
+  // Coin & bag art are shared by default; a map may override either with its own
+  // (e.g. Melody Lane's note-coin + instrument-case bag). Falls back to shared.
+  COIN_IMG.src = map.coin || 'assets/images/coin.png';
+  BAG_IMG.src  = map.bag  || 'assets/images/moneybag.png';
 }
 
 function drawBackground() {
@@ -65,23 +69,30 @@ function drawDrink(sx, sy, tier, scale, wobble) {
   const r = item.r * scale;
   ctx.save(); ctx.translate(sx, sy);
   ctx.rotate(Math.sin(wobble) * 0.02);
+
+  // Shadow drawn ON the collision circle (origin = body centre here), sized to
+  // physR — so it reads as grounded at its actual hitbox instead of floating
+  // above a detached puddle, and follows any hitbox tuned in the editor.
+  const pr = item.physR * scale;
+  ctx.save();
+  ctx.scale(1, 0.82);
+  const sh = ctx.createRadialGradient(0, 0, 0, 0, 0, pr);
+  sh.addColorStop(0,    'rgba(28,15,4,.36)');
+  sh.addColorStop(0.72, 'rgba(28,15,4,.20)');
+  sh.addColorStop(1,    'rgba(28,15,4,0)');
+  ctx.fillStyle = sh;
+  ctx.beginPath(); ctx.arc(0, 0, pr, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+
   // The collision circle may be offset from the sprite anchor (set in the
   // hitbox editor); the body IS the circle, so shift the art the other way.
   ctx.translate(-item.hbOffX * r, -item.hbOffY * r);
 
-  // shadow
-  ctx.save();
-  ctx.translate(0, r * 0.68); ctx.scale(1, 0.28);
-  const sh = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.72);
-  sh.addColorStop(0, 'rgba(60,30,5,.22)');
-  sh.addColorStop(0.7, 'rgba(60,30,5,.10)');
-  sh.addColorStop(1, 'rgba(60,30,5,0)');
-  ctx.fillStyle = sh;
-  ctx.beginPath(); ctx.arc(0, 0, r * 0.72, 0, Math.PI * 2); ctx.fill();
-  ctx.restore();
-
   if (item.img.complete && item.img.naturalWidth) {
-    const dispH = r * 2.4;
+    // vis (default 1) scales the drawn sprite only; r*0.75-dispH keeps the sprite
+    // BOTTOM at ~0.75r so it stays grounded on the shadow (identical to the old
+    // placement when vis===1, so other maps are unchanged).
+    const dispH = r * 2.4 * (item.vis || 1);
     const dispW = dispH * (item.img.naturalWidth / item.img.naturalHeight);
     ctx.drawImage(item.img, -dispW / 2, r * 0.75 - dispH, dispW, dispH);
   } else {
@@ -97,9 +108,13 @@ function drawNextPreview(queuedTier) {
   ctx.beginPath(); ctx.arc(nb.x, nb.y, nb.r, 0, Math.PI * 2); ctx.fill();
   ctx.strokeStyle = '#c89b5a'; ctx.lineWidth = 3;
   ctx.beginPath(); ctx.arc(nb.x, nb.y, nb.r, 0, Math.PI * 2); ctx.stroke();
-  const qi = ITEMS[queuedTier].img;
+  const qItem = ITEMS[queuedTier], qi = qItem.img;
   if (qi.complete && qi.naturalWidth) {
-    const ph = 48, pw = ph * (qi.naturalWidth / qi.naturalHeight);
+    // apply the item's vis scale, then shrink to fit inside the bubble so wide
+    // shapes (e.g. the harmonica) don't overflow it
+    let ph = 48 * (qItem.vis || 1), pw = ph * (qi.naturalWidth / qi.naturalHeight);
+    const fit = (nb.r * 1.7) / Math.max(pw, ph);
+    if (fit < 1) { pw *= fit; ph *= fit; }
     ctx.drawImage(qi, nb.x - pw / 2, nb.y - ph / 2, pw, ph);
   }
   ctx.fillStyle = '#fff3e0'; ctx.font = 'bold 12px Georgia';

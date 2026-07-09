@@ -10,6 +10,7 @@ function setSoundProfile(mapId) {
   else if (mapId === 'kyoto') soundProfile = 'ceramic';
   else if (mapId === 'mage') soundProfile = 'arcane';
   else if (mapId === 'teddy') soundProfile = 'plush';
+  else if (mapId === 'melody') soundProfile = 'music';
   else soundProfile = 'default';
 }
 
@@ -29,6 +30,7 @@ function pop(tier) {
   if (soundProfile === 'ceramic') { popCeramic(tier); return; }
   if (soundProfile === 'arcane')  { popArcane(tier);  return; }
   if (soundProfile === 'plush')   { popPlush(tier);   return; }
+  if (soundProfile === 'music')   { popMusical(tier); return; }
   const a = ac(), t = a.currentTime;
   const f = 220 * Math.pow(1.18, tier);
   const o = a.createOscillator(), g = a.createGain();
@@ -91,6 +93,7 @@ function clink(impact) {
   if (soundProfile === 'ceramic') { clinkCeramic(impact); return; }
   if (soundProfile === 'arcane')  { clinkArcane(impact);  return; }
   if (soundProfile === 'plush')   { clinkPlush(impact);   return; }
+  if (soundProfile === 'music')   { clinkMusical(impact); return; }
   const a = ac(), t = a.currentTime;
   const vol = Math.min(0.14, impact * 0.032);
   if (vol < 0.012) return;
@@ -142,6 +145,34 @@ function clinkWood(impact) {
   flt.frequency.value = 900; flt.Q.value = 1.5;
   const ng = a.createGain(); ng.gain.setValueAtTime(vol * 0.6, t);
   src.connect(flt).connect(ng).connect(a.destination); src.start(t);
+}
+
+// Music-shop map: hollow wooden-body knock, like tapping the side of a guitar —
+// a soft, warm thud with a felt attack instead of the default metallic tink.
+function clinkMusical(impact) {
+  const a = ac(), t = a.currentTime;
+  const vol = Math.min(0.16, impact * 0.035);
+  if (vol < 0.013) return;
+  const base = 220 + Math.random() * 160; // low-mid hollow-body range
+  [1, 1.5].forEach((mult, i) => {
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(base * mult, t);
+    o.frequency.exponentialRampToValueAtTime(base * mult * 0.9, t + 0.07);
+    const pv = vol * (i === 0 ? 1 : 0.4);
+    g.gain.setValueAtTime(pv, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
+    o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.11);
+  });
+  // soft felt attack — short low-passed noise, no hard edge
+  const len = Math.floor(a.sampleRate * 0.02);
+  const buf = a.createBuffer(1, len, a.sampleRate);
+  const ch = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const src = a.createBufferSource(); src.buffer = buf;
+  const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 700;
+  const ng = a.createGain(); ng.gain.setValueAtTime(vol * 0.5, t);
+  src.connect(lp).connect(ng).connect(a.destination); src.start(t);
 }
 
 // Kyoto map: soft marimba pop — warm wooden tone like a mochi squish
@@ -296,6 +327,45 @@ function clinkPlush(impact) {
   src.connect(lp).connect(ng).connect(a.destination); src.start(t);
 }
 
+// Music-shop map: a plucked-string merge (ukulele / harp). Each tier plays the
+// next degree of a C major-pentatonic scale, so climbing tiers climbs the scale
+// and a combo cascade rings out as a rising arpeggio. Pentatonic keeps even
+// chaotic simultaneous merges consonant. Higher tiers open the filter and ring
+// a touch longer, so big merges feel bigger, not just higher-pitched.
+const MUSIC_SCALE = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21]; // C D E G A · octave up
+function popMusical(tier) {
+  const a = ac(), t = a.currentTime;
+  const semi = MUSIC_SCALE[Math.min(tier, MUSIC_SCALE.length - 1)];
+  const f = 261.63 * Math.pow(2, semi / 12); // C4 root
+  const bright = 1 + tier * 0.12;
+  const sustain = 0.5 + tier * 0.03;
+  // bright plucked core: sawtooth through a decaying lowpass
+  const o = a.createOscillator(), g = a.createGain();
+  const lp = a.createBiquadFilter(); lp.type = 'lowpass';
+  lp.frequency.setValueAtTime(f * 6 * bright, t);
+  lp.frequency.exponentialRampToValueAtTime(f * 1.5, t + 0.25);
+  o.type = 'sawtooth'; o.frequency.setValueAtTime(f, t);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.3, t + 0.004);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + sustain);
+  o.connect(lp).connect(g).connect(a.destination); o.start(t); o.stop(t + sustain + 0.05);
+  // warm body — pure fundamental under the saw so single merges aren't thin
+  const ob = a.createOscillator(), gb = a.createGain();
+  ob.type = 'sine'; ob.frequency.setValueAtTime(f, t);
+  gb.gain.setValueAtTime(0.0001, t);
+  gb.gain.exponentialRampToValueAtTime(0.135, t + 0.01);
+  gb.gain.exponentialRampToValueAtTime(0.0001, t + sustain * 0.9);
+  ob.connect(gb).connect(a.destination); ob.start(t); ob.stop(t + sustain);
+  // tiny noise pluck for the string attack
+  const len = Math.floor(a.sampleRate * 0.012);
+  const buf = a.createBuffer(1, len, a.sampleRate);
+  const ch = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const src = a.createBufferSource(); src.buffer = buf;
+  const ng = a.createGain(); ng.gain.setValueAtTime(0.15, t);
+  src.connect(ng).connect(a.destination); src.start(t);
+}
+
 // Triumphant flourish for a beaten high score — a bright rising major arpeggio
 // with a shimmering sparkle tail. Map-agnostic: always celebratory.
 function fanfare() {
@@ -332,12 +402,44 @@ function fanfare() {
 
 function coinTick() {
   if (muted) return;
+  if (soundProfile === 'music') { coinTickMusical(); return; }
   const a = ac(), t = a.currentTime;
   const o = a.createOscillator(), g = a.createGain();
   o.type = 'square'; o.frequency.setValueAtTime(1568, t);
   o.frequency.setValueAtTime(2093, t + 0.04);
   g.gain.setValueAtTime(0.05, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
   o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.13);
+}
+
+// Music-shop coin sound: instead of a repeated blip, each coin plays the next
+// step of a pentatonic run one octave above the merge notes — so a merge's coin
+// shower pours in as a rising arcade-payout flourish. The run restarts when a
+// new burst begins (a gap since the last coin); once it reaches the top of the
+// range it HOLDS the top note for any extra coins (a big combo lands on a bright
+// sustained sparkle) rather than wrapping or descending.
+let coinRunIdx = 0, coinRunLastMs = 0;
+function coinTickMusical() {
+  const a = ac(), t = a.currentTime;
+  const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+  if (now - coinRunLastMs > 350) coinRunIdx = 0; // new shower -> restart the run
+  coinRunLastMs = now;
+  const semi = MUSIC_SCALE[Math.min(coinRunIdx, MUSIC_SCALE.length - 1)]; // climb, then hold the top
+  coinRunIdx++;
+  const f = 523.25 * Math.pow(2, semi / 12); // C5 root — sparkles above the merges
+  // soft bell pluck: triangle body + quiet sine octave, quick decay so a fast
+  // 20-coin run stays clear instead of muddy
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = 'triangle'; o.frequency.setValueAtTime(f, t);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.09, t + 0.006);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.2);
+  const o2 = a.createOscillator(), g2 = a.createGain();
+  o2.type = 'sine'; o2.frequency.setValueAtTime(f * 2, t);
+  g2.gain.setValueAtTime(0.0001, t);
+  g2.gain.exponentialRampToValueAtTime(0.028, t + 0.006);
+  g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+  o2.connect(g2).connect(a.destination); o2.start(t); o2.stop(t + 0.13);
 }
 
 // ---------- music ----------
