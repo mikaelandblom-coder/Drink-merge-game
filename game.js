@@ -191,10 +191,22 @@ function makeDrink(x, y, tier, shot = false) {
   // product then activates the normal way once it gets inside.
   const ghost = isFinite(FREE_WY) &&
                 (shot || !(y < FREE_WY && insideTray(x, y)));
-  const b = Bodies.circle(x, y, ITEMS[tier].physR, {
+  const it = ITEMS[tier];
+  const opts = {
     restitution: 0.02, frictionAir: 0.028, friction: 0.3, density: 0.0012,
     collisionFilter: { group: 0, category: 0x0001, mask: ghost ? ~CAT_TRAY : -1 },
-  });
+  };
+  let b;
+  if (it.cap) {
+    // Elongated stadium hitbox (config/hitboxes.js shape:'capsule'): a chamfered
+    // rectangle, LOCKED UPRIGHT (inertia ∞) so the horizontal sprite never drifts
+    // from its body — drawDrink ignores body.angle, see render.js.
+    b = Bodies.rectangle(x, y, it.cap.hw * 2, it.cap.hh * 2,
+      { ...opts, angle: it.cap.rot, chamfer: { radius: Math.min(it.cap.hw, it.cap.hh) } });
+    Body.setInertia(b, Infinity);   // locks the body at its authored angle forever
+  } else {
+    b = Bodies.circle(x, y, it.physR, opts);
+  }
   b.plugin = { tier, born: performance.now(), merging: false, ghost };
   Composite.add(engine.world, b);
   state.drinks.push(b);

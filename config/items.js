@@ -96,5 +96,20 @@ const MELODY_ITEMS = [
   item.hbOffY = (hb && hb.dy) || 0;
   item.img = new Image();
   item.img.src = item.sprite;
-  item.physR = item.r * 2.4 * item.bodyRatio / 2 * 0.88;
+  const natH = item.r * 2.4;                 // sprites are sized by height
+  if (hb && hb.shape === 'capsule') {
+    // Elongated (stadium) hitbox for non-circular art: a rounded rectangle whose
+    // half-extents are fractions of sprite height (same 0.88 fudge as physR, so a
+    // square capsule matches the equivalent circle). Built and LOCKED UPRIGHT in
+    // makeDrink() — see game.js. physR keeps the SHORT (vertical) half-extent so
+    // the shadow + danger-line checks keep working unchanged.
+    const rot = hb.rot || 0;
+    item.cap   = { hw: natH * hb.w / 2 * 0.88, hh: natH * hb.h / 2 * 0.88, rot };
+    // Vertical half-extent of the rotated stadium — the danger-line check adds
+    // this to the body centre (physR keeps meaning "downward reach").
+    item.physR = Math.abs(item.cap.hw * Math.sin(rot)) + Math.abs(item.cap.hh * Math.cos(rot));
+  } else {
+    item.cap   = null;
+    item.physR = natH * item.bodyRatio / 2 * 0.88;
+  }
 });

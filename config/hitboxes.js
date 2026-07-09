@@ -15,8 +15,13 @@
 //                 segments consumed by game.js). Regenerated on every save.
 //
 // ITEM_HITBOXES[spritePath]:
-//   bodyRatio   — overrides the item's collision-circle size (see items.js)
-//   dx, dy      — collision-circle offset from the sprite anchor, in units
+//   bodyRatio   — overrides the item's collision-CIRCLE size (see items.js)
+//   shape:'capsule' + w, h — elongated STADIUM hitbox for non-circular art;
+//                 w/h are half-extent fractions of sprite height. Built as a
+//                 chamfered rectangle in makeDrink(), locked at a fixed angle.
+//   rot         — capsule angle in radians (optional); the body is locked here
+//                 so it never spins. Aligns the stadium to diagonal art.
+//   dx, dy      — collision-shape offset from the sprite anchor, in units
 //                 of the item's r (drawDrink shifts the art the other way)
 
 const MAP_HITBOXES = {
@@ -474,16 +479,16 @@ const ITEM_HITBOXES = {
   'assets/images/drink-beer.png': { bodyRatio: 0.497, dx: -0.164, dy: 0.116 },
   'assets/images/drink-fruit-punch-pitcher.png': { bodyRatio: 0.642, dx: -0.155, dy: -0.013 },
   'assets/images/drink-tiki-mug-cocktail.png': { bodyRatio: 0.5, dx: -0.018, dy: 0.157 },
-  'assets/images/melody-piano.png': { bodyRatio: 0.568, dx: 0.131, dy: -0.323 },
-  'assets/images/melody-saxophone.png': { bodyRatio: 0.502, dx: 0.129, dy: 0.108 },
+  'assets/images/melody-piano.png': { shape: 'capsule', w: 1.02, h: 0.553, dx: 0.057, dy: 0.039 },
+  'assets/images/melody-saxophone.png': { shape: 'capsule', w: 0.537, h: 0.717, dx: 0.182, dy: -0.065 },
   'assets/images/drink-mojito.png': { bodyRatio: 0.608, dx: -0.096, dy: 0.054 },
   'assets/images/drink-blue-hawaiian.png': { bodyRatio: 0.454, dx: 0.01, dy: 0.104 },
-  'assets/images/melody-harmonica.png': { bodyRatio: 0.299, dx: -0.005, dy: 0.396 },
-  'assets/images/melody-ocarina.png': { bodyRatio: 0.494, dx: -0.018, dy: -0.126 },
-  'assets/images/melody-recorder.png': { bodyRatio: 0.324, dx: -0.03, dy: -0.307 },
-  'assets/images/melody-ukulele.png': { bodyRatio: 0.482, dx: -0.005, dy: 0.205 },
-  'assets/images/melody-trumpet.png': { bodyRatio: 0.404, dx: -0.104, dy: 0.294 },
-  'assets/images/melody-violin.png': { bodyRatio: 0.468, dx: -0.448, dy: 0.204 },
-  'assets/images/melody-accordion.png': { bodyRatio: 0.677, dx: 0.15, dy: -0.057 },
-  'assets/images/melody-electric-guitar.png': { bodyRatio: 0.512, dx: -0.046, dy: 0.173 },
+  'assets/images/melody-harmonica.png': { shape: 'capsule', w: 1.048, h: 0.299, dx: -0.005, dy: 0.396 },
+  'assets/images/melody-ocarina.png': { shape: 'capsule', w: 0.985, h: 0.371, rot: -0.344, dx: 0.039, dy: -0.235 },
+  'assets/images/melody-recorder.png': { shape: 'capsule', w: 0.146, h: 1.103, rot: 0.343, dx: 0.03, dy: -0.464 },
+  'assets/images/melody-ukulele.png': { shape: 'capsule', w: 0.459, h: 0.695, rot: 0.266, dx: 0.018, dy: 0.008 },
+  'assets/images/melody-trumpet.png': { shape: 'capsule', w: 0.654, h: 0.404, dx: -0.104, dy: 0.294 },
+  'assets/images/melody-violin.png': { shape: 'capsule', w: 0.832, h: 0.578, rot: -0.662, dx: -0.143, dy: -0.056 },
+  'assets/images/melody-accordion.png': { shape: 'capsule', w: 0.997, h: 0.677, dx: -0.022, dy: -0.029 },
+  'assets/images/melody-electric-guitar.png': { shape: 'capsule', w: 0.512, h: 0.767, rot: 0.374, dy: -0.08 },
 };

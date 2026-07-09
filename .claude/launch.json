@@ -3,8 +3,9 @@
   "configurations": [
     {
       "name": "game",
+      "autoPort": true,
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "5500"],
+      "runtimeArgs": ["-c", "import os,http.server,socketserver; socketserver.TCPServer(('',int(os.environ.get('PORT',5500))),http.server.SimpleHTTPRequestHandler).serve_forever()"],
       "port": 5500
     }
   ]

@@ -108,11 +108,15 @@
       <legend>Selected item</legend>
       <div class="readout" id="itemRead">–</div>
       <div class="row">
+        <button class="ghost" id="itemShape">Switch to capsule</button>
         <button class="ghost" id="itemReset">Reset override</button>
       </div>
-      <div class="hint">Drag a circle's edge or square handle to RESIZE · drag inside it to MOVE.
-        Scroll to zoom toward the cursor (great for small items) · drag empty space or middle-drag to
-        pan · double-click to reset zoom. Changes apply to that one item only.</div>
+      <div class="hint">Drag an edge/square handle to RESIZE · drag inside to MOVE.
+        <b>Capsule</b> = elongated stadium hitbox for non-circular art (guitars,
+        violins…): RIGHT handle stretches length, TOP handle sets thickness, and
+        the KNOB on the stalk rotates it to line up with diagonal art. In-game it
+        stays locked at that angle. Scroll to zoom · drag empty space or
+        middle-drag to pan · double-click to reset zoom.</div>
     </fieldset>
   </div>
 
@@ -432,11 +436,16 @@ function rebuildItemsLayout() {
     const col = idx % cols, row = Math.floor(idx / cols);
     const ax = MX + col*cellW + cellW/2;
     const ay = MY + row*cellH + (cellH - LABEL)/2;
+    const cap = it.hbShape === 'capsule';
     itemLayout.push({
       it, ax, ay, k,
       ccx: ax + (it.hbOffX||0) * it.r * k,
       ccy: ay + (it.hbOffY||0) * it.r * k,
       pr:  physR(it) * k,
+      cap,
+      hwPx: cap ? capHW(it) * k : 0,
+      hhPx: cap ? capHH(it) * k : 0,
+      rot:  cap ? (it.capRot || 0) : 0,
       cellX: MX + col*cellW, cellY: MY + row*cellH, cellW, cellH,
     });
   });
@@ -457,34 +466,103 @@ function drawItems() {
       const dispH = it.r * 2.4 * (it.vis || 1) * g.k, dispW = dispH * (it.img.naturalWidth / it.img.naturalHeight);
       ctx.drawImage(it.img, g.ax - dispW/2, g.ay + it.r*0.75*g.k - dispH, dispW, dispH);
     }
-    // collision circle + move/resize handles (active item highlighted pink)
+    // collision shape + move/resize handles (active item highlighted pink)
     const col = active ? '#ff7ab8' : '#50dcff';
-    ctx.beginPath(); ctx.arc(g.ccx, g.ccy, g.pr, 0, Math.PI*2);
-    ctx.fillStyle = active ? 'rgba(255,122,184,.16)' : 'rgba(80,220,255,.13)'; ctx.fill();
-    ctx.strokeStyle = col; ctx.lineWidth = (active ? 2.5 : 1.5) * sc; ctx.stroke();
-    ctx.beginPath(); ctx.arc(g.ccx, g.ccy, 4*sc, 0, Math.PI*2); ctx.fillStyle = col; ctx.fill();
-    ctx.fillStyle='#fff3e0'; ctx.fillRect(g.ccx + g.pr - 4*sc, g.ccy - 4*sc, 8*sc, 8*sc);
-    ctx.strokeStyle='#17100b'; ctx.lineWidth=1*sc; ctx.strokeRect(g.ccx + g.pr - 4*sc, g.ccy - 4*sc, 8*sc, 8*sc);
+    ctx.fillStyle = active ? 'rgba(255,122,184,.16)' : 'rgba(80,220,255,.13)';
+    ctx.strokeStyle = col; ctx.lineWidth = (active ? 2.5 : 1.5) * sc;
+    if (g.cap) {
+      // Draw everything in the stadium's rotated local frame: outline, centre,
+      // RIGHT handle (length), TOP handle (thickness), and a rotate handle on a
+      // stalk above the top edge.
+      ctx.save();
+      ctx.translate(g.ccx, g.ccy); ctx.rotate(g.rot);
+      stadiumPath(0, 0, g.hwPx, g.hhPx); ctx.fill(); ctx.stroke();
+      const rotY = -(g.hhPx + ROT_GAP*sc);
+      ctx.strokeStyle = col; ctx.lineWidth = 1.5*sc;
+      ctx.beginPath(); ctx.moveTo(0, -g.hhPx); ctx.lineTo(0, rotY); ctx.stroke();
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(0, 0, 4*sc, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(0, rotY, 5*sc, 0, Math.PI*2); ctx.fill();   // rotate knob
+      ctx.strokeStyle = '#17100b'; ctx.lineWidth = 1.5*sc; ctx.stroke();
+      drawSq(g.hwPx, 0, sc);          // resize length
+      drawSq(0, -g.hhPx, sc);         // resize thickness
+      ctx.restore();
+    } else {
+      ctx.beginPath(); ctx.arc(g.ccx, g.ccy, g.pr, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(g.ccx, g.ccy, 4*sc, 0, Math.PI*2); ctx.fill();
+      drawSq(g.ccx + g.pr, g.ccy, sc);          // resize radius
+    }
     // label
     ctx.fillStyle = active ? '#ff7ab8' : '#c8a870'; ctx.font = (11*sc) + 'px Georgia';
     ctx.fillText(it.name, g.ax, g.cellY + g.cellH - 2*sc);
   }
   ctx.textAlign = 'left';
-  document.getElementById('itemRead').textContent = activeItem
-    ? `${activeItem.name} — bodyRatio ${activeItem.bodyRatio.toFixed(3)} · physR ${physR(activeItem).toFixed(1)}px`
-      + ` · offset (${(activeItem.hbOffX||0).toFixed(2)}, ${(activeItem.hbOffY||0).toFixed(2)})r`
-    : 'Click an item to select it, then drag its circle to resize/move.';
+  const it = activeItem;
+  const off = it ? ` · offset (${(it.hbOffX||0).toFixed(2)}, ${(it.hbOffY||0).toFixed(2)})r` : '';
+  document.getElementById('itemRead').textContent = !it
+    ? 'Click an item to select it, then drag its shape to resize/move.'
+    : it.hbShape === 'capsule'
+      ? `${it.name} — capsule w ${it.capW.toFixed(3)} · h ${it.capH.toFixed(3)}` +
+        ` · ${Math.round((it.capRot || 0) * 180 / Math.PI)}°` +
+        ` (${(capHW(it)*2).toFixed(0)}×${(capHH(it)*2).toFixed(0)}px)${off}`
+      : `${it.name} — bodyRatio ${it.bodyRatio.toFixed(3)} · physR ${physR(it).toFixed(1)}px${off}`;
+  const shapeBtn = document.getElementById('itemShape');
+  shapeBtn.disabled = !it;
+  shapeBtn.textContent = !it ? 'Switch shape'
+    : it.hbShape === 'capsule' ? 'Switch to circle' : 'Switch to capsule';
 }
 const physR = it => it.r * 2.4 * it.bodyRatio / 2 * 0.88;
+// Capsule (stadium) half-extents in world px, mirroring items.js. capW/capH are
+// fractions of sprite height; the 0.88 fudge matches physR so a square capsule
+// equals the equivalent circle. Inverse (px→fraction) used while dragging.
+const capHW = it => it.r * 2.4 * it.capW / 2 * 0.88;
+const capHH = it => it.r * 2.4 * it.capH / 2 * 0.88;
+const capFrac = (it, halfPx) => Math.max(0.1, Math.min(1.8, (halfPx / (it.r * 2.4 * 0.88)) * 2));
+const ROT_GAP = 22;   // screen px from the stadium top edge to the rotate handle
+// Cursor → capsule-local coords (undo the stadium's rotation about its centre).
+function toLocal(g, x, y) {
+  const dx = x - g.ccx, dy = y - g.ccy, c = Math.cos(g.rot), s = Math.sin(g.rot);
+  return [dx * c + dy * s, -dx * s + dy * c];
+}
+function stadiumPath(cx, cy, hw, hh) {
+  ctx.beginPath();
+  if (hw >= hh) {                         // horizontal stadium — round the x-ends
+    const r = hh;
+    ctx.moveTo(cx - hw + r, cy - hh);
+    ctx.lineTo(cx + hw - r, cy - hh);
+    ctx.arc(cx + hw - r, cy, r, -Math.PI/2, Math.PI/2);
+    ctx.lineTo(cx - hw + r, cy + hh);
+    ctx.arc(cx - hw + r, cy, r, Math.PI/2, Math.PI*1.5);
+  } else {                                // vertical stadium — round the y-ends
+    const r = hw;
+    ctx.moveTo(cx + hw, cy - hh + r);
+    ctx.lineTo(cx + hw, cy + hh - r);
+    ctx.arc(cx, cy + hh - r, r, 0, Math.PI);
+    ctx.lineTo(cx - hw, cy - hh + r);
+    ctx.arc(cx, cy - hh + r, r, Math.PI, Math.PI*2);
+  }
+  ctx.closePath();
+}
+function drawSq(x, y, sc) {
+  ctx.save();
+  ctx.fillStyle = '#fff3e0'; ctx.fillRect(x - 4*sc, y - 4*sc, 8*sc, 8*sc);
+  ctx.strokeStyle = '#17100b'; ctx.lineWidth = 1*sc; ctx.strokeRect(x - 4*sc, y - 4*sc, 8*sc, 8*sc);
+  ctx.restore();
+}
 
 function ensureOrig(it) {
   if (it._orig) return;   // page-load snapshot, for Reset override
   it._orig = { bodyRatio: it.bodyRatio, dx: it.hbOffX || 0, dy: it.hbOffY || 0,
+               hbShape: it.hbShape, capW: it.capW, capH: it.capH, capRot: it.capRot,
                hb: ITEM_HITBOXES[it.sprite] ? { ...ITEM_HITBOXES[it.sprite] } : undefined };
 }
 
 function pushItemHB(it) {
-  const hb = { bodyRatio: +it.bodyRatio.toFixed(3) };
+  const hb = it.hbShape === 'capsule'
+    ? { shape: 'capsule', w: +it.capW.toFixed(3), h: +it.capH.toFixed(3) }
+    : { bodyRatio: +it.bodyRatio.toFixed(3) };
+  if (it.hbShape === 'capsule' && Math.abs(it.capRot || 0) > 0.002) hb.rot = +it.capRot.toFixed(3);
   if (Math.abs(it.hbOffX || 0) > 0.002) hb.dx = +it.hbOffX.toFixed(3);
   if (Math.abs(it.hbOffY || 0) > 0.002) hb.dy = +it.hbOffY.toFixed(3);
   ITEM_HITBOXES[it.sprite] = hb;
@@ -515,13 +593,23 @@ canvas.addEventListener('pointerdown', e => {
     const [x, y] = toWorld(e);
     const band = 12 / view.z, sq = 10 / view.z;         // hit tolerances constant on screen
     for (const g of itemLayout) {
+      const grab = kind => { activeItem = g.it; ensureOrig(g.it); itemDrag = { g, kind }; draw(); };
+      if (g.cap) {
+        // Hit-test in the stadium's local frame: rotate knob, RIGHT square =
+        // length, TOP square = thickness, inside = move.
+        const [lx, ly] = toLocal(g, x, y);
+        const rotY = -(g.hhPx + ROT_GAP / view.z);
+        if (Math.abs(lx) < sq && Math.abs(ly - rotY) < sq)   { grab('capRot'); return; }
+        if (Math.abs(lx - g.hwPx) < sq && Math.abs(ly) < sq) { grab('capW'); return; }
+        if (Math.abs(lx) < sq && Math.abs(ly + g.hhPx) < sq) { grab('capH'); return; }
+        if (Math.abs(lx) < g.hwPx && Math.abs(ly) < g.hhPx)  { grab('move'); return; }
+        continue;
+      }
       const d = Math.hypot(x - g.ccx, y - g.ccy);
       const onSquare = Math.abs(x - (g.ccx + g.pr)) < sq && Math.abs(y - g.ccy) < sq;
       // resize on the square handle or the outer edge ring; the inner core is MOVE
-      if (onSquare || (Math.abs(d - g.pr) < band && d > g.pr * 0.5)) {
-        activeItem = g.it; ensureOrig(g.it); itemDrag = { g, kind: 'resize' }; draw(); return;
-      }
-      if (d < g.pr) { activeItem = g.it; ensureOrig(g.it); itemDrag = { g, kind: 'move' }; draw(); return; }
+      if (onSquare || (Math.abs(d - g.pr) < band && d > g.pr * 0.5)) { grab('resize'); return; }
+      if (d < g.pr) { grab('move'); return; }
     }
     // not on a circle: start a pan, but remember this cell's item so a click (no
     // drag) still selects it — otherwise the tiled cells would swallow every drag
@@ -579,6 +667,17 @@ canvas.addEventListener('pointermove', e => {
       it.bodyRatio = Math.max(0.1, Math.min(1.4, (d / g.k) * 2 / (it.r * 2.4 * 0.88)));
       it.physR = physR(it);
       g.pr = physR(it) * g.k;                  // track live so the circle follows the cursor
+    } else if (itemDrag.kind === 'capW') {     // stretch the stadium's length
+      const [lx] = toLocal(g, p[0], p[1]);
+      it.capW = capFrac(it, Math.abs(lx) / g.k);
+      g.hwPx = capHW(it) * g.k;
+    } else if (itemDrag.kind === 'capH') {     // adjust the stadium's thickness
+      const [, ly] = toLocal(g, p[0], p[1]);
+      it.capH = capFrac(it, Math.abs(ly) / g.k);
+      g.hhPx = capHH(it) * g.k;
+    } else if (itemDrag.kind === 'capRot') {   // rotate about the centre
+      let rot = Math.atan2(p[1] - g.ccy, p[0] - g.ccx) + Math.PI / 2;  // knob rests at local -90°
+      it.capRot = g.rot = Math.atan2(Math.sin(rot), Math.cos(rot));    // normalise to (-π, π]
     } else {                                   // move: offset in units of r
       it.hbOffX = Math.max(-1.5, Math.min(1.5, (p[0] - g.ax) / (it.r * g.k)));
       it.hbOffY = Math.max(-1.5, Math.min(1.5, (p[1] - g.ay) / (it.r * g.k)));
@@ -739,6 +838,12 @@ document.getElementById('clearBalls').onclick = () => { if (testing) rebuildSim(
 })();
 
 // ───────────────────────── item mode ─────────────────────────────────────────
+// Seed each item's editor shape-state from any saved override (circle | capsule).
+editableMaps.forEach(m => (m.itemsData || []).forEach(it => {
+  const hb = ITEM_HITBOXES[it.sprite];
+  if (hb && hb.shape === 'capsule') { it.hbShape = 'capsule'; it.capW = hb.w; it.capH = hb.h; it.capRot = hb.rot || 0; }
+  else it.hbShape = 'circle';
+}));
 // Re-fit the grid once sprites finish decoding (their aspect ratios feed the scale).
 editableMaps.forEach(m => (m.itemsData || []).forEach(it => {
   if (it.img) it.img.addEventListener('load', () => { if (mode === 'item') { rebuildItemsLayout(); draw(); } });
@@ -747,9 +852,30 @@ document.getElementById('itemReset').onclick = () => {
   const it = activeItem; if (!it || !it._orig) return;
   const o = it._orig;
   it.bodyRatio = o.bodyRatio; it.hbOffX = o.dx; it.hbOffY = o.dy; it.physR = physR(it);
+  it.hbShape = o.hbShape; it.capW = o.capW; it.capH = o.capH; it.capRot = o.capRot;
   if (o.hb) ITEM_HITBOXES[it.sprite] = { ...o.hb }; else delete ITEM_HITBOXES[it.sprite];
   rebuildItemsLayout(); draw();
   status(`"${it.name}" restored to page-load state.`);
+};
+document.getElementById('itemShape').onclick = () => {
+  const it = activeItem; if (!it) return;
+  ensureOrig(it);
+  if (it.hbShape === 'capsule') {
+    it.hbShape = 'circle';
+    status(`"${it.name}" → circle hitbox.`);
+  } else {
+    it.hbShape = 'capsule';
+    // Seed a sensible stadium oriented by the art: thickness = current circle,
+    // long axis elongated along the sprite's longer dimension so it immediately
+    // reads as a capsule the user just fine-tunes.
+    const asp = (it.img && it.img.naturalWidth) ? it.img.naturalWidth / it.img.naturalHeight : 1.6;
+    const longF = Math.min(1.7, it.bodyRatio * Math.max(1.6, asp >= 1 ? asp : 1 / asp));
+    if (asp >= 1) { it.capH = it.bodyRatio; it.capW = longF; }   // landscape → wide
+    else          { it.capW = it.bodyRatio; it.capH = longF; }   // portrait  → tall
+    it.capRot = 0;
+    status(`"${it.name}" → capsule hitbox. Drag the length/rotate handles to fit the art.`);
+  }
+  pushItemHB(it); rebuildItemsLayout(); draw();
 };
 
 document.getElementById('tabMap').onclick  = () => setMode('map');
@@ -783,7 +909,10 @@ function serialize() {
     return `  ${id}: {\n    sideInset: ${hb.sideInset},\n    closed: ${hb.closed},${hz}\n    knots: [\n      ${kn},\n    ],\n    cornerWalls: [\n${cw}\n    ],\n  },`;
   }).join('\n');
   const itemsSrc = Object.entries(ITEM_HITBOXES).map(([sprite, hb]) => {
-    const parts = [`bodyRatio: ${hb.bodyRatio}`];
+    const parts = hb.shape === 'capsule'
+      ? [`shape: 'capsule'`, `w: ${hb.w}`, `h: ${hb.h}`]
+      : [`bodyRatio: ${hb.bodyRatio}`];
+    if (hb.rot) parts.push(`rot: ${hb.rot}`);
     if (hb.dx) parts.push(`dx: ${hb.dx}`);
     if (hb.dy) parts.push(`dy: ${hb.dy}`);
     return `  '${sprite}': { ${parts.join(', ')} },`;
@@ -805,8 +934,13 @@ function serialize() {
 //                 segments consumed by game.js). Regenerated on every save.
 //
 // ITEM_HITBOXES[spritePath]:
-//   bodyRatio   — overrides the item's collision-circle size (see items.js)
-//   dx, dy      — collision-circle offset from the sprite anchor, in units
+//   bodyRatio   — overrides the item's collision-CIRCLE size (see items.js)
+//   shape:'capsule' + w, h — elongated STADIUM hitbox for non-circular art;
+//                 w/h are half-extent fractions of sprite height. Built as a
+//                 chamfered rectangle in makeDrink(), locked at a fixed angle.
+//   rot         — capsule angle in radians (optional); the body is locked here
+//                 so it never spins. Aligns the stadium to diagonal art.
+//   dx, dy      — collision-shape offset from the sprite anchor, in units
 //                 of the item's r (drawDrink shifts the art the other way)
 
 const MAP_HITBOXES = {

@@ -76,12 +76,35 @@ function drawDrink(sx, sy, tier, scale, wobble) {
   const pr = item.physR * scale;
   ctx.save();
   ctx.scale(1, 0.82);
-  const sh = ctx.createRadialGradient(0, 0, 0, 0, 0, pr);
-  sh.addColorStop(0,    'rgba(28,15,4,.36)');
-  sh.addColorStop(0.72, 'rgba(28,15,4,.20)');
-  sh.addColorStop(1,    'rgba(28,15,4,0)');
-  ctx.fillStyle = sh;
-  ctx.beginPath(); ctx.arc(0, 0, pr, 0, Math.PI * 2); ctx.fill();
+  if (item.cap) {
+    // Stadium shadow matching the elongated (capsule) hitbox, orientation-aware
+    // and rotated to the capsule's fixed authored angle.
+    const hw = item.cap.hw * scale, hh = item.cap.hh * scale;
+    ctx.rotate(item.cap.rot);
+    ctx.fillStyle = 'rgba(28,15,4,.26)';
+    ctx.beginPath();
+    if (hw >= hh) {
+      const cr = hh;
+      ctx.moveTo(-hw + cr, -hh); ctx.lineTo(hw - cr, -hh);
+      ctx.arc(hw - cr, 0, cr, -Math.PI / 2, Math.PI / 2);
+      ctx.lineTo(-hw + cr, hh);
+      ctx.arc(-hw + cr, 0, cr, Math.PI / 2, Math.PI * 1.5);
+    } else {
+      const cr = hw;
+      ctx.moveTo(hw, -hh + cr); ctx.lineTo(hw, hh - cr);
+      ctx.arc(0, hh - cr, cr, 0, Math.PI);
+      ctx.lineTo(-hw, -hh + cr);
+      ctx.arc(0, -hh + cr, cr, Math.PI, Math.PI * 2);
+    }
+    ctx.closePath(); ctx.fill();
+  } else {
+    const sh = ctx.createRadialGradient(0, 0, 0, 0, 0, pr);
+    sh.addColorStop(0,    'rgba(28,15,4,.36)');
+    sh.addColorStop(0.72, 'rgba(28,15,4,.20)');
+    sh.addColorStop(1,    'rgba(28,15,4,0)');
+    ctx.fillStyle = sh;
+    ctx.beginPath(); ctx.arc(0, 0, pr, 0, Math.PI * 2); ctx.fill();
+  }
   ctx.restore();
 
   // The collision circle may be offset from the sprite anchor (set in the
