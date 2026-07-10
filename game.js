@@ -28,8 +28,10 @@ function fitCanvas() {
   const s = canvas.width / W;  // uniform world→pixel scale (aspect preserved)
   ctx.setTransform(s, 0, 0, s, 0, 0);
   ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  rebuildBgCache();  // backing size changed — re-scale the cached background
+  // 'low' (bilinear) — sprites are drawn near 1:1 so the high-quality filter is
+  // invisible here, but it costs real GPU time per sprite per frame on mobile.
+  // The background cache keeps 'high' for its one-time scale (render.js).
+  ctx.imageSmoothingQuality = 'low';
 }
 fitCanvas();
 window.addEventListener('resize', fitCanvas);
@@ -185,7 +187,7 @@ function comboColor(m) {
   return '#5aa8e6';
 }
 
-function makeDrink(x, y, tier, shot = false) {
+function makeDrink(x, y, tier, shot = false, growIn = false) {
   // Shots always start as ghosts; merge spawns only when they would not yet
   // qualify as active (e.g. two stray ghosts merging in the dead zone) — the
   // product then activates the normal way once it gets inside.
@@ -208,6 +210,19 @@ function makeDrink(x, y, tier, shot = false) {
     b = Bodies.circle(x, y, it.physR, opts);
   }
   b.plugin = { tier, born: performance.now(), merging: false, ghost };
+  if (growIn) {
+    // Merge products appear INSIDE a packed pile. A full-size body materialising
+    // there gets separated by Matter's position solver in one violent shove —
+    // the pile visibly teleports (measured up to ~47px in a single frame with
+    // the largest capsules; ~33px with big circles). Spawn the BODY at the
+    // sprite grow-animation's start scale instead and let the loop grow it in
+    // step with the drawn sprite (render() growth, 0.6 -> 1 over 200ms), so the
+    // pile is eased apart smoothly. Applies to every map — merge feel stays
+    // consistent regardless of item shape or size.
+    Body.scale(b, 0.6, 0.6);
+    if (it.cap) Body.setInertia(b, Infinity);  // re-lock: Body.scale recomputes inertia
+    b.plugin.scale = 0.6;
+  }
   Composite.add(engine.world, b);
   state.drinks.push(b);
   return b;
@@ -244,7 +259,7 @@ Events.on(engine, 'collisionStart', ev => {
       const my = (a.position.y + b.position.y) / 2;
       Composite.remove(engine.world, a); Composite.remove(engine.world, b);
       state.drinks = state.drinks.filter(d => d !== a && d !== b);
-      makeDrink(mx, my, tier + 1);
+      makeDrink(mx, my, tier + 1, false, true);  // grow in — no one-frame pile shove
       const sp = persp(mx, my);
       burst(sp.x, sp.y, ITEMS[tier + 1].liq, ITEMS[tier + 1].r * sp.s, state.particles);
       pop(tier);
@@ -308,7 +323,8 @@ window.addEventListener('keydown', e => {
 
 function render(dt) {
   wob += 0.05 * dt;
-  drawBackground();
+  // The background is a DOM layer under this (transparent) canvas — just clear.
+  ctx.clearRect(0, 0, W, H);
   drawDangerLine(DANGER_WY);
 
   const sl = persp(LAUNCH.x, LAUNCH.y);
@@ -346,6 +362,11 @@ function render(dt) {
 }
 
 const FRAME_MS = 1000 / 60;
+// Cool mode (welcome-screen toggle): cap rendering at 30fps instead of 60 —
+// the single biggest heat/battery lever. Physics keeps the SAME step size
+// (twice as many substeps per frame), so game speed and collision quality are
+// identical; only the draw rate halves. Read from storage per run in startGame.
+let coolMode = false;
 // Items are shot fast (~27px/step). A single physics step lets them jump deep
 // into a thin wall in one go, which Matter resolves by ejecting them inward
 // with a "pop" — so shots bounced back toward centre instead of sliding along
@@ -372,9 +393,10 @@ function sceneBusy() {
 function loop(ts) {
   if (!running) return;
   requestAnimationFrame(loop);
-  // Cap to ~60fps: on 120Hz phones rAF fires twice as often, so skip the
-  // extra frames rather than doing double the physics + drawing work (heat).
-  if (lastTs && ts - lastTs < FRAME_MS - 1) return;
+  // Cap to ~60fps (30 in cool mode): on 120Hz phones rAF fires twice as often,
+  // so skip the extra frames rather than doing double the physics + drawing
+  // work (heat).
+  if (lastTs && ts - lastTs < (coolMode ? FRAME_MS * 2 : FRAME_MS) - 1) return;
   const dt = lastTs ? Math.min((ts - lastTs) / FRAME_MS, 3) : 1;
   lastTs = ts;
 
@@ -386,7 +408,10 @@ function loop(ts) {
   if (sceneBusy()) idleFrames = 0; else idleFrames++;
   if (idleFrames > 20) return;  // board is still — skip the expensive work
 
-  for (let i = 0; i < SUBSTEPS; i++) Engine.update(engine, FRAME_MS / SUBSTEPS);
+  // In cool mode each drawn frame covers two 60Hz frames of game time, so run
+  // twice the substeps at the unchanged step size (bigger steps would tunnel).
+  const steps = coolMode ? SUBSTEPS * 2 : SUBSTEPS;
+  for (let i = 0; i < steps; i++) Engine.update(engine, FRAME_MS / SUBSTEPS);
   // A shot's hitbox activates only once it is past the free line AND inside
   // the traced shape (and clear of walls, via trySolidify). Nothing can turn
   // solid out in the dead zone — a stray ghost stays a ghost until a later
@@ -395,12 +420,24 @@ function loop(ts) {
     if (d.plugin.ghost && d.position.y < FREE_WY &&
         insideTray(d.position.x, d.position.y)) trySolidify(d);
   }
+  // Grow freshly-merged bodies to full size in step with their sprite's grow
+  // animation (spawned at 0.6 scale in makeDrink) — eases the pile apart over
+  // 200ms instead of one violent position-solver shove.
+  for (const d of state.drinks) {
+    const pl = d.plugin;
+    if (pl.scale) {
+      const target = Math.min(1, 0.6 + 0.4 * (performance.now() - pl.born) / 200);
+      if (target > pl.scale) {
+        const r = target / pl.scale;
+        Body.scale(d, r, r);
+        if (ITEMS[pl.tier].cap) Body.setInertia(d, Infinity);
+        pl.scale = target;
+      }
+      if (target >= 1) pl.scale = null;
+    }
+  }
   render(dt);
 }
-
-// The background may finish loading after we've already gone idle; rebuild its
-// cache and wake the loop for a frame so it actually appears.
-bgImg.onload = () => { rebuildBgCache(); idleFrames = 0; };
 
 // Stop burning cycles when the tab/app is backgrounded; resume on return.
 document.addEventListener('visibilitychange', () => {
@@ -413,6 +450,9 @@ document.addEventListener('visibilitychange', () => {
 });
 
 function startGame(map, opts = {}) {
+  // Cool mode is shelved for now (checkbox commented out in index.html) —
+  // pinned off here so a stale saved pref can't half-rate anyone's game.
+  coolMode = false;  // was: localStorage.getItem('mm_cool') === '1'
   ACTIVE_MAP = map;
   ITEMS = ACTIVE_MAP.itemsData;
   // Pick the backdrop for the requested size (map.sizes), else default art.

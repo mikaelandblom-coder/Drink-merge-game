@@ -147,6 +147,11 @@ function wireWelcomeEvents() {
 function showWelcome() {
   document.getElementById('map-cards').innerHTML = buildWelcomeCards();
   document.getElementById('welcome-version').textContent = GAME_VERSION;
+  // Cool mode is shelved for now — its checkbox is commented out in index.html.
+  // Restore both together (startGame reads the saved value per run in game.js).
+  // const coolCb = document.getElementById('cool-cb');
+  // coolCb.checked = localStorage.getItem('mm_cool') === '1';
+  // coolCb.onchange = () => localStorage.setItem('mm_cool', coolCb.checked ? '1' : '0');
   wireWelcomeEvents();
   document.getElementById('welcome').style.display = 'flex';
   document.getElementById('wrap').style.display = 'none';

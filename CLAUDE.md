@@ -66,8 +66,31 @@ Pick a map from the top **Map** dropdown, then choose **Background** or
   drag its circle **edge/square** to resize (bodyRatio) or **inside** to move
   (dx/dy offset). Scroll to **zoom** toward the cursor, drag empty space to
   **pan**, double-click to reset zoom (needed to tune small circles precisely).
+  Each item can instead use a **capsule** hitbox (see below) via the
+  **Switch to capsule / circle** button — for non-circular art where a circle
+  leaves too much sprite uncovered (drinks visually overlap when packed).
 - **Save:** writes `config/hitboxes.js` (File System API asks for the file once,
   then overwrites on every save). Reload the game tab to play with the result.
+
+**Capsule (stadium) item hitboxes.** A second per-item primitive alongside the
+circle, for elongated/non-circular art (guitars, violins, saxes). Toggle it with
+the **Switch to capsule** button in the item tab, then:
+- **RIGHT** square handle = length, **TOP** square = thickness, **knob on the
+  stalk** = rotation, drag inside = move (dx/dy, shared with the circle).
+- Saved to `ITEM_HITBOXES[sprite]` as
+  `{ shape:'capsule', w, h, rot?, dx?, dy? }` — `w`/`h` are half-extent fractions
+  of sprite height (same scaling as `bodyRatio`, so a square capsule ≈ the
+  equivalent circle); `rot` is radians (omitted when 0).
+- In-game (`makeDrink`) it is a **chamfered rectangle locked at its authored
+  angle** (`inertia: Infinity`) — it never spins, so the upright sprite never
+  drifts from its body (`drawDrink` ignores `body.angle` — see below). `rot`
+  only tilts the HITBOX to follow diagonal art; the sprite is NOT rotated.
+- `physR` for a capsule is its **vertical projection** (`|hw·sinθ|+|hh·cosθ|`),
+  so the danger-line / shadow keep working. The stadium shadow in `render.js` is
+  orientation- and rotation-aware.
+- Melody Lane is the worked example — every instrument uses a capsule, several
+  rotated. Existing circle items are untouched (capsule is opt-in; no capsule =
+  `item.cap` is null and the old `Bodies.circle` path runs).
 
 The game consumes hitboxes via `MAP_HITBOXES` / `ITEM_HITBOXES` in
 `config/hitboxes.js`; the spline knots are stored alongside the generated walls
@@ -96,6 +119,14 @@ in localStorage and passed into `startGame(map, {size, combos})`:
 - **Combo multipliers** (every map). Cascade-merge score multipliers. The map's
   `combos: true` is now just the *default* checkbox state (on for Mage Tower &
   Plushie Factory), not a hard setting — `COMBOS_ENABLED` is set per run.
+
+**Cool mode (30 fps cap) — built but SHELVED.** The welcome-screen checkbox is
+commented out in index.html (with its wiring in welcome.js), and startGame pins
+`coolMode = false`. The game.js machinery is intact: it halves the render rate
+but keeps the physics step size (twice the substeps per frame), so game speed
+and collision quality are unchanged. Re-enable by restoring the index.html
+block + welcome.js wiring + the localStorage read in startGame. It remains the
+biggest thermal lever if the DOM-layer background isn't enough.
 
 ## High scores
 
@@ -225,12 +256,24 @@ Edit `config/items.js`. Each item:
 
 `physR` is computed automatically: `r * 2.4 * bodyRatio / 2 * 0.88`
 
+For non-circular art, leave `bodyRatio` as a rough default and give the item a
+**capsule** hitbox in the editor instead (see "Capsule (stadium) item hitboxes"
+under Hitbox editing). The capsule params live in `config/hitboxes.js`, not here.
+
 **`vis`** scales only the DRAWN sprite (in drawDrink + the editor + the next
-preview), not the physics circle. Sprites are sized by HEIGHT (`r*2.4`), so wide
-shapes (a harmonica, a trumpet) render huge and break the tier size-ramp. Set
-`vis ≈ 1/aspect` on wide items so every item's on-screen extent lands on the `r`
-ramp. Default 1 = no change (all other maps untouched). The melody instruments
-use it; recompute if art proportions change.
+preview), not the physics body. Sprites are sized by HEIGHT (`r*2.4`), so wide
+shapes (a harmonica, a trumpet) render huge unless scaled down. Set
+`vis ≈ sqrt(0.75/aspect)` (aspect = art width/height) — this is **AREA parity**:
+the item occupies the same on-screen footprint as a typical upright sprite of
+its tier. Do NOT use the old `1/aspect` rule (extent parity) — it shrank very
+wide items to slivers (the harmonica shipped at ~35% of its tier's footprint
+and "felt tiny"; fixed 2026-07-10). items.js now `console.warn`s at load when
+an item draws below half its tier's nominal area — check the console after
+adding items. Default 1 = no change. NOTE: changing `vis` on an item that
+already has a traced capsule rescales the ART ONLY — scale the capsule in
+config/hitboxes.js by the same factor k (`w`,`h`,`dx` ×k; `dy` → k·dy +
+0.75·(1−k), from drawDrink's bottom-anchored sprite placement), or re-trace it
+in the editor.
 
 `DROP_MAX` in `game.js` controls how many of the lowest tiers can be shot.
 Currently 4 — increase when adding more tiers.
@@ -243,14 +286,32 @@ Currently 4 — increase when adding more tiers.
 - **Fruit punch pitcher**: handle and under-umbrella are transparent (same)
 - **Canvas resolution**: rendered at MAX_SCALE=1.6× DPR so the browser never
   upscales — this fixes the blurriness on desktop
+- **Render heat optimizations (deliberate — don't "clean up")**: the map
+  background is a DOM layer (`#stage-bg` div) UNDER a transparent canvas —
+  rastered once by the compositor per map load; the render loop only
+  `clearRect`s and draws dynamic content (never blit a background onto the
+  game canvas); the game ctx uses `imageSmoothingQuality:'low'`; the circular
+  drink shadow is ONE cached 256px sprite (`SHADOW_SPRITE`) blitted scaled,
+  never a per-frame `createRadialGradient`; combo text pops are pre-rendered to
+  a per-pop canvas at spawn (`spawnTextPop`) so `shadowBlur` never runs in the
+  frame loop. Remaining known levers if heat returns: re-enable the shelved
+  cool mode (30fps), rate-limit `clink()` node creation.
 - **Collision sounds**: synthesised via Web Audio API (no files). This is intentional —
   instant, zero-size, procedurally variable by tier.
 - **No Node.js installed**: use `python -m http.server 5500` to serve locally.
   Install Node.js to use `npx serve .` and enable the Claude Code preview panel.
-- **Screenshot tools time out on any rAF page** — the game, the hitbox editor,
-  AND sound-lab all run animation loops that block capture (even when paused).
-  Verify with `preview_eval` — numeric assertions, or a `canvas.toDataURL`
-  snapshot. Physics can be tested headlessly by stepping `Matter.Engine.update`.
+- **Screenshot/rAF time-outs: the preview tab is often HIDDEN** (root cause,
+  diagnosed 2026-07-10 — the old "rAF pages block capture" theory was wrong).
+  When the Browser pane isn't open on screen, `document.hidden === true`: the
+  renderer commits no frames, so `preview_screenshot` waits forever AND any
+  `preview_eval` that awaits `requestAnimationFrame` hangs (30s timeout).
+  Check `document.hidden` first when captures/evals stall. Hidden-tab-safe
+  verification: everything synchronous still works — call `render(1)` /
+  `Matter.Engine.update` directly, assert with `getImageData`, and for a real
+  screenshot composite `#stage-bg` + the game canvas into a temp canvas,
+  `toDataURL('image/jpeg')`, let the harness spill the base64 to a file, and
+  decode it to an image with Python. If the user opens the Browser pane,
+  `preview_screenshot` should work normally.
 - **Read-tool image preview composites transparent PNGs on a dark background** —
   a properly-transparent sprite/grid can look like it has "a painted dark
   backdrop with glows". Do NOT conclude transparency failed from the preview:
@@ -290,6 +351,16 @@ Currently 4 — increase when adding more tiers.
 - Perspective transform applied at render time (not physics time)
 - Drinks are shot from LAUNCH point (bottom-centre, slides toward aim X)
 - Two drinks of the same tier merge → next tier + coin reward + particle burst
+- **Merge products GROW IN physically** (makeDrink `growIn` flag): the body
+  spawns at 0.6 scale and is Body.scale'd to full over 200ms, in step with the
+  sprite's grow animation. Without this, a full-size body materialising inside
+  a packed pile got separated by Matter's position solver in one violent
+  position shove (up to ~47px/frame with the largest capsules — the "pile
+  teleport" that made Melody Lane feel inconsistent). Keep this for all future
+  maps/shapes; it's what keeps merge feel uniform regardless of item size.
+  (Investigated 2026-07-10: capsule item physics itself measured equivalent to
+  circles; per-map wall "bounciness" differences largely vanish once the ghost
+  free-shot mechanic is accounted for.)
 - Optional combo multipliers (per-run, menu checkbox): fast successive merges
   stack a score multiplier (`COMBOS_ENABLED` in game.js)
 - Game over: any drink settled above the danger line (H-150) for >1.5s at speed <0.15

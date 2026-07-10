@@ -12,7 +12,11 @@ html, body { height: 100%; overflow: hidden; background: var(--bar-deep); font-f
 #welcome {
   position: fixed; inset: 0;
   display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
+  align-items: center;
+  /* NO justify-content:center here: with overflow-y:auto, flex centering pushes
+     overflow above the scroll origin, clipping the title unreachably on short
+     viewports (Android Chrome). #welcome-ui's margin:auto centers when content
+     fits and collapses to a normal top-anchored scroll when it doesn't. */
   background: var(--bar-deep);
   overflow-y: auto;
   z-index: 10;
@@ -36,6 +40,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bar-deep); font-f
   display: flex; flex-direction: column;
   align-items: center; gap: 14px;
   padding: 40px 20px 48px;
+  margin: auto 0;  /* centers when content fits; collapses to 0 when it overflows */
 }
 
 #welcome-title {
@@ -58,6 +63,12 @@ html, body { height: 100%; overflow: hidden; background: var(--bar-deep); font-f
   margin-top: -2px; margin-bottom: 10px;
   font-size: 12px; letter-spacing: .14em;
   color: #b8935f; text-shadow: 0 1px 6px rgba(0,0,0,.85);
+}
+
+#cool-toggle {
+  justify-content: center;
+  margin: -4px auto 12px;
+  text-shadow: 0 1px 6px rgba(0,0,0,.85);
 }
 
 .map-card {
@@ -149,7 +160,17 @@ html, body { height: 100%; overflow: hidden; background: var(--bar-deep); font-f
   overflow: visible;
 }
 
-canvas { display: block; touch-action: none; border-radius: 14px; }
+/* Map background as its own compositor layer under the transparent canvas —
+   rastered once per map load instead of blitted every frame (see render.js). */
+#stage-bg {
+  position: absolute; inset: 0; z-index: 0;
+  border-radius: 14px;
+  background-color: #7a4d26;            /* fallback while the image loads */
+  background-size: 100% 100%;           /* stretch exactly like the old drawImage */
+  background-repeat: no-repeat;
+}
+
+canvas { display: block; position: relative; z-index: 1; touch-action: none; border-radius: 14px; }
 
 #over {
   position: absolute; inset: 0; display: none;

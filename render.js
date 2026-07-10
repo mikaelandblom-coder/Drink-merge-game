@@ -2,50 +2,21 @@
 
 const COIN_IMG = new Image(); COIN_IMG.src = 'assets/images/coin.png';
 const BAG_IMG  = new Image(); BAG_IMG.src  = 'assets/images/moneybag.png';
-const bgImg    = new Image();
 
-// The background never changes during play, but it's a large source image.
-// Rescaling it every frame with high-quality smoothing is a big, needless GPU
-// cost (a major heat source on mobile). Instead we pre-scale it once into an
-// offscreen canvas at the exact backing resolution, then blit that 1:1 each
-// frame — no per-frame resampling.
-const bgCanvas = document.createElement('canvas');
-const bgCtx    = bgCanvas.getContext('2d');
-let bgCacheReady = false;
-
-function rebuildBgCache() {
-  if (!(bgImg.complete && bgImg.naturalWidth) || !canvas.width) { bgCacheReady = false; return; }
-  bgCanvas.width  = canvas.width;
-  bgCanvas.height = canvas.height;
-  bgCtx.imageSmoothingEnabled = true;
-  bgCtx.imageSmoothingQuality = 'high';
-  bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
-  bgCtx.drawImage(bgImg, 0, 0, bgCanvas.width, bgCanvas.height);
-  bgCacheReady = true;
-}
-bgImg.onload = rebuildBgCache;
-
+// The map background lives in a DOM layer (#stage-bg) UNDER a transparent
+// canvas, not on the canvas itself: the compositor rasters the image once and
+// caches it, so the render loop never touches those ~2.7M pixels again — it
+// just clears and draws the dynamic content. (Previously the background was
+// blitted full-frame every frame, the single largest per-frame pixel cost.)
 function loadMapAssets(map, bgSrc) {
   // bgSrc lets startGame pick a size variant (map.sizes); falls back to map.bg.
-  bgImg.src = bgSrc || map.bg;  // called once from game.js after DOM is ready
-  if (bgImg.complete && bgImg.naturalWidth) rebuildBgCache();  // already cached by browser
+  // background-size 100% 100% matches the old drawImage(0,0,W,H) stretch.
+  document.getElementById('stage-bg').style.backgroundImage =
+    `url('${bgSrc || map.bg}')`;
   // Coin & bag art are shared by default; a map may override either with its own
   // (e.g. Melody Lane's note-coin + instrument-case bag). Falls back to shared.
   COIN_IMG.src = map.coin || 'assets/images/coin.png';
   BAG_IMG.src  = map.bag  || 'assets/images/moneybag.png';
-}
-
-function drawBackground() {
-  if (bgCacheReady) {
-    // bgCanvas is already backing-sized, so drawing it to the world rect under
-    // the active transform maps it 1:1 to device pixels — a plain blit with no
-    // resampling (and no per-frame rescale of the large source image).
-    ctx.drawImage(bgCanvas, 0, 0, W, H);
-  } else if (bgImg.complete && bgImg.naturalWidth) {
-    ctx.drawImage(bgImg, 0, 0, W, H);
-  } else {
-    ctx.fillStyle = '#7a4d26'; ctx.fillRect(0, 0, W, H);
-  }
 }
 
 function drawDangerLine(dangerWY) {
@@ -63,6 +34,24 @@ function drawAimLine(aiming, gameOver, launchScreen, aimX, aimY) {
   ctx.beginPath(); ctx.arc(aimX, aimY, 5, 0, Math.PI * 2);
   ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.fill();
 }
+
+// The circular drink shadow is the same radial gradient for every item — only
+// its radius differs. Creating a gradient per drink per frame is a canvas slow
+// path (30 gradient rasterizations/frame on a full board), so render it once
+// into a sprite and blit it scaled instead. 256px is plenty: it's a soft blur,
+// so upscaling to the largest tiers is invisible.
+const SHADOW_SPRITE = (() => {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 256;
+  const c = cv.getContext('2d');
+  const g = c.createRadialGradient(128, 128, 0, 128, 128, 128);
+  g.addColorStop(0,    'rgba(28,15,4,.36)');
+  g.addColorStop(0.72, 'rgba(28,15,4,.20)');
+  g.addColorStop(1,    'rgba(28,15,4,0)');
+  c.fillStyle = g;
+  c.fillRect(0, 0, 256, 256);
+  return cv;
+})();
 
 function drawDrink(sx, sy, tier, scale, wobble) {
   const item = ITEMS[tier];
@@ -98,12 +87,7 @@ function drawDrink(sx, sy, tier, scale, wobble) {
     }
     ctx.closePath(); ctx.fill();
   } else {
-    const sh = ctx.createRadialGradient(0, 0, 0, 0, 0, pr);
-    sh.addColorStop(0,    'rgba(28,15,4,.36)');
-    sh.addColorStop(0.72, 'rgba(28,15,4,.20)');
-    sh.addColorStop(1,    'rgba(28,15,4,0)');
-    ctx.fillStyle = sh;
-    ctx.beginPath(); ctx.arc(0, 0, pr, 0, Math.PI * 2); ctx.fill();
+    ctx.drawImage(SHADOW_SPRITE, -pr, -pr, pr * 2, pr * 2);
   }
   ctx.restore();
 
@@ -205,8 +189,30 @@ function spawnCoins(x, y, n, coins, stagger = 0.10) {
 }
 
 // ---------- floating combo text ----------
+// The glow (shadowBlur) is a per-draw gaussian blur — the most expensive canvas
+// operation — and the text never changes after spawn. So render each pop ONCE
+// into its own small canvas here, and the per-frame draw is a plain scaled
+// blit. Supersampled 3x so the late-life scale-up (~1.55x) plus the backing
+// resolution (~3.2x world units) stays crisp.
+const POP_SS  = 3;
+const POP_PAD = 22;  // world px of headroom for the 18px glow + 4px stroke
+
 function spawnTextPop(x, y, text, color, pops) {
-  pops.push({ x, y, text, color, life: 1, vy: -0.7 });
+  const cv = document.createElement('canvas');
+  const c  = cv.getContext('2d');
+  c.font = 'bold ' + 22 * POP_SS + 'px Georgia';
+  const tw = c.measureText(text).width / POP_SS;
+  cv.width  = Math.ceil((tw + POP_PAD * 2) * POP_SS);
+  cv.height = Math.ceil((22 + POP_PAD * 2) * POP_SS);
+  c.font = 'bold ' + 22 * POP_SS + 'px Georgia';  // canvas resize reset the ctx
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.translate(cv.width / 2, cv.height / 2);
+  c.shadowColor = color; c.shadowBlur = 18 * POP_SS;
+  c.lineWidth = 4 * POP_SS; c.strokeStyle = 'rgba(18,10,28,.85)';
+  c.strokeText(text, 0, 0);
+  c.fillStyle = color;
+  c.fillText(text, 0, 0);
+  pops.push({ x, y, img: cv, w: cv.width / POP_SS, h: cv.height / POP_SS, life: 1, vy: -0.7 });
 }
 
 function drawTextPops(pops, dt) {
@@ -217,20 +223,11 @@ function drawTextPops(pops, dt) {
     const alpha = Math.max(0, Math.min(1, p.life * 1.5));
     const pop   = p.life > 0.8 ? (1 - p.life) * 5 : 1;   // quick scale-in at spawn
     const scale = (0.7 + pop * 0.5) + (1 - p.life) * 0.35;
-    ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.translate(p.x, p.y);
-    ctx.scale(scale, scale);
-    ctx.font = 'bold 22px Georgia';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.shadowColor = p.color; ctx.shadowBlur = 18;
-    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(18,10,28,.85)';
-    ctx.strokeText(p.text, 0, 0);
-    ctx.fillStyle = p.color;
-    ctx.fillText(p.text, 0, 0);
-    ctx.restore();
+    const w = p.w * scale, h = p.h * scale;
+    ctx.drawImage(p.img, p.x - w / 2, p.y - h / 2, w, h);
   }
-  ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+  ctx.globalAlpha = 1;
 }
 
 function updateCoins(coins, dt, onCoinLand) {

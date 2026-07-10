@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Mixology Merge</title>
 <!-- PNG icons: iOS Safari ignores SVG/data-URI favicons, so a real apple-touch-icon is required -->
-<link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png?v=54">
-<link rel="icon" type="image/png" sizes="192x192" href="assets/images/icon-192.png?v=54">
-<link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=54">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png?v=56">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/images/icon-192.png?v=56">
+<link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=56">
 <meta name="apple-mobile-web-app-title" content="Mixology Merge">
-<link rel="stylesheet" href="style.css?v=54">
+<link rel="stylesheet" href="style.css?v=56">
 </head>
 <body>
 
@@ -20,6 +20,15 @@
     <div id="welcome-title">MIXOLOGY MERGE</div>
     <div id="welcome-sub">a world tour of flavours</div>
     <div id="welcome-version"></div>
+    <!-- Cool mode (30fps cap) — shelved for now in favour of the DOM-layer
+         background; the game.js plumbing (coolMode) is still in place.
+         Restore this block + the wiring in welcome.js to bring it back.
+    <label id="cool-toggle" class="map-opt-toggle"
+           title="Halves the frame rate so the phone stays cooler on long sessions">
+      <input type="checkbox" id="cool-cb">
+      <span>Cool mode (30 fps, less heat)</span>
+    </label>
+    -->
     <div id="map-cards"></div>
   </div>
 </div>
@@ -27,6 +36,10 @@
 <!-- Game screen (hidden until a map is selected) -->
 <div id="wrap">
   <div id="stage">
+    <!-- Map background lives in the DOM, NOT on the canvas: the compositor
+         rasters it once and caches it, so the render loop no longer blits a
+         full-frame background image every frame (heat). -->
+    <div id="stage-bg"></div>
     <canvas id="c"></canvas>
     <audio id="bgm" loop preload="auto" src="assets/audio/bgm.mp3"></audio>
     <div id="over">
@@ -54,15 +67,15 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
-<script src="config/constants.js?v=54"></script>
-<script src="config/hitboxes.js?v=54"></script>
-<script src="config/items.js?v=54"></script>
-<script src="config/maps.js?v=54"></script>
-<script src="scores.js?v=54"></script>
-<script src="audio.js?v=54"></script>
-<script src="render.js?v=54"></script>
-<script src="ui.js?v=54"></script>
-<script src="welcome.js?v=54"></script>
-<script src="game.js?v=54"></script>
+<script src="config/constants.js?v=56"></script>
+<script src="config/hitboxes.js?v=56"></script>
+<script src="config/items.js?v=56"></script>
+<script src="config/maps.js?v=56"></script>
+<script src="scores.js?v=56"></script>
+<script src="audio.js?v=56"></script>
+<script src="render.js?v=56"></script>
+<script src="ui.js?v=56"></script>
+<script src="welcome.js?v=56"></script>
+<script src="game.js?v=56"></script>
 </body>
 </html>

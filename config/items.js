@@ -71,9 +71,9 @@ const TEDDY_ITEMS = [
 // blow up in width. vis ~= 1/aspect lands every item's drawn extent on the same
 // r-based ramp so sizes read by tier. Recompute if the art's proportions change.
 const MELODY_ITEMS = [
-  { name:'harmonica',   r:15, glass:'#eef1f4', liq:'#b8c0c8', sprite:'assets/images/melody-harmonica.png', bodyRatio:0.70, vis:0.28 },
+  { name:'harmonica',   r:15, glass:'#eef1f4', liq:'#b8c0c8', sprite:'assets/images/melody-harmonica.png', bodyRatio:0.70, vis:0.38 },
   { name:'ocarina',     r:19, glass:'#e6f4ff', liq:'#5aa8e6', sprite:'assets/images/melody-ocarina.png',   bodyRatio:0.70, vis:0.67 },
-  { name:'recorder',    r:23, glass:'#fdf9ee', liq:'#c9a86a', sprite:'assets/images/melody-recorder.png',  bodyRatio:0.32 },
+  { name:'recorder',    r:23, glass:'#fdf9ee', liq:'#c9a86a', sprite:'assets/images/melody-recorder.png',  bodyRatio:0.32, vis:1.2 },
   { name:'ukulele',     r:28, glass:'#fdf1dd', liq:'#d89a4e', sprite:'assets/images/melody-ukulele.png',   bodyRatio:0.52 },
   { name:'trumpet',     r:33, glass:'#fff6db', liq:'#e0a92e', sprite:'assets/images/melody-trumpet.png',   bodyRatio:0.55, vis:0.43 },
   { name:'violin',      r:39, glass:'#f7e6cf', liq:'#a0522d', sprite:'assets/images/melody-violin.png',    bodyRatio:0.46, vis:0.83 },
@@ -95,6 +95,23 @@ const MELODY_ITEMS = [
   item.hbOffX = (hb && hb.dx) || 0;
   item.hbOffY = (hb && hb.dy) || 0;
   item.img = new Image();
+  // Guardrail against "tiny item" regressions (the melody harmonica shipped at
+  // ~35% of its tier's visual footprint before this existed): once the art
+  // loads, compare the DRAWN area — (r*2.4*vis)^2 * aspect — against the tier's
+  // nominal footprint (a typical upright sprite: height r*2.4, aspect ~0.75)
+  // and warn when it lands under 45% (calibrated so the slimmest legitimate
+  // sprite, Saigon's hoisin bottle at 48%, stays quiet). Fix by raising vis
+  // toward the area-parity value sqrt(0.75/aspect) — see CLAUDE.md.
+  item.img.onload = () => {
+    const aspect = item.img.naturalWidth / item.img.naturalHeight;
+    const drawn   = Math.pow(item.r * 2.4 * (item.vis || 1), 2) * aspect;
+    const nominal = Math.pow(item.r * 2.4, 2) * 0.75;
+    if (drawn < nominal * 0.45) console.warn(
+      '[items] "' + item.name + '" draws at ' + Math.round(100 * drawn / nominal) +
+      '% of its tier\'s nominal area - raise vis toward sqrt(0.75/aspect) = ' +
+      (Math.sqrt(0.75 / aspect)).toFixed(2) + ' (see CLAUDE.md, and scale its' +
+      ' capsule hitbox by the same factor)');
+  };
   item.img.src = item.sprite;
   const natH = item.r * 2.4;                 // sprites are sized by height
   if (hb && hb.shape === 'capsule') {
