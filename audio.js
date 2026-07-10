@@ -464,13 +464,19 @@ function startMusic() {
 }
 
 function toggleMusic(btn) {
-  if (!musicStarted) { startMusic(); btn.textContent = 'music on'; return; }
+  if (!musicStarted) { startMusic(); setToggleBtn(btn, true); return; }
   musicOn = !musicOn;
-  btn.textContent = musicOn ? 'music on' : 'music off';
+  setToggleBtn(btn, musicOn);
   if (musicOn) bgmEl.play().catch(() => {}); else bgmEl.pause();
 }
 
 function toggleMute(btn) {
   muted = !muted;
-  btn.textContent = muted ? 'sound off' : 'sound on';
+  setToggleBtn(btn, !muted);
+}
+
+// HUD toggle buttons show their state via icon swap (.off class), not text.
+function setToggleBtn(btn, on) {
+  btn.classList.toggle('off', !on);
+  btn.setAttribute('aria-pressed', String(on));
 }

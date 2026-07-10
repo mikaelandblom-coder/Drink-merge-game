@@ -54,17 +54,33 @@ function wireInput(canvas, state) {
 }
 
 function wireHUD(state) {
-  document.getElementById('mute').onclick     = e => toggleMute(e.target);
-  document.getElementById('musicBtn').onclick = e => toggleMusic(e.target);
+  // currentTarget, not target: clicks can land on the buttons' SVG icons.
+  document.getElementById('mute').onclick     = e => toggleMute(e.currentTarget);
+  document.getElementById('musicBtn').onclick = e => toggleMusic(e.currentTarget);
+
+  const over = document.getElementById('over');
+  const peek = document.getElementById('over-peek');
 
   document.getElementById('again').onclick = () => {
-    document.getElementById('over').style.display = 'none';
+    over.style.display = 'none';
+    peek.style.display = 'none';
     resetState();
   };
 
   document.getElementById('menu').onclick = () => {
-    document.getElementById('over').style.display = 'none';
+    over.style.display = 'none';
+    peek.style.display = 'none';
     returnToMenu();
+  };
+
+  // ✕ hides the results so the final pile can be inspected; the pill restores them.
+  document.getElementById('over-close').onclick = () => {
+    over.style.display = 'none';
+    peek.style.display = 'block';
+  };
+  peek.onclick = () => {
+    peek.style.display = 'none';
+    over.style.display = 'flex';
   };
 
   const confirmOverlay = document.getElementById('confirm-menu');
@@ -73,6 +89,7 @@ function wireHUD(state) {
   };
   document.getElementById('confirm-yes').onclick = () => {
     confirmOverlay.style.display = 'none';
+    peek.style.display = 'none';
     returnToMenu();
   };
   document.getElementById('confirm-no').onclick = () => {
@@ -112,6 +129,7 @@ function showGameOver(state, key) {
      <div class="final-coins">You earned <strong>${score.toLocaleString()}</strong> coins</div>
      ${scores.length ? `<div class="score-list"><div class="score-list-title">Top scores</div>${rowsHtml}</div>` : ''}`;
 
+  document.getElementById('over-peek').style.display = 'none';
   document.getElementById('over').style.display = 'flex';
 }
 
