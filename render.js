@@ -40,6 +40,11 @@ function drawAimLine(aiming, gameOver, launchScreen, aimX, aimY) {
 // path (30 gradient rasterizations/frame on a full board), so render it once
 // into a sprite and blit it scaled instead. 256px is plenty: it's a soft blur,
 // so upscaling to the largest tiers is invisible.
+// Downward shadow nudge as a fraction of physR — makes the shadow peek out
+// under the item so it reads as resting on top of it (applied identically to
+// circle and capsule shadows in drawDrink).
+const SHADOW_DROP = 0.40;
+
 const SHADOW_SPRITE = (() => {
   const cv = document.createElement('canvas');
   cv.width = cv.height = 256;
@@ -53,6 +58,37 @@ const SHADOW_SPRITE = (() => {
   return cv;
 })();
 
+// Capsule items get the SAME shadow profile as circles (0→.36, .72→.20, 1→0),
+// extruded along the stadium's long axis instead of a hard-edged flat fill —
+// so shadows read identically across maps. Baked once per item on first draw
+// (per-pixel distance-to-segment; canvas gradients can't do stadium falloff)
+// and blitted scaled every frame, same perf model as SHADOW_SPRITE.
+function makeCapsuleShadowSprite(hw, hh) {
+  const rad = Math.min(hw, hh);          // stadium cap radius
+  const SS  = 64 / rad;                  // short half-extent → 64px
+  const w = Math.ceil(hw * 2 * SS), h = Math.ceil(hh * 2 * SS);
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  const c = cv.getContext('2d');
+  const img = c.createImageData(w, h);
+  const horiz = hw >= hh;
+  const halfLen = Math.abs(hw - hh) * SS, radPx = rad * SS;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const px = x + 0.5 - w / 2, py = y + 0.5 - h / 2;
+    const ax = horiz ? Math.max(Math.abs(px) - halfLen, 0) : Math.abs(px);
+    const ay = horiz ? Math.abs(py) : Math.max(Math.abs(py) - halfLen, 0);
+    const t = Math.hypot(ax, ay) / radPx;
+    const a = t >= 1 ? 0
+            : t <= 0.72 ? 0.36 - 0.16 * (t / 0.72)
+            : 0.20 * (1 - (t - 0.72) / 0.28);
+    const i = (y * w + x) * 4;
+    img.data[i] = 28; img.data[i + 1] = 15; img.data[i + 2] = 4;
+    img.data[i + 3] = Math.round(a * 255);
+  }
+  c.putImageData(img, 0, 0);
+  return cv;
+}
+
 function drawDrink(sx, sy, tier, scale, wobble) {
   const item = ITEMS[tier];
   const r = item.r * scale;
@@ -62,30 +98,22 @@ function drawDrink(sx, sy, tier, scale, wobble) {
   // Shadow drawn ON the collision circle (origin = body centre here), sized to
   // physR — so it reads as grounded at its actual hitbox instead of floating
   // above a detached puddle, and follows any hitbox tuned in the editor.
+  // Nudged down a little so it peeks out beneath the item (light-from-above
+  // grounding cue); same physR fraction for circles and capsules so every map
+  // gets the identical treatment.
   const pr = item.physR * scale;
   ctx.save();
+  ctx.translate(0, pr * SHADOW_DROP);
   ctx.scale(1, 0.82);
   if (item.cap) {
     // Stadium shadow matching the elongated (capsule) hitbox, orientation-aware
-    // and rotated to the capsule's fixed authored angle.
+    // and rotated to the capsule's fixed authored angle. Soft sprite baked on
+    // first use — same falloff as SHADOW_SPRITE so all maps' shadows match.
     const hw = item.cap.hw * scale, hh = item.cap.hh * scale;
     ctx.rotate(item.cap.rot);
-    ctx.fillStyle = 'rgba(28,15,4,.26)';
-    ctx.beginPath();
-    if (hw >= hh) {
-      const cr = hh;
-      ctx.moveTo(-hw + cr, -hh); ctx.lineTo(hw - cr, -hh);
-      ctx.arc(hw - cr, 0, cr, -Math.PI / 2, Math.PI / 2);
-      ctx.lineTo(-hw + cr, hh);
-      ctx.arc(-hw + cr, 0, cr, Math.PI / 2, Math.PI * 1.5);
-    } else {
-      const cr = hw;
-      ctx.moveTo(hw, -hh + cr); ctx.lineTo(hw, hh - cr);
-      ctx.arc(0, hh - cr, cr, 0, Math.PI);
-      ctx.lineTo(-hw, -hh + cr);
-      ctx.arc(0, -hh + cr, cr, Math.PI, Math.PI * 2);
-    }
-    ctx.closePath(); ctx.fill();
+    const spr = item.cap.shadow ||
+      (item.cap.shadow = makeCapsuleShadowSprite(item.cap.hw, item.cap.hh));
+    ctx.drawImage(spr, -hw, -hh, hw * 2, hh * 2);
   } else {
     ctx.drawImage(SHADOW_SPRITE, -pr, -pr, pr * 2, pr * 2);
   }
