@@ -453,14 +453,27 @@ function initMusic(audioEl, volume, src) {
     bgmEl.pause();
     bgmEl.setAttribute('src', src);
     bgmEl.load();
-    musicStarted = false;
   }
+  // Always re-arm, even when the src is unchanged: returnToMenu() paused
+  // playback, and a stale musicStarted=true made startMusic() early-return
+  // silently when the same map (or one sharing a track) was picked again.
+  musicStarted = false;
 }
 
 function startMusic() {
   if (musicStarted) return;
   musicStarted = true;
   if (musicOn) bgmEl.play().catch(() => {});
+}
+
+// Tab-visibility pause/resume: the browser keeps an <audio> element playing
+// in a hidden/minimized tab, so game.js calls these from visibilitychange.
+// Both respect the user's music toggle — a paused-by-choice track stays paused.
+function pauseMusicForHide() {
+  if (bgmEl && musicStarted && musicOn) bgmEl.pause();
+}
+function resumeMusicAfterHide() {
+  if (bgmEl && musicStarted && musicOn) bgmEl.play().catch(() => {});
 }
 
 function toggleMusic(btn) {

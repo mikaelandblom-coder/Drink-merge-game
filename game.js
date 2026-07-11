@@ -440,11 +440,14 @@ function loop(ts) {
 }
 
 // Stop burning cycles when the tab/app is backgrounded; resume on return.
+// The bgm <audio> keeps playing in a hidden tab unless paused explicitly.
 document.addEventListener('visibilitychange', () => {
   const onGameScreen = document.getElementById('wrap').style.display !== 'none';
   if (document.hidden) {
     running = false;
+    pauseMusicForHide();
   } else if (onGameScreen && !running) {
+    resumeMusicAfterHide();
     running = true; lastTs = 0; idleFrames = 0; requestAnimationFrame(loop);
   }
 });
