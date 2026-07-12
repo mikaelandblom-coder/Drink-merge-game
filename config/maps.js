@@ -3,7 +3,7 @@ const MAPS = [
     id:        'hawaii',
     label:     'Hawaii',
     sublabel:  'Tiki Bar',
-    bg:        'assets/images/bg-tikibar.png',
+    bg:        'assets/source/tikibar/tiki_bar_background.png',
     bgm:       'assets/audio/bgm.mp3',
     bgmVol:    0.35,
     itemsData: null, // filled after items.js loads (see bottom of this file)
@@ -12,7 +12,7 @@ const MAPS = [
     id:        'saigon',
     label:     'Saigon',
     sublabel:  'Pho House',
-    bg:        'assets/images/bg-saigon.png',
+    bg:        'assets/source/saigon/bg-saigon.png',
     bgm:       'assets/audio/bgm-saigon.mp3',
     bgmVol:    0.30,
     itemsData: null, // filled below
@@ -23,21 +23,21 @@ const MAPS = [
     id:       'kyoto',
     label:    'Kyoto',
     sublabel: 'Night Market',
-    bg:       'assets/images/bg-kyoto.png',
+    bg:       'assets/source/kyoto/bg_large.png',
     bgm:      'assets/audio/Lantern Alley.mp3',
     bgmVol:   0.35,
     itemsData: null,
     // Two table framings share the same play field / hitboxes; only the
     // backdrop art changes. See the size checkbox in the main menu.
-    sizes:       { large: 'assets/images/bg-kyoto.png',
-                   small: 'assets/images/bg-kyoto-small.png' },
+    sizes:       { large: 'assets/source/kyoto/bg_large.png',
+                   small: 'assets/source/kyoto/bg_small.png' },
     defaultSize: 'large',
   },
   {
     id:       'mage',
     label:    'Mage Tower',
     sublabel: 'Arcane Sanctum',
-    bg:       'assets/images/bg-mage.png',
+    bg:       'assets/source/mage/bg.png',
     bgm:      'assets/audio/Arcane Sanctum.mp3',
     bgmVol:   0.35,
     itemsData: null,
@@ -47,20 +47,20 @@ const MAPS = [
     id:       'teddy',
     label:    'Plushie Factory',
     sublabel: 'Made for Mai',
-    bg:       'assets/images/bg-teddy.png',
+    bg:       'assets/source/teddy/bg.png',
     bgm:      'assets/audio/Stuffed with love.mp3',
     bgmVol:   0.35,
     itemsData: null,
     combos:   true,   // cascade-merge multipliers (like Mage Tower)
-    sizes:       { large: 'assets/images/bg-teddy-large.png',
-                   small: 'assets/images/bg-teddy.png' },
+    sizes:       { large: 'assets/source/teddy/bg_large.png',
+                   small: 'assets/source/teddy/bg.png' },
     defaultSize: 'small',
   },
   {
     id:       'melody',
     label:    'Melody Lane',
     sublabel: 'Music Shop',
-    bg:       'assets/images/bg-melody-small.png',
+    bg:       'assets/source/melody/bg.png',
     bgm:      'assets/audio/Melody Lane.mp3',   // TODO: add track (or reuse another map's bgm)
     bgmVol:   0.35,
     itemsData: null,
@@ -69,11 +69,11 @@ const MAPS = [
     bag:      'assets/images/melody-bag.png',
     // TEMP: Large-table framing disabled until the large background art exists —
     // omitting `sizes` hides the "Large table" checkbox and plays only the small
-    // framing (bg above). Restore both lines + the bg-melody-large copy entry in
-    // process_assets.py once the large art is in. (defaultSize was 'small', so the
+    // framing (bg above). Drop the art in assets/source/melody/bg_large.png and
+    // restore both lines once it's in. (defaultSize was 'small', so the
     // score/hitbox key stays 'melody' either way — no scores lost by toggling.)
-    // sizes:       { large: 'assets/images/bg-melody-large.png',
-    //                small: 'assets/images/bg-melody-small.png' },
+    // sizes:       { large: 'assets/source/melody/bg_large.png',
+    //                small: 'assets/source/melody/bg.png' },
     // defaultSize: 'small',
   },
 ];

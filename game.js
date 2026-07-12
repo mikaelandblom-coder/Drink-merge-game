@@ -168,13 +168,11 @@ const COMBO_WINDOW = 1400;  // ms; merges within this of each other chain a comb
 
 // Happy Hour (orders mode) tuning.
 const HH_QUEUE_MAX     = 3;     // customers visible at once
-const HH_FIRST_SHOT    = 5;     // first customer arrives after this many shots
-const HH_SHOTS_BETWEEN = 3;     // further arrivals every N shots (if the queue has room)
-const HH_ORDER_MAX     = DROP_MAX;    // orders span tiers 0..DROP_MAX (shootable + one merge up)
+const HH_FIRST_SHOT    = 8;     // first customer arrives after this many shots
+const HH_SHOTS_BETWEEN = 6;     // further arrivals every N shots (if the queue has room)
 const HH_CAST          = 9;     // size of the customer art set (render.js CUSTOMER_IMGS)
 const HH_LEAVE_MS      = 420;   // served customer's walk-out animation
-const HH_CASHOUT_MS    = 1100;  // golden receipt lingers this long, then pays out
-const HH_CASHOUT_COINS = 25;    // the golden receipt's payout (10 points per coin)
+const HH_CASHOUT_COINS = 25;    // golden receipt's bonus payout when it forms (10 points per coin)
 
 const state = {
   drinks:     [],
@@ -288,7 +286,9 @@ function spawnCustomer() {
   do { art = Math.floor(Math.random() * HH_CAST); } while (faces.has(art));
   state.customers.push({
     slot, art,
-    tier: Math.floor(Math.random() * (HH_ORDER_MAX + 1)),
+    // Unweighted sample over the map's ENTIRE tier chain — high-tier orders
+    // are rare finds the player grows into, not guaranteed-servable requests.
+    tier: Math.floor(Math.random() * ITEMS.length),
     bornAt: performance.now(),
     leaveAt: 0,
   });
@@ -325,21 +325,10 @@ function tryServeCustomer(c) {
   idleFrames = 0;
 }
 
-// Per-frame Happy Hour upkeep: served customers finish their walk-out, and a
-// freshly-merged golden receipt lingers a moment, then cashes out as coins.
+// Per-frame Happy Hour upkeep: served customers finish their walk-out.
 function updateHappyHour() {
   const now = performance.now();
   state.customers = state.customers.filter(c => !c.leaveAt || now - c.leaveAt < HH_LEAVE_MS);
-  for (const d of state.drinks) {
-    if (!d.plugin.expireAt || now < d.plugin.expireAt) continue;
-    Composite.remove(engine.world, d);
-    state.drinks = state.drinks.filter(x => x !== d);
-    const sp = persp(d.position.x, d.position.y);
-    burst(sp.x, sp.y, '#ffc83d', RECEIPT_ITEMS[RECEIPT_ITEMS.length - 1].r * sp.s * 1.4, state.particles);
-    spawnTextPop(sp.x, sp.y - 20, 'PAID!', '#ffb03d', state.textPops);
-    spawnCoins(sp.x, sp.y, HH_CASHOUT_COINS, state.coins, 0.05);
-    pop(Math.min(7, ITEMS.length - 1));
-  }
 }
 
 // ---------- merging ----------
@@ -362,13 +351,15 @@ Events.on(engine, 'collisionStart', ev => {
       const my = (a.position.y + b.position.y) / 2;
       Composite.remove(engine.world, a); Composite.remove(engine.world, b);
       state.drinks = state.drinks.filter(d => d !== a && d !== b);
-      const product = makeDrink(mx, my, tier + 1, false, true, kind);  // grow in — no one-frame pile shove
-      // The top receipt never rests on the field: it lingers just long enough
-      // to be admired, then cashes out as a coin burst (updateHappyHour).
-      if (kind === 'receipt' && tier + 1 === SET.length - 1) {
-        product.plugin.expireAt = performance.now() + HH_CASHOUT_MS;
-      }
+      makeDrink(mx, my, tier + 1, false, true, kind);  // grow in — no one-frame pile shove
       const sp = persp(mx, my);
+      // The golden top receipt pays its bonus the moment it forms but STAYS on
+      // the field for good — each finished chain permanently eats table space,
+      // so a Happy Hour run ratchets toward game over instead of dragging on.
+      if (kind === 'receipt' && tier + 1 === SET.length - 1) {
+        spawnTextPop(sp.x, sp.y - 20, 'PAID!', '#ffb03d', state.textPops);
+        spawnCoins(sp.x, sp.y, HH_CASHOUT_COINS, state.coins, 0.05);
+      }
       burst(sp.x, sp.y, SET[tier + 1].liq, SET[tier + 1].r * sp.s, state.particles);
       pop(tier);
       triggerShake();
@@ -496,14 +487,12 @@ function sceneBusy() {
   if (state.coins.length || state.particles.length || state.textPops.length) return true;
   if (recoil > 0.1) return true;
   if (HAPPY_HOUR) {
-    // Keep drawing while a customer walks in/out, and keep simulating while a
-    // golden receipt is waiting to cash out — both would otherwise freeze
+    // Keep drawing while a customer walks in/out — it would otherwise freeze
     // mid-animation when the board settles.
     const now = performance.now();
     for (const c of state.customers) {
       if (c.leaveAt || now - c.bornAt < 700) return true;
     }
-    for (const d of state.drinks) if (d.plugin.expireAt) return true;
   }
   for (const d of state.drinks) {
     if (Math.hypot(d.velocity.x, d.velocity.y) > 0.08) return true;

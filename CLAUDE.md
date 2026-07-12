@@ -42,6 +42,9 @@ tools/
                          (often hidden) preview tab — see "Known issues".
 assets/
   source/             — Raw AI-generated images (white background). NEVER edit these.
+                         Backgrounds are served straight from here (config/maps.js
+                         `bg:` paths) — they need no processing, so they are NOT
+                         duplicated into images/.
     _archive/         — Superseded source art, kept for reference
     shared/           — coins_and_bag.png (shared across all maps)
     tikibar/          — Per-map source images
@@ -119,19 +122,22 @@ in localStorage and passed into `startGame(map, {size, combos, happyHour})`:
 - **Large table** (only for maps with a `sizes` field in config/maps.js). Swaps
   the background art between framings; `defaultSize` sets the initial state
   (Kyoto → large, Plushie → small). Each size has its own hitbox (see above) and
-  its own high-score board. Backgrounds are produced by the asset pipeline (extra
-  `copy` entries, e.g. `bg-kyoto-small`, `bg-teddy-large`).
+  its own high-score board. Background art loads straight from
+  `assets/source/<map>/` (no pipeline step — see `sizes:` in config/maps.js).
 - **Combo multipliers** (every map). Cascade-merge score multipliers. The map's
   `combos: true` is now just the *default* checkbox state (on for Mage Tower &
   Plushie Factory), not a hard setting — `COMBOS_ENABLED` is set per run.
 - **Happy Hour** (every map; orders mode). Customers queue behind the horizon
-  (max 3; first after 5 shots, then every 3 shots — `HH_*` constants in game.js)
+  (max 3; first after 8 shots, then every 6 shots — `HH_*` constants in game.js)
   and each shows the drink tier they want in a speech-bubble frame that lights
-  green when that tier is on the field. Tapping a green frame serves the copy
+  green when that tier is on the field. Orders are an UNWEIGHTED sample over the
+  map's whole tier chain (`ITEMS.length`), so high-tier orders sit unservable
+  until the player merges that far. Tapping a green frame serves the copy
   CLOSEST to the danger line: coins + a tier-0 **receipt** grows in where the
-  drink stood. Receipts (`RECEIPT_ITEMS` in config/items.js, shared art) merge
-  as a parallel 5-tier chain; the golden top tier lingers ~1.1s then cashes out
-  as a 25-coin burst. Forces combos OFF (`COMBOS_ENABLED=false`, combo checkbox
+  drink stood. Receipts (`RECEIPT_ITEMS` in config/items.js, shared art)
+  merge as a parallel 5-tier chain; the golden top tier pays a 25-coin burst the
+  moment it forms and then STAYS on the field for good — each finished chain
+  permanently eats table space, so a run can't drag on forever. Forces combos OFF (`COMBOS_ENABLED=false`, combo checkbox
   disabled). Taps above HORIZON never start an aim (ui.js). Customers/bubbles
   are drawn by `drawCustomers`/`customerLayout` in render.js — layout is
   proportional to the per-map HORIZON and shared with the tap hit-test.
@@ -202,7 +208,9 @@ Each map lists its source files. Entry types:
 | `single` | one item per file (preferred) |
 | `pair` | two items side by side (coin + bag) |
 | `spritesheet` | grid of items; use `separator` for reliable splits |
-| `copy` | background images — no processing |
+
+Backgrounds are not pipeline entries — they need no processing, so the game
+loads them directly from `assets/source/<map>/` via `bg:` in config/maps.js.
 
 Key per-entry options:
 - `fill_holes: True` — makes enclosed white regions transparent (handle holes,
@@ -255,8 +263,9 @@ The background stays white as normal; only the separator line changes.
 
 Optional per-map fields (see "Menu options"): `combos: true` to default the combo
 checkbox on; `sizes: {large, small}` + `defaultSize` to offer a Large-table
-toggle (add the extra background via a `copy` entry in the pipeline, then trace
-each size's boundary in the hitbox editor); `coin:` / `bag:` to override the
+toggle (drop the extra background in `assets/source/<map>/`, point the `sizes`
+paths at it, then trace each size's boundary in the hitbox editor); `coin:` /
+`bag:` to override the
 shared coin/money-bag art with map-specific PNGs (omit to use the shared art);
 a `soundProfile` branch in audio.js (`setSoundProfile`) + `popX`/`clinkX`/
 `coinTickX` synth fns to theme the map's sounds. Melody Lane (music shop) is the

@@ -86,8 +86,8 @@ const MELODY_ITEMS = [
 // Happy Hour mode: the receipt merge chain, shared by every map. Serving a
 // customer's order spawns tier 0 (crumpled ball) where the served drink stood;
 // receipts merge among themselves in parallel with the drink chain. The FINAL
-// tier never rests on the field — it cashes out as a coin burst shortly after
-// it forms (see the expireAt handling in game.js). vis values are area-parity
+// tier pays a bonus coin burst when it forms and then stays on the field for
+// good, slowly filling the table (see game.js). vis values are area-parity
 // (sqrt(0.75/aspect)) since the art is wider than a typical upright drink.
 const RECEIPT_ITEMS = [
   { name:'crumpled receipt', r:16, glass:'#f5f2ea', liq:'#e8e2d4', sprite:'assets/images/receipt-ball.png',   bodyRatio:0.85, vis:0.83 },

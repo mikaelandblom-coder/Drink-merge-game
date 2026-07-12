@@ -16,7 +16,6 @@ split exactly on that color — no guessing, no debris, no missing content.
 """
 
 import argparse
-import shutil
 import sys
 from collections import deque
 from pathlib import Path
@@ -51,8 +50,8 @@ except ImportError:
 #                  'white_thresh': per-image override (optional)
 #                  'min_hole_px': minimum hole size in pixels (default 300)
 #
-#   copy         — no processing, just copy.
-#                  'name': output filename (without extension)
+# Backgrounds need no processing and are NOT in the pipeline: the game loads
+# them straight from assets/source/<map>/ (see `bg:` in config/maps.js).
 
 PIPELINE = {
 
@@ -103,7 +102,6 @@ PIPELINE = {
          'fill_holes': True, 'fill_holes_region': 'right'},
         {'file': 'drink-fruit-punch-pitcher.png', 'type': 'single', 'name': 'drink-fruit-punch-pitcher',
          'fill_holes': True, 'min_hole_px': 300},
-        {'file': 'tiki_bar_background.png',       'type': 'copy',   'name': 'bg-tikibar'},
     ],
 
     'saigon': [
@@ -120,7 +118,6 @@ PIPELINE = {
                 'pho-bowl-small', 'pho-bowl-large', 'pho-pot',
             ],
         },
-        {'file': 'bg-saigon.png', 'type': 'copy', 'name': 'bg-saigon'},
     ],
 
     'kyoto': [
@@ -136,8 +133,6 @@ PIPELINE = {
                 'kyoto-parfait', 'kyoto-unaju', 'kyoto-matcha-cake',
             ],
         },
-        {'file': 'background 2.png',     'type': 'copy', 'name': 'bg-kyoto'},        # large (tray fills frame)
-        {'file': 'background small.png', 'type': 'copy', 'name': 'bg-kyoto-small'},  # small (more scene visible)
     ],
 
     'mage': [
@@ -157,7 +152,6 @@ PIPELINE = {
                 None,           None,          'mage-ball',   # empty, dup portal
             ],
         },
-        {'file': 'bg.png', 'type': 'copy', 'name': 'bg-mage'},
     ],
 
     'teddy': [
@@ -172,8 +166,6 @@ PIPELINE = {
                 'teddy-bunny',    'teddy-axolotl', 'teddy-bear',
             ],
         },
-        {'file': 'bg.png',       'type': 'copy', 'name': 'bg-teddy'},        # small (heart fits frame)
-        {'file': 'bg_large.png', 'type': 'copy', 'name': 'bg-teddy-large'},  # large (heart fills frame)
     ],
 
     'melody': [
@@ -197,9 +189,9 @@ PIPELINE = {
                 'melody-saxophone', 'melody-piano',     'melody-coin',      'melody-bag',
             ],
         },
-        {'file': 'bg.png',       'type': 'copy', 'name': 'bg-melody-small'},  # small (more shop visible)
-        # TODO tomorrow: larger framing (mat fills the frame). Save as bg-large.png:
-        # {'file': 'bg-large.png', 'type': 'copy', 'name': 'bg-melody-large'},
+        # TODO: larger framing (mat fills the frame). Backgrounds skip the
+        # pipeline — save it as assets/source/melody/bg_large.png and restore
+        # the commented `sizes` block in config/maps.js.
     ],
 
     # 'example-map': [
@@ -210,7 +202,6 @@ PIPELINE = {
     #         'chroma':    'alpha',   # generate with a transparent background
     #         'names':     ['item-a', 'item-b', ...],
     #     },
-    #     {'file': 'teddy_background.png', 'type': 'copy', 'name': 'bg-teddybears'},
     # ],
 
 }
@@ -702,12 +693,6 @@ def handle_pair(src: Path, cfg: dict):
         print(f"    {name}.png")
 
 
-def handle_copy(src: Path, cfg: dict):
-    dst = OUTPUT_DIR / f"{cfg['name']}{src.suffix}"
-    shutil.copy2(src, dst)
-    print(f"    {dst.name}  (copied)")
-
-
 def handle_single(src: Path, cfg: dict):
     thresh = cfg.get('white_thresh', WHITE_THRESH)
     remove_white_bg(Image.open(src), thresh,
@@ -721,7 +706,6 @@ def handle_single(src: Path, cfg: dict):
 HANDLERS = {
     'spritesheet': handle_spritesheet,
     'pair':        handle_pair,
-    'copy':        handle_copy,
     'single':      handle_single,
 }
 
