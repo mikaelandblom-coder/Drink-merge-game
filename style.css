@@ -272,9 +272,10 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
 .hud-btn:focus-visible { outline: 3px solid var(--neon); outline-offset: 2px; }
 
 /* Close (✕) on the game-over overlay: hides the results so the final pile can
-   be inspected; #over-peek brings them back. */
+   be inspected; #over-peek brings them back. Top-LEFT because the top-right
+   corner is covered by #hud-btns (z3, above the overlay since b0b96d9). */
 #over-close {
-  position: absolute; top: 10px; right: 10px;
+  position: absolute; top: 10px; left: 10px;
   width: 34px; height: 34px; border-radius: 50%; padding: 0;
   display: flex; align-items: center; justify-content: center;
   background: none; border: 1px solid #5a4630; color: var(--brass);
