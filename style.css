@@ -120,6 +120,9 @@ html, body { height: 100%; overflow: hidden; background: var(--bar-deep); font-f
 }
 .map-opt-toggle input { accent-color: var(--brass); width: 15px; height: 15px; cursor: pointer; }
 .map-opt-toggle:hover { color: var(--brass); }
+/* Combo toggle greys out while Happy Hour is on (they don't stack) */
+.map-opt-toggle input:disabled,
+.map-opt-toggle input:disabled + span { opacity: .4; cursor: default; }
 
 /* Scores inside map card */
 .card-scores { display: flex; flex-direction: column; gap: 6px; }

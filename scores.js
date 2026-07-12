@@ -20,16 +20,22 @@ const SCORE_MAX = 8;
 // NOTE: this couples key identity to the map's current defaults — changing a
 // map's defaultSize / combos default would re-point the legacy key. Defaults
 // are stable, so this is intentional (and what keeps Mai's scores intact).
-function scoreKey(map, size, combos) {
+function scoreKey(map, size, combos, happyHour) {
   const parts = [];
   if (map.sizes) {
     const defSize = map.defaultSize || 'large';
     const s = size || defSize;
     if (s !== defSize) parts.push(s);
   }
-  const defCombos = !!map.combos;
-  const on = (combos === undefined) ? defCombos : !!combos;
-  if (on !== defCombos) parts.push(on ? 'combo' : 'nocombo');
+  if (happyHour) {
+    // Happy Hour implies combos-off, so the combo part is skipped entirely —
+    // the variant is just size × happyhour (mm_s_kyoto__small_happyhour).
+    parts.push('happyhour');
+  } else {
+    const defCombos = !!map.combos;
+    const on = (combos === undefined) ? defCombos : !!combos;
+    if (on !== defCombos) parts.push(on ? 'combo' : 'nocombo');
+  }
   return 'mm_s_' + map.id + (parts.length ? '__' + parts.join('_') : '');
 }
 

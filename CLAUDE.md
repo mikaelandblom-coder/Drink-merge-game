@@ -38,6 +38,8 @@ tools/
                          server). Prototype/compare synth sounds here BEFORE
                          wiring them into audio.js — used to design the music
                          map's merge/coin/collision/personal-best sounds.
+  shot-receiver.py    — Local POST receiver for canvas screenshots from the
+                         (often hidden) preview tab — see "Known issues".
 assets/
   source/             — Raw AI-generated images (white background). NEVER edit these.
     _archive/         — Superseded source art, kept for reference
@@ -53,7 +55,10 @@ assets/
 Open **http://localhost:5500/tools/hitbox-editor.html** (same server as the game).
 
 Pick a map from the top **Map** dropdown, then choose **Background** or
-**Merge items**:
+**Merge items**. The dropdown also has a map-less **"Happy Hour — Receipts"**
+entry for the shared receipt chain: it opens the item tab directly (the
+Background tab is disabled — receipts have no boundary of their own) and its
+overrides save to `ITEM_HITBOXES` like any other item.
 - **Background tab:** edit the boundary as a Catmull-Rom spline — drag knots,
   double-click the curve to add a knot, double-click a knot (or Del) to remove.
   The magenta shapes are the actual perspective-corrected physics walls,
@@ -106,10 +111,10 @@ new size once. Item-tab targets are per-item and unaffected by size.
 
 ---
 
-## Menu options — size variants & combos
+## Menu options — size variants, combos & Happy Hour
 
-Each map card in the main menu can carry two per-map checkboxes, both remembered
-in localStorage and passed into `startGame(map, {size, combos})`:
+Each map card in the main menu can carry per-map checkboxes, all remembered
+in localStorage and passed into `startGame(map, {size, combos, happyHour})`:
 
 - **Large table** (only for maps with a `sizes` field in config/maps.js). Swaps
   the background art between framings; `defaultSize` sets the initial state
@@ -119,6 +124,19 @@ in localStorage and passed into `startGame(map, {size, combos})`:
 - **Combo multipliers** (every map). Cascade-merge score multipliers. The map's
   `combos: true` is now just the *default* checkbox state (on for Mage Tower &
   Plushie Factory), not a hard setting — `COMBOS_ENABLED` is set per run.
+- **Happy Hour** (every map; orders mode). Customers queue behind the horizon
+  (max 3; first after 5 shots, then every 3 shots — `HH_*` constants in game.js)
+  and each shows the drink tier they want in a speech-bubble frame that lights
+  green when that tier is on the field. Tapping a green frame serves the copy
+  CLOSEST to the danger line: coins + a tier-0 **receipt** grows in where the
+  drink stood. Receipts (`RECEIPT_ITEMS` in config/items.js, shared art) merge
+  as a parallel 5-tier chain; the golden top tier lingers ~1.1s then cashes out
+  as a 25-coin burst. Forces combos OFF (`COMBOS_ENABLED=false`, combo checkbox
+  disabled). Taps above HORIZON never start an aim (ui.js). Customers/bubbles
+  are drawn by `drawCustomers`/`customerLayout` in render.js — layout is
+  proportional to the per-map HORIZON and shared with the tap hit-test.
+  Arrivals key off SHOT COUNT (not wall time) so the idle-frame optimizer can
+  never skip drawing a walk-in.
 
 **Cool mode (30 fps cap) — built but SHELVED.** The welcome-screen checkbox is
 commented out in index.html (with its wiring in welcome.js), and startGame pins
@@ -130,10 +148,12 @@ biggest thermal lever if the DOM-layer background isn't enough.
 
 ## High scores
 
-Scores are stored **per variant** (table size × combo state) via `scoreKey()` in
+Scores are stored **per variant** (table size × combo state × Happy Hour) via `scoreKey()` in
 scores.js. To avoid a migration, the DEFAULT variant keeps the legacy
 `mm_s_<mapId>` key (so pre-existing scores are untouched); non-default variants
-get a suffix (`mm_s_kyoto__small_combo`). Menu cards show every variant's top 3
+get a suffix (`mm_s_kyoto__small_combo`). Happy Hour always suffixes
+`happyhour` and skips the combo part (combos are forced off in it, e.g.
+`mm_s_kyoto__small_happyhour`). Menu cards show every variant's top 3
 at once (no names — local scores), highlighting the current selection. Game over
 saves under the played variant and shows a `fanfare()` + banner when the best is
 beaten. NOTE: key identity is coupled to a map's current `defaultSize`/`combos`
@@ -151,8 +171,14 @@ python -m http.server 5500
 
 Then open http://localhost:5500 in a browser.
 
-The `.claude/launch.json` is configured for this command — the preview panel
-should work directly.
+The `.claude/launch.json` runs an equivalent server for the preview panel —
+IMPORTANT: it must use `http.server.ThreadingHTTPServer` (plus a
+`Cache-Control: no-cache` header for dev). The old plain
+`socketserver.TCPServer` one-liner was SINGLE-threaded with a backlog of 5:
+Chrome opens ~6 parallel connections, so page loads hung half-finished and the
+rest got ERR_CONNECTION_REFUSED — this looked like random preview flakiness for
+weeks (diagnosed 2026-07-12). The no-cache header also stops the browser
+serving stale JS under an unchanged `?v=` during development.
 
 ---
 
@@ -308,10 +334,14 @@ Currently 4 — increase when adding more tiers.
   Check `document.hidden` first when captures/evals stall. Hidden-tab-safe
   verification: everything synchronous still works — call `render(1)` /
   `Matter.Engine.update` directly, assert with `getImageData`, and for a real
-  screenshot composite `#stage-bg` + the game canvas into a temp canvas,
-  `toDataURL('image/jpeg')`, let the harness spill the base64 to a file, and
-  decode it to an image with Python. If the user opens the Browser pane,
-  `preview_screenshot` should work normally.
+  screenshot composite `#stage-bg` + the game canvas into a temp canvas and
+  `toDataURL`. **Get the image OUT via `tools/shot-receiver.py`** (run it in
+  the background, then `fetch('http://127.0.0.1:5599/', {method:'POST',
+  mode:'no-cors', body: dataURL})` from the page — works even hidden). Do NOT
+  return the base64 through the eval result: big results get spilled to an
+  awkward JSON file, and hand-copying base64 between tools corrupts it
+  (both burned real time on 2026-07-12). If the user opens the Browser pane,
+  a normal screenshot works.
 - **Read-tool image preview composites transparent PNGs on a dark background** —
   a properly-transparent sprite/grid can look like it has "a painted dark
   backdrop with glows". Do NOT conclude transparency failed from the preview:

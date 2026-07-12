@@ -25,6 +25,17 @@ function setMapCombos(mapId, on) {
   localStorage.setItem('mm_combos_' + mapId, on ? '1' : '0');
 }
 
+// Happy Hour (orders mode) preference per map, remembered across visits.
+// Always defaults OFF; turning it on forces combos off for the run (the combo
+// checkbox is disabled while checked).
+function getMapHH(map) {
+  return localStorage.getItem('mm_hh_' + map.id) === '1';
+}
+
+function setMapHH(mapId, on) {
+  localStorage.setItem('mm_hh_' + mapId, on ? '1' : '0');
+}
+
 // Every playable size/combo combination for a map, default first, each with a
 // short label and its storage key. Maps without size variants only vary by
 // combo (2 rows); size maps have 4.
@@ -42,6 +53,9 @@ function mapVariants(map) {
       parts.push(c ? 'Combo' : 'No combo');
       out.push({ key: scoreKey(map, s, c), label: parts.join(' · ') });
     }
+    // Happy Hour is its own variant per size (combos are always off in it).
+    const hhLabel = (s ? (s === 'large' ? 'Large · ' : 'Small · ') : '') + 'Happy Hour';
+    out.push({ key: scoreKey(map, s, false, true), label: hhLabel });
   }
   return out;
 }
@@ -50,7 +64,7 @@ function mapVariants(map) {
 // every high score is visible without toggling. The row matching the current
 // selection is highlighted; refreshScoreList() moves that highlight on toggle.
 function buildScoreRows(map) {
-  const activeKey = scoreKey(map, getMapSize(map), getMapCombos(map));
+  const activeKey = scoreKey(map, getMapSize(map), getMapCombos(map), getMapHH(map));
   return mapVariants(map).map(v => {
     const top = getScores(v.key).slice(0, 3);
     const vals = top.length
@@ -89,8 +103,14 @@ function buildWelcomeCards() {
     const comboToggle =
       `<label class="map-opt-toggle" title="Chain merges quickly for score multipliers">
          <input type="checkbox" class="map-combo-cb" data-id="${map.id}"
-                ${getMapCombos(map) ? 'checked' : ''}>
+                ${getMapCombos(map) ? 'checked' : ''} ${getMapHH(map) ? 'disabled' : ''}>
          <span>Combo multipliers</span>
+       </label>`;
+    const hhToggle =
+      `<label class="map-opt-toggle" title="Customers order drinks off your table — serve them for coins and merge the receipts">
+         <input type="checkbox" class="map-hh-cb" data-id="${map.id}"
+                ${getMapHH(map) ? 'checked' : ''}>
+         <span>Happy Hour</span>
        </label>`;
     return `<div class="map-card" data-map="${map.id}">
       <div class="map-header">
@@ -100,7 +120,7 @@ function buildWelcomeCards() {
         </div>
         <button class="play-btn" data-id="${map.id}">Play</button>
       </div>
-      <div class="map-options">${sizeToggle}${comboToggle}</div>
+      <div class="map-options">${sizeToggle}${comboToggle}${hhToggle}</div>
       <div class="card-scores">
         <div class="card-scores-header">
           <span class="card-scores-title">Top scores</span>
@@ -133,13 +153,27 @@ function wireWelcomeEvents() {
     };
   });
 
+  document.querySelectorAll('.map-hh-cb').forEach(cb => {
+    const map = MAPS.find(m => m.id === cb.dataset.id);
+    cb.onclick = e => e.stopPropagation();
+    cb.onchange = () => {
+      setMapHH(cb.dataset.id, cb.checked);
+      // Happy Hour runs without combo multipliers — grey the combo toggle out
+      // while it's on (the saved combo preference is kept for when it's off).
+      const comboCb = document.querySelector(`.map-combo-cb[data-id="${cb.dataset.id}"]`);
+      if (comboCb) comboCb.disabled = cb.checked;
+      refreshScoreList(map);
+    };
+  });
+
   document.querySelectorAll('.play-btn').forEach(btn => {
     btn.onclick = () => {
       const map = MAPS.find(m => m.id === btn.dataset.id);
       if (!map) return;
       document.getElementById('welcome').style.display = 'none';
       document.getElementById('wrap').style.display = 'flex';
-      startGame(map, { size: getMapSize(map), combos: getMapCombos(map) });
+      startGame(map, { size: getMapSize(map), combos: getMapCombos(map),
+                       happyHour: getMapHH(map) });
     };
   });
 }

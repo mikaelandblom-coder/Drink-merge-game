@@ -89,8 +89,9 @@ function makeCapsuleShadowSprite(hw, hh) {
   return cv;
 }
 
-function drawDrink(sx, sy, tier, scale, wobble) {
-  const item = ITEMS[tier];
+// item is the full item object (from ITEMS or RECEIPT_ITEMS) — bodies carry
+// theirs on plugin.item, so drinks and Happy Hour receipts share this path.
+function drawDrink(sx, sy, item, scale, wobble) {
   const r = item.r * scale;
   ctx.save(); ctx.translate(sx, sy);
   ctx.rotate(Math.sin(wobble) * 0.02);
@@ -173,6 +174,101 @@ function burst(x, y, color, r, particles) {
   for (let i = 0; i < 16; i++) {
     const a = Math.random() * Math.PI * 2, s = 1 + Math.random() * 3;
     particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 1, life: 1, color, size: 2 + Math.random() * r * 0.12 });
+  }
+}
+
+// ---------- Happy Hour: customers behind the horizon ----------
+// One shared cast for every map (like the default coin/bag art). Sprites are
+// preloaded once here; game.js picks a random art index per customer.
+const CUSTOMER_IMGS = [
+  'customer-granny',  'customer-girl',      'customer-sailor',
+  'customer-student', 'customer-artist',    'customer-businessman',
+  'customer-surfer',  'customer-professor', 'customer-tourist',
+].map(n => { const i = new Image(); i.src = 'assets/images/' + n + '.png'; return i; });
+
+// Layout is proportional to the per-map HORIZON so customers always fit in the
+// strip behind the line regardless of map framing. Shared by drawCustomers and
+// the pointerdown hit-test in ui.js (customerFrameHit) so taps land exactly on
+// what's drawn.
+function customerLayout(slot) {
+  // Slot spacing/sizing leaves the top HUD corners clear: the coin pill on the
+  // left and the NEXT preview on the right both sit above/outside the bubbles.
+  const cx = W * (0.24 + 0.26 * slot);       // three slots across the horizon strip
+  const ch = HORIZON * 0.46;                 // customer sprite height
+  const fs = Math.min(44, HORIZON * 0.26);   // order-frame (speech bubble) size
+  const cBottom = HORIZON + 2;
+  return { cx, ch, cBottom,
+           frame: { x: cx - fs / 2, y: cBottom - ch - fs - 6, w: fs, h: fs } };
+}
+
+// Returns the customer whose order frame contains the point (canvas coords),
+// or null. Ignores customers already walking out.
+function customerFrameHit(customers, p) {
+  for (const c of customers) {
+    if (c.leaveAt) continue;
+    const f = customerLayout(c.slot).frame;
+    // A little slop around the bubble so finger taps don't need to be exact.
+    const pad = 6;
+    if (p.x >= f.x - pad && p.x <= f.x + f.w + pad &&
+        p.y >= f.y - pad && p.y <= f.y + f.h + pad) return c;
+  }
+  return null;
+}
+
+function drawCustomers(customers, wob) {
+  const now = performance.now();
+  for (const c of customers) {
+    const L = customerLayout(c.slot);
+    // Walk-in: fade + drop into place. Walk-out (after serving): fade + rise.
+    const tIn  = Math.min(1, (now - c.bornAt) / 400);
+    const easeIn = 1 - (1 - tIn) * (1 - tIn);
+    let alpha = easeIn, dy = (1 - easeIn) * -18;
+    if (c.leaveAt) {
+      const tOut = Math.min(1, (now - c.leaveAt) / 400);
+      alpha = 1 - tOut; dy = -14 * tOut;
+    }
+    if (alpha <= 0) continue;
+    ctx.globalAlpha = alpha;
+
+    const img = CUSTOMER_IMGS[c.art];
+    if (img.complete && img.naturalWidth) {
+      const h = L.ch, w = h * (img.naturalWidth / img.naturalHeight);
+      ctx.drawImage(img, L.cx - w / 2, L.cBottom - h + dy, w, h);
+    }
+
+    // Order bubble: same parchment style as the NEXT preview; green when the
+    // ordered tier is on the field (tap to serve). The pulse is a plain alpha
+    // wave — no shadowBlur in the frame loop (heat).
+    const f = L.frame;
+    const avail = !c.leaveAt && orderAvailable(c.tier);
+    ctx.fillStyle = avail ? 'rgba(230,255,238,.95)' : 'rgba(255,243,224,.92)';
+    ctx.beginPath(); ctx.roundRect(f.x, f.y + dy, f.w, f.h, 9); ctx.fill();
+    if (avail) {
+      ctx.strokeStyle = 'rgba(46,190,100,' + (0.75 + 0.25 * Math.sin(wob * 3)) + ')';
+      ctx.lineWidth = 3.5;
+    } else {
+      ctx.strokeStyle = '#c89b5a';
+      ctx.lineWidth = 2.5;
+    }
+    ctx.beginPath(); ctx.roundRect(f.x, f.y + dy, f.w, f.h, 9); ctx.stroke();
+    // Bubble tail pointing at the customer's head.
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.beginPath();
+    ctx.moveTo(L.cx - 5, f.y + f.h + dy);
+    ctx.lineTo(L.cx + 5, f.y + f.h + dy);
+    ctx.lineTo(L.cx, f.y + f.h + 6 + dy);
+    ctx.closePath(); ctx.fill();
+
+    // The ordered drink, fitted inside the bubble (vis-aware, like the NEXT
+    // preview, so wide sprites don't overflow).
+    const it = ITEMS[c.tier], oi = it.img;
+    if (oi.complete && oi.naturalWidth) {
+      let ph = f.h * 0.78 * (it.vis || 1), pw = ph * (oi.naturalWidth / oi.naturalHeight);
+      const fit = (f.w * 0.82) / Math.max(pw, ph);
+      if (fit < 1) { pw *= fit; ph *= fit; }
+      ctx.drawImage(oi, f.x + f.w / 2 - pw / 2, f.y + f.h / 2 - ph / 2 + dy, pw, ph);
+    }
+    ctx.globalAlpha = 1;
   }
 }
 

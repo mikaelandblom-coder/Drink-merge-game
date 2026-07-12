@@ -19,6 +19,7 @@
   .tabs button { flex:1; background:none; border:1px solid var(--line); color:var(--brass);
                  font-family:inherit; padding:6px 0; border-radius:8px; cursor:pointer; }
   .tabs button.on { background:var(--brass); color:var(--bar); font-weight:bold; }
+  .tabs button:disabled { opacity:.35; cursor:default; }
   fieldset { border:1px solid var(--line); border-radius:10px; padding:10px; display:flex;
              flex-direction:column; gap:8px; }
   legend { font-size:11px; color:var(--brass); text-transform:uppercase; letter-spacing:.1em; padding:0 6px; }
@@ -203,19 +204,39 @@ let itemLayout = [], activeItem = null, itemDrag = null;
 // ───────────────────────── map data in/out ───────────────────────────────────
 const editableMaps = MAPS.filter(m => m.bg);
 
-// Top-level picker: one entry per map. Size-variant maps (config/maps.js
-// `sizes`) then expose a framing selector, so each framing's boundary — its own
-// MAP_HITBOXES key via hitboxKey — stays editable under the Background tab.
+// The Happy Hour receipt chain is a MAP-LESS item set shared by every map: it
+// gets its own picker entry so its hitboxes are tunable like any map's items,
+// but it has no background/boundary — selecting it forces the item tab.
+const RECEIPTS_ENTRY = { id: '__receipts', label: 'Happy Hour — Receipts',
+                         itemsData: (typeof RECEIPT_ITEMS !== 'undefined') ? RECEIPT_ITEMS : [] };
+const pickerSets = [...editableMaps, RECEIPTS_ENTRY];
+
+// Top-level picker: one entry per map (+ the receipt set). Size-variant maps
+// (config/maps.js `sizes`) then expose a framing selector, so each framing's
+// boundary — its own MAP_HITBOXES key via hitboxKey — stays editable under the
+// Background tab.
 const mapPick  = document.getElementById('mapPick');
 const sizePick = document.getElementById('sizePick');
 const sizeRow  = document.getElementById('sizeRow');
-editableMaps.forEach((m, i) => mapPick.add(new Option(m.label, i)));
+pickerSets.forEach((m, i) => mapPick.add(new Option(m.label, i)));
 
 function boundaryKey() { return curMap.sizes ? hitboxKey(curMap, curSize) : curMap.id; }
 
 function selectMap(i) {
-  curMap = editableMaps[i];
+  curMap = pickerSets[i];
   mapPick.value = i;
+  // Map-less set (the receipts): item hitboxes only — no background/boundary,
+  // so the Background tab is disabled and the item tab takes over.
+  const mapless = !curMap.bg;
+  document.getElementById('tabMap').disabled = mapless;
+  if (mapless) {
+    curSize = null; sizeRow.style.display = 'none';
+    activeItem = null;
+    rebuildItemsLayout();
+    setMode('item');
+    status('Happy Hour receipts — item hitboxes only (shared across all maps). Save writes config/hitboxes.js as usual.');
+    return;
+  }
   if (curMap.sizes) {
     sizePick.innerHTML = '';
     const order = (curMap.defaultSize === 'small') ? ['small', 'large'] : ['large', 'small'];
@@ -839,13 +860,13 @@ document.getElementById('clearBalls').onclick = () => { if (testing) rebuildSim(
 
 // ───────────────────────── item mode ─────────────────────────────────────────
 // Seed each item's editor shape-state from any saved override (circle | capsule).
-editableMaps.forEach(m => (m.itemsData || []).forEach(it => {
+pickerSets.forEach(m => (m.itemsData || []).forEach(it => {
   const hb = ITEM_HITBOXES[it.sprite];
   if (hb && hb.shape === 'capsule') { it.hbShape = 'capsule'; it.capW = hb.w; it.capH = hb.h; it.capRot = hb.rot || 0; }
   else it.hbShape = 'circle';
 }));
 // Re-fit the grid once sprites finish decoding (their aspect ratios feed the scale).
-editableMaps.forEach(m => (m.itemsData || []).forEach(it => {
+pickerSets.forEach(m => (m.itemsData || []).forEach(it => {
   if (it.img) it.img.addEventListener('load', () => { if (mode === 'item') { rebuildItemsLayout(); draw(); } });
 }));
 document.getElementById('itemReset').onclick = () => {
@@ -893,7 +914,10 @@ function setMode(m) {
 
 // ───────────────────────── save ──────────────────────────────────────────────
 function serialize() {
-  MAP_HITBOXES[mapId] = {
+  // The receipts entry has no boundary of its own — only re-serialize the
+  // current boundary state when a real map is selected (its item overrides in
+  // ITEM_HITBOXES are written below either way).
+  if (curMap && curMap.bg) MAP_HITBOXES[mapId] = {
     sideInset: inset, closed,
     horizon: +horizon.toFixed(1),
     freeLine: Math.round(freeLine),

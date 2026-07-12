@@ -24,8 +24,18 @@ function wireInput(canvas, state) {
     if (state.gameOver) return;
     initAudio();
     startMusic();
+    const p = ptr(e, canvas);
+    // Happy Hour: the strip behind the horizon belongs to the customers — a
+    // tap there serves a lit order (or does nothing) but NEVER starts an aim,
+    // so serving can't accidentally fire a shot. Drags that start on the field
+    // and cross the line still aim normally (pointermove is untouched).
+    if (HAPPY_HOUR && p.y < HORIZON) {
+      const c = customerFrameHit(state.customers, p);
+      if (c && orderAvailable(c.tier)) tryServeCustomer(c);
+      return;
+    }
     aiming = true;
-    updateAim(ptr(e, canvas), state.nextTier);
+    updateAim(p, state.nextTier);
   });
 
   canvas.addEventListener('pointermove', e => {

@@ -83,10 +83,24 @@ const MELODY_ITEMS = [
   { name:'grand piano', r:71, glass:'#e8e8ec', liq:'#1a1a1a', sprite:'assets/images/melody-piano.png',     bodyRatio:0.78, vis:0.93 },
 ];
 
+// Happy Hour mode: the receipt merge chain, shared by every map. Serving a
+// customer's order spawns tier 0 (crumpled ball) where the served drink stood;
+// receipts merge among themselves in parallel with the drink chain. The FINAL
+// tier never rests on the field — it cashes out as a coin burst shortly after
+// it forms (see the expireAt handling in game.js). vis values are area-parity
+// (sqrt(0.75/aspect)) since the art is wider than a typical upright drink.
+const RECEIPT_ITEMS = [
+  { name:'crumpled receipt', r:16, glass:'#f5f2ea', liq:'#e8e2d4', sprite:'assets/images/receipt-ball.png',   bodyRatio:0.85, vis:0.83 },
+  { name:'receipt slip',     r:21, glass:'#faf7ef', liq:'#efe9da', sprite:'assets/images/receipt-slip.png',   bodyRatio:0.72, vis:0.72 },
+  { name:'receipt roll',     r:27, glass:'#faf7ef', liq:'#f2ecdf', sprite:'assets/images/receipt-roll.png',   bodyRatio:0.85, vis:0.83 },
+  { name:'receipt stack',    r:34, glass:'#fbf6ea', liq:'#ffd84d', sprite:'assets/images/receipt-stack.png',  bodyRatio:0.80, vis:0.78 },
+  { name:'golden receipt',   r:42, glass:'#fff3c4', liq:'#ffc83d', sprite:'assets/images/receipt-golden.png', bodyRatio:0.80, vis:0.83 },
+];
+
 // Pre-load all sprites and compute physics radii for every item set at startup.
 // Collision-circle overrides from config/hitboxes.js (edited visually with
 // tools/hitbox-editor.html) are applied before physR is derived.
-[...HAWAII_ITEMS, ...SAIGON_ITEMS, ...KYOTO_ITEMS, ...MAGE_ITEMS, ...TEDDY_ITEMS, ...MELODY_ITEMS].forEach(item => {
+[...HAWAII_ITEMS, ...SAIGON_ITEMS, ...KYOTO_ITEMS, ...MAGE_ITEMS, ...TEDDY_ITEMS, ...MELODY_ITEMS, ...RECEIPT_ITEMS].forEach(item => {
   const hb = (typeof ITEM_HITBOXES !== 'undefined') && ITEM_HITBOXES[item.sprite];
   if (hb && hb.bodyRatio) item.bodyRatio = hb.bodyRatio;
   // Collision-circle offset relative to the sprite anchor, in units of r

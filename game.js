@@ -83,6 +83,7 @@ let mapWalls = [];
 const CAT_TRAY = 0x0002;          // collision category of the traced walls
 let FREE_WY = Infinity;           // physics y of the free line (Infinity = off)
 let COMBOS_ENABLED = false;       // cascade-merge multipliers (set per run in startGame)
+let HAPPY_HOUR = false;           // orders mode (set per run in startGame; forces combos off)
 let ACTIVE_SIZE = null;           // table-size variant of the current run (for score keys)
 let trayWalls = [];               // just the traced boundary bodies
 let trayPoly  = [];               // boundary polygon (physics coords) for the inside test
@@ -165,6 +166,16 @@ const DANGER_WY  = H - 150;
 
 const COMBO_WINDOW = 1400;  // ms; merges within this of each other chain a combo
 
+// Happy Hour (orders mode) tuning.
+const HH_QUEUE_MAX     = 3;     // customers visible at once
+const HH_FIRST_SHOT    = 5;     // first customer arrives after this many shots
+const HH_SHOTS_BETWEEN = 3;     // further arrivals every N shots (if the queue has room)
+const HH_ORDER_MAX     = DROP_MAX;    // orders span tiers 0..DROP_MAX (shootable + one merge up)
+const HH_CAST          = 9;     // size of the customer art set (render.js CUSTOMER_IMGS)
+const HH_LEAVE_MS      = 420;   // served customer's walk-out animation
+const HH_CASHOUT_MS    = 1100;  // golden receipt lingers this long, then pays out
+const HH_CASHOUT_COINS = 25;    // the golden receipt's payout (10 points per coin)
+
 const state = {
   drinks:     [],
   particles:  [],
@@ -177,6 +188,10 @@ const state = {
   nextTier:   0,
   queuedTier: 0,
   canShoot:   true,
+  // Happy Hour
+  customers:  [],   // { slot, art, tier, bornAt, leaveAt }
+  shotsFired: 0,
+  nextCustomerAtShot: HH_FIRST_SHOT,
 };
 
 // Combo tint escalates like RPG loot rarity: blue → purple → magenta → gold.
@@ -187,13 +202,15 @@ function comboColor(m) {
   return '#5aa8e6';
 }
 
-function makeDrink(x, y, tier, shot = false, growIn = false) {
+// kind: 'drink' (the map's item set) or 'receipt' (Happy Hour's shared chain).
+// The two kinds share all physics/render plumbing but only merge within a kind.
+function makeDrink(x, y, tier, shot = false, growIn = false, kind = 'drink') {
   // Shots always start as ghosts; merge spawns only when they would not yet
   // qualify as active (e.g. two stray ghosts merging in the dead zone) — the
   // product then activates the normal way once it gets inside.
   const ghost = isFinite(FREE_WY) &&
                 (shot || !(y < FREE_WY && insideTray(x, y)));
-  const it = ITEMS[tier];
+  const it = (kind === 'receipt' ? RECEIPT_ITEMS : ITEMS)[tier];
   const opts = {
     restitution: 0.02, frictionAir: 0.028, friction: 0.3, density: 0.0012,
     collisionFilter: { group: 0, category: 0x0001, mask: ghost ? ~CAT_TRAY : -1 },
@@ -209,7 +226,8 @@ function makeDrink(x, y, tier, shot = false, growIn = false) {
   } else {
     b = Bodies.circle(x, y, it.physR, opts);
   }
-  b.plugin = { tier, born: performance.now(), merging: false, ghost };
+  b.plugin = { tier, kind, item: it, born: performance.now(), merging: false, ghost };
+  if (shot) countShot();
   if (growIn) {
     // Merge products appear INSIDE a packed pile. A full-size body materialising
     // there gets separated by Matter's position solver in one violent shove —
@@ -238,10 +256,90 @@ function resetState() {
   state.drinks = []; state.particles = []; state.coins = []; state.textPops = [];
   state.coinCount = 0; state.combo = 0; state.lastMergeAt = 0;
   state.gameOver = false; state.canShoot = true;
+  state.customers = []; state.shotsFired = 0; state.nextCustomerAtShot = HH_FIRST_SHOT;
   LAUNCH.x = W / 2;
   state.queuedTier = Math.floor(Math.random() * DROP_MAX);
   rollNext();
   idleFrames = 0;  // ensure the fresh board draws even if we were idle
+}
+
+// ---------- Happy Hour (orders mode) ----------
+// Customers queue behind the horizon and each shows the drink tier they want.
+// Arrivals are keyed to SHOT COUNT, not wall time: a shot always wakes the
+// render loop, so a customer can never walk in while the idle-frame optimizer
+// has drawing switched off (a timer arrival would go invisible until the next
+// interaction).
+function countShot() {
+  if (!HAPPY_HOUR) return;
+  state.shotsFired++;
+  while (state.shotsFired >= state.nextCustomerAtShot &&
+         state.customers.length < HH_QUEUE_MAX) {
+    spawnCustomer();
+    state.nextCustomerAtShot = state.shotsFired + HH_SHOTS_BETWEEN;
+  }
+}
+
+function spawnCustomer() {
+  const used  = new Set(state.customers.map(c => c.slot));
+  const slot  = [0, 1, 2].find(s => !used.has(s));
+  if (slot === undefined) return;
+  const faces = new Set(state.customers.map(c => c.art));
+  let art;
+  do { art = Math.floor(Math.random() * HH_CAST); } while (faces.has(art));
+  state.customers.push({
+    slot, art,
+    tier: Math.floor(Math.random() * (HH_ORDER_MAX + 1)),
+    bornAt: performance.now(),
+    leaveAt: 0,
+  });
+}
+
+// A drink can fill an order once it's a real settled-ish body on the field —
+// not a ghost still flying through the dead zone, and not mid-merge.
+function orderAvailable(tier) {
+  return state.drinks.some(d => d.plugin.kind === 'drink' && d.plugin.tier === tier &&
+                                !d.plugin.ghost && !d.plugin.merging);
+}
+
+// Serve: the matching drink CLOSEST TO THE DANGER LINE (largest y) leaves the
+// field — so serving always reads as helpful — pays coins like the merge it
+// replaces, and a tier-0 receipt grows in where the drink stood.
+function tryServeCustomer(c) {
+  if (c.leaveAt || state.gameOver) return;
+  let pick = null;
+  for (const d of state.drinks) {
+    if (d.plugin.kind !== 'drink' || d.plugin.tier !== c.tier ||
+        d.plugin.ghost || d.plugin.merging) continue;
+    if (!pick || d.position.y > pick.position.y) pick = d;
+  }
+  if (!pick) return;
+  const { x, y } = pick.position;
+  Composite.remove(engine.world, pick);
+  state.drinks = state.drinks.filter(d => d !== pick);
+  makeDrink(x, y, 0, false, true, 'receipt');
+  const sp = persp(x, y);
+  burst(sp.x, sp.y, '#ffe9a8', ITEMS[c.tier].r * sp.s, state.particles);
+  spawnCoins(sp.x, sp.y, 2 + c.tier, state.coins);
+  pop(c.tier);
+  c.leaveAt = performance.now();
+  idleFrames = 0;
+}
+
+// Per-frame Happy Hour upkeep: served customers finish their walk-out, and a
+// freshly-merged golden receipt lingers a moment, then cashes out as coins.
+function updateHappyHour() {
+  const now = performance.now();
+  state.customers = state.customers.filter(c => !c.leaveAt || now - c.leaveAt < HH_LEAVE_MS);
+  for (const d of state.drinks) {
+    if (!d.plugin.expireAt || now < d.plugin.expireAt) continue;
+    Composite.remove(engine.world, d);
+    state.drinks = state.drinks.filter(x => x !== d);
+    const sp = persp(d.position.x, d.position.y);
+    burst(sp.x, sp.y, '#ffc83d', RECEIPT_ITEMS[RECEIPT_ITEMS.length - 1].r * sp.s * 1.4, state.particles);
+    spawnTextPop(sp.x, sp.y - 20, 'PAID!', '#ffb03d', state.textPops);
+    spawnCoins(sp.x, sp.y, HH_CASHOUT_COINS, state.coins, 0.05);
+    pop(Math.min(7, ITEMS.length - 1));
+  }
 }
 
 // ---------- merging ----------
@@ -252,16 +350,26 @@ Events.on(engine, 'collisionStart', ev => {
     const rvx = a.velocity.x - b.velocity.x, rvy = a.velocity.y - b.velocity.y;
     clink(Math.hypot(rvx, rvy));
     if (a.plugin.merging || b.plugin.merging) continue;
-    if (a.plugin.tier === b.plugin.tier && a.plugin.tier < ITEMS.length - 1) {
+    // Merges only happen within a kind: the map's drink chain and Happy Hour's
+    // receipt chain run in parallel without ever merging into each other.
+    const SET = a.plugin.kind === 'receipt' ? RECEIPT_ITEMS : ITEMS;
+    if (a.plugin.kind === b.plugin.kind &&
+        a.plugin.tier === b.plugin.tier && a.plugin.tier < SET.length - 1) {
       a.plugin.merging = b.plugin.merging = true;
+      const kind = a.plugin.kind;
       const tier = a.plugin.tier;
       const mx = (a.position.x + b.position.x) / 2;
       const my = (a.position.y + b.position.y) / 2;
       Composite.remove(engine.world, a); Composite.remove(engine.world, b);
       state.drinks = state.drinks.filter(d => d !== a && d !== b);
-      makeDrink(mx, my, tier + 1, false, true);  // grow in — no one-frame pile shove
+      const product = makeDrink(mx, my, tier + 1, false, true, kind);  // grow in — no one-frame pile shove
+      // The top receipt never rests on the field: it lingers just long enough
+      // to be admired, then cashes out as a coin burst (updateHappyHour).
+      if (kind === 'receipt' && tier + 1 === SET.length - 1) {
+        product.plugin.expireAt = performance.now() + HH_CASHOUT_MS;
+      }
       const sp = persp(mx, my);
-      burst(sp.x, sp.y, ITEMS[tier + 1].liq, ITEMS[tier + 1].r * sp.s, state.particles);
+      burst(sp.x, sp.y, SET[tier + 1].liq, SET[tier + 1].r * sp.s, state.particles);
       pop(tier);
       triggerShake();
 
@@ -280,7 +388,7 @@ Events.on(engine, 'collisionStart', ev => {
       if (COMBOS_ENABLED && m >= 2) {
         const col = comboColor(m);
         spawnTextPop(sp.x, sp.y - 24, 'COMBO ×' + m, col, state.textPops);
-        burst(sp.x, sp.y, col, ITEMS[tier + 1].r * sp.s * 1.5, state.particles);
+        burst(sp.x, sp.y, col, SET[tier + 1].r * sp.s * 1.5, state.particles);
       }
     }
   }
@@ -293,7 +401,7 @@ function checkOver() {
   for (const d of state.drinks) {
     if (now - d.plugin.born < 1500) continue;
     const speed = Math.hypot(d.velocity.x, d.velocity.y);
-    if (d.position.y + ITEMS[d.plugin.tier].physR > DANGER_WY && speed < 0.15) {
+    if (d.position.y + d.plugin.item.physR > DANGER_WY && speed < 0.15) {
       state.gameOver = true;
       // Coins still flying to the bag haven't landed, so their value isn't in
       // coinCount yet. Settle them now so the saved/displayed score matches what
@@ -301,7 +409,7 @@ function checkOver() {
       // while the recorded high score is short by 10 per in-flight coin).
       state.coinCount += state.coins.length * 10;
       state.coins = [];
-      showGameOver(state, scoreKey(ACTIVE_MAP, ACTIVE_SIZE, COMBOS_ENABLED));
+      showGameOver(state, scoreKey(ACTIVE_MAP, ACTIVE_SIZE, COMBOS_ENABLED, HAPPY_HOUR));
     }
   }
 }
@@ -325,6 +433,9 @@ function render(dt) {
   wob += 0.05 * dt;
   // The background is a DOM layer under this (transparent) canvas — just clear.
   ctx.clearRect(0, 0, W, H);
+  // Customers live behind the horizon, so they're drawn first — anything on
+  // the field (including the danger line) reads as in front of them.
+  if (HAPPY_HOUR) drawCustomers(state.customers, wob);
   drawDangerLine(DANGER_WY);
 
   const sl = persp(LAUNCH.x, LAUNCH.y);
@@ -335,12 +446,12 @@ function render(dt) {
     const born   = (performance.now() - d.plugin.born) / 200;
     const growth = Math.min(1, 0.6 + born * 0.4);
     const p      = persp(d.position.x, d.position.y);
-    drawDrink(p.x, p.y, d.plugin.tier, p.s * growth, wob + d.id);
+    drawDrink(p.x, p.y, d.plugin.item, p.s * growth, wob + d.id);
   }
 
   if (!state.gameOver) {
     recoil *= Math.pow(0.82, dt);
-    if (state.canShoot) drawDrink(sl.x, sl.y + recoil, state.nextTier, 1, wob);
+    if (state.canShoot) drawDrink(sl.x, sl.y + recoil, ITEMS[state.nextTier], 1, wob);
   }
 
   drawParticles(state.particles, dt);
@@ -384,6 +495,16 @@ function sceneBusy() {
   if (aiming || !state.canShoot) return true;
   if (state.coins.length || state.particles.length || state.textPops.length) return true;
   if (recoil > 0.1) return true;
+  if (HAPPY_HOUR) {
+    // Keep drawing while a customer walks in/out, and keep simulating while a
+    // golden receipt is waiting to cash out — both would otherwise freeze
+    // mid-animation when the board settles.
+    const now = performance.now();
+    for (const c of state.customers) {
+      if (c.leaveAt || now - c.bornAt < 700) return true;
+    }
+    for (const d of state.drinks) if (d.plugin.expireAt) return true;
+  }
   for (const d of state.drinks) {
     if (Math.hypot(d.velocity.x, d.velocity.y) > 0.08) return true;
   }
@@ -436,6 +557,7 @@ function loop(ts) {
       if (target >= 1) pl.scale = null;
     }
   }
+  if (HAPPY_HOUR) updateHappyHour();
   render(dt);
 }
 
@@ -462,8 +584,12 @@ function startGame(map, opts = {}) {
   const chosenSize = opts.size || map.defaultSize;
   const bgSrc = (map.sizes && chosenSize && map.sizes[chosenSize]) || map.bg;
   ACTIVE_SIZE = chosenSize;
+  // Happy Hour (orders mode) is per-run from the menu and forces combos off —
+  // the receipt chain is its own scoring layer, so the two don't stack.
+  HAPPY_HOUR = !!opts.happyHour;
   // Combo multipliers: per-run override from the menu, else the map's default.
-  COMBOS_ENABLED = (opts.combos !== undefined) ? !!opts.combos : !!map.combos;
+  COMBOS_ENABLED = HAPPY_HOUR ? false
+    : (opts.combos !== undefined) ? !!opts.combos : !!map.combos;
   // Apply the active size variant's traced boundary (each framing has its own).
   // Falls back to the map's base boundary if this size wasn't traced yet.
   if (typeof MAP_HITBOXES !== 'undefined') {

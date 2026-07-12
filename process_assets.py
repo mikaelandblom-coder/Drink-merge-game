@@ -63,6 +63,32 @@ PIPELINE = {
             'names':        ['coin', 'moneybag'],
             'white_thresh': 245,   # gold edges are close to white; be strict
         },
+        # Happy Hour mode: customer cast (shared across all maps)
+        {
+            'file':   'customers.png',
+            'type':   'spritesheet',
+            'grid':   (3, 3),
+            'chroma': 'alpha',
+            'min_component_frac': 0.05,  # cells grab slivers of the neighbour above/below
+                                         # (ledge/hat fragments, <=2.4%); characters are a
+                                         # single blob at 97%+ so 0.05 is safe both ways
+            'names':  [
+                'customer-granny',  'customer-girl',      'customer-sailor',
+                'customer-student', 'customer-artist',    'customer-businessman',
+                'customer-surfer',  'customer-professor', 'customer-tourist',
+            ],
+        },
+        # Happy Hour mode: 5-tier receipt merge chain (shared across all maps)
+        {
+            'file':   'receipts.png',
+            'type':   'spritesheet',
+            'grid':   (1, 5),
+            'chroma': 'alpha',
+            'names':  [
+                'receipt-ball', 'receipt-slip', 'receipt-roll',
+                'receipt-stack', 'receipt-golden',
+            ],
+        },
     ],
 
     'tikibar': [

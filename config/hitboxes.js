@@ -493,4 +493,9 @@ const ITEM_HITBOXES = {
   'assets/images/melody-electric-guitar.png': { shape: 'capsule', w: 0.512, h: 0.767, rot: 0.374, dy: -0.08 },
   'assets/images/drink-espresso-shot.png': { bodyRatio: 0.552, dx: 0.042, dy: 0.031 },
   'assets/images/drink-strawberry-daiquiri.png': { shape: 'capsule', w: 0.43, h: 0.164, rot: -0.014, dx: -0.013, dy: 0.449 },
+  'assets/images/receipt-ball.png': { bodyRatio: 0.776, dx: -0.027, dy: -0.281 },
+  'assets/images/receipt-slip.png': { bodyRatio: 0.626, dx: 0.096, dy: -0.085 },
+  'assets/images/receipt-roll.png': { bodyRatio: 0.807, dx: -0.017, dy: -0.236 },
+  'assets/images/receipt-stack.png': { bodyRatio: 0.664, dx: 0.148, dy: -0.055 },
+  'assets/images/receipt-golden.png': { bodyRatio: 0.718, dx: -0.046, dy: -0.147 },
 };
