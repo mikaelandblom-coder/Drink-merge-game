@@ -177,6 +177,37 @@ python -m http.server 5500
 
 Then open http://localhost:5500 in a browser.
 
+### Test mode (?test=1) — USE THIS to verify gameplay changes
+
+**http://localhost:5500/?test=1** loads `test.js`, which installs `window.TT`
+(the file is inert without the flag — Mai's game never runs it). It is the
+fast path for verification: it wraps `performance.now()` with a virtual offset
+and steps the game **synchronously** (same per-frame code as live play:
+`checkOver` + `stepPhysics` + `render`), so merges, the 1.5s game-over grace,
+combo windows and coin flights all fast-forward deterministically — hidden
+preview tab or not. No rAF, no real-time waits, no pointer-event simulation.
+
+```js
+await TT.start('hawaii', {happyHour:true}); // bypass menu; audio muted; rAF OFF
+TT.seed(42);              // deterministic Math.random
+TT.shoot(210, 100);       // real shot (ghost->solidify, counts for HH arrivals)
+TT.spawn(3, 200, 300);    // or place a body directly ('receipt' kind supported)
+TT.step(120);             // advance exactly 2s of game time, synchronously
+TT.settle();              // step until nothing moves; returns state + .settledIn
+TT.state();               // compact JSON snapshot (drinks/receipts/customers/score)
+TT.customer(2); TT.serve(0);      // Happy Hour queue control
+await TT.shot('label');   // composite bg+canvas -> tools/shot-receiver.py :5599
+TT.live(true);            // hand back to the real rAF loop to watch in a pane
+```
+
+Notes: high-score saves are stubbed in test mode (localStorage boards stay
+clean); map ids are `hawaii/saigon/kyoto/mage/teddy/melody` (TT.start errors
+list them); two spawned bodies only merge if placed overlapping (use
+`ITEMS[t].physR`); the coin-bag NUMBER eases toward the true score — run a few
+extra `TT.step()`s before a screenshot if it must match. `stepPhysics()` in
+game.js is the shared per-frame simulation — keep loop() and TT.step in sync
+through it.
+
 The `.claude/launch.json` runs an equivalent server for the preview panel —
 IMPORTANT: it must use `http.server.ThreadingHTTPServer` (plus a
 `Cache-Control: no-cache` header for dev). The old plain

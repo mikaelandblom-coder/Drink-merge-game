@@ -518,6 +518,14 @@ function loop(ts) {
   if (sceneBusy()) idleFrames = 0; else idleFrames++;
   if (idleFrames > 20) return;  // board is still — skip the expensive work
 
+  stepPhysics();
+  render(dt);
+}
+
+// One 60Hz frame of simulation (physics substeps + ghost/grow upkeep).
+// Extracted from loop() so test mode (test.js, ?test=1) can step the game
+// synchronously without rAF — behaviour must stay identical to live play.
+function stepPhysics() {
   // In cool mode each drawn frame covers two 60Hz frames of game time, so run
   // twice the substeps at the unchanged step size (bigger steps would tunnel).
   const steps = coolMode ? SUBSTEPS * 2 : SUBSTEPS;
@@ -547,7 +555,6 @@ function loop(ts) {
     }
   }
   if (HAPPY_HOUR) updateHappyHour();
-  render(dt);
 }
 
 // Stop burning cycles when the tab/app is backgrounded; resume on return.
