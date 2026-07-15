@@ -65,6 +65,17 @@ html, body { height: 100%; overflow: hidden; background: var(--bar-deep); font-f
   color: #b8935f; text-shadow: 0 1px 6px rgba(0,0,0,.85);
 }
 
+/* One-line gameplay hint under the title — deliberately quiet so returning
+   players read past it, but first-timers get the premise at a glance. */
+#welcome-howto {
+  max-width: 300px;
+  margin: -6px 0 4px;
+  font-size: 12px; line-height: 1.5; letter-spacing: .03em;
+  text-align: center;
+  color: #c9a06a; opacity: .8;
+  text-shadow: 0 1px 6px rgba(0,0,0,.85);
+}
+
 #cool-toggle {
   justify-content: center;
   margin: -4px auto 12px;
