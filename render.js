@@ -193,9 +193,16 @@ const CUSTOMER_IMGS = [
 function customerLayout(slot) {
   // Slot spacing/sizing leaves the top HUD corners clear: the coin pill on the
   // left and the NEXT preview on the right both sit above/outside the bubbles.
-  const cx = W * (0.24 + 0.26 * slot);       // three slots across the horizon strip
+  // On a shallow-horizon map (Mage Tower, ~68px vs 150+ elsewhere) the whole
+  // strip sits LEVEL with that corner HUD, so the slots squeeze toward the
+  // middle, into the gap between the coin pill and the NEXT/buttons corner.
+  // squeeze is 1 (unchanged layout) for every horizon >= 150.
+  const squeeze = Math.max(0.46, Math.min(1, HORIZON / 150));
+  const cx = W * (0.5 + 0.26 * squeeze * (slot - 1)); // three slots across the strip
   const ch = HORIZON * 0.46;                 // customer sprite height
-  const fs = Math.min(44, HORIZON * 0.26);   // order-frame (speech bubble) size
+  // Bubble scales with the strip but never below 24px — it's also the tap
+  // target for serving, and Mage Tower's strip would shrink it to ~17px.
+  const fs = Math.min(44, Math.max(24, HORIZON * 0.26));
   const cBottom = HORIZON + 2;
   return { cx, ch, cBottom,
            frame: { x: cx - fs / 2, y: cBottom - ch - fs - 6, w: fs, h: fs } };

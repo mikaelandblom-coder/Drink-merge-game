@@ -34,7 +34,13 @@ function fitCanvas() {
   ctx.imageSmoothingQuality = 'low';
 }
 fitCanvas();
-window.addEventListener('resize', fitCanvas);
+window.addEventListener('resize', () => {
+  fitCanvas();
+  // Resizing the backing store WIPES the canvas, and the idle-frame optimizer
+  // would happily keep skipping render() while the board is still — leaving
+  // the field blank after a window resize/rotation until something moved.
+  idleFrames = 0;
+});
 
 // ---------- perspective ----------
 // The horizon (vanishing row) is per-map: each background's art has its own —

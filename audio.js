@@ -368,28 +368,42 @@ function popMusical(tier) {
 
 // Triumphant flourish for a beaten high score — a bright rising major arpeggio
 // with a shimmering sparkle tail. Map-agnostic: always celebratory.
+// New-best celebration: a proper brass "ta-ta-ta-daaa!". A sawtooth through a
+// lowpass whose cutoff blooms open over the first ~60ms reads as a trumpet
+// attack; the held final note lands as a full C-major chord with vibrato, and
+// the old sparkle sweep rides out on top of it.
 function fanfare() {
   if (muted) return;
   const a = ac(), t = a.currentTime;
-  const notes = [1047, 1319, 1568, 2093]; // C6 · E6 · G6 · C7
-  notes.forEach((f, i) => {
-    const st = t + i * 0.10;
-    const o = a.createOscillator(), g = a.createGain();
-    o.type = 'triangle'; o.frequency.setValueAtTime(f, st);
+  // One synthesized trumpet voice.
+  const brass = (f, st, dur, vol, vib) => {
+    const o = a.createOscillator(), g = a.createGain(), lp = a.createBiquadFilter();
+    o.type = 'sawtooth'; o.frequency.setValueAtTime(f, st);
+    lp.type = 'lowpass'; lp.Q.value = 1.2;
+    lp.frequency.setValueAtTime(f * 1.5, st);
+    lp.frequency.linearRampToValueAtTime(f * 4.5, st + 0.06); // the brassy "blat"
     g.gain.setValueAtTime(0.0001, st);
-    g.gain.exponentialRampToValueAtTime(0.22, st + 0.015);
-    g.gain.exponentialRampToValueAtTime(0.0001, st + 0.32);
-    o.connect(g).connect(a.destination); o.start(st); o.stop(st + 0.34);
-    // sine octave underneath for body
-    const o2 = a.createOscillator(), g2 = a.createGain();
-    o2.type = 'sine'; o2.frequency.setValueAtTime(f * 0.5, st);
-    g2.gain.setValueAtTime(0.0001, st);
-    g2.gain.exponentialRampToValueAtTime(0.10, st + 0.02);
-    g2.gain.exponentialRampToValueAtTime(0.0001, st + 0.24);
-    o2.connect(g2).connect(a.destination); o2.start(st); o2.stop(st + 0.26);
-  });
-  // sparkle tail once the arpeggio lands
-  const ts = t + notes.length * 0.10;
+    g.gain.exponentialRampToValueAtTime(vol, st + 0.025);
+    g.gain.setValueAtTime(vol, st + Math.max(0.03, dur - 0.09));
+    g.gain.exponentialRampToValueAtTime(0.0001, st + dur);
+    if (vib) {
+      const lfo = a.createOscillator(), lg = a.createGain();
+      lfo.frequency.value = 5.5; lg.gain.value = f * 0.014;
+      lfo.connect(lg).connect(o.frequency);
+      lfo.start(st + 0.18); lfo.stop(st + dur);
+    }
+    o.connect(lp).connect(g).connect(a.destination);
+    o.start(st); o.stop(st + dur + 0.02);
+  };
+  // Pickup triplet on G5, then the long C6 with E5+G5 harmony under it.
+  brass(784,  t + 0.00, 0.15, 0.15);
+  brass(784,  t + 0.17, 0.15, 0.15);
+  brass(784,  t + 0.34, 0.15, 0.15);
+  brass(1047, t + 0.52, 1.00, 0.17, true);   // lead: C6, held with vibrato
+  brass(659,  t + 0.52, 1.00, 0.07, true);   // harmony: E5
+  brass(784,  t + 0.52, 1.00, 0.07, true);   // harmony: G5
+  // sparkle tail once the chord lands
+  const ts = t + 0.62;
   const o3 = a.createOscillator(), g3 = a.createGain();
   o3.type = 'triangle';
   o3.frequency.setValueAtTime(2093, ts);

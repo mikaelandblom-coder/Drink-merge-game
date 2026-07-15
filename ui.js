@@ -120,6 +120,7 @@ function showGameOver(state, key) {
       <span class="nb-sub">You topped the previous best of ${prevBest.toLocaleString()}</span>
     </div>`;
     fanfare();
+    spawnConfetti(document.getElementById('over'));
   } else if (score > 0 && prevBest === 0 && result.rank === 1) {
     banner = `<div class="new-best subtle">✨ First score on the board!</div>`;
   }
@@ -141,6 +142,33 @@ function showGameOver(state, key) {
 
   document.getElementById('over-peek').style.display = 'none';
   document.getElementById('over').style.display = 'flex';
+}
+
+// Confetti rain over the game-over results when a record is beaten. DOM pieces
+// with one-shot transform keyframes — compositor-only work, so the burst never
+// touches the render-loop heat budget. Everything lives inside #over, so
+// closing/hiding the overlay takes the confetti with it.
+function spawnConfetti(host) {
+  const old = document.getElementById('confetti');
+  if (old) old.remove();
+  const box = document.createElement('div');
+  box.id = 'confetti';
+  const colors = ['#ffd35c', '#ff7ab4', '#7ae0ff', '#9dff8a', '#ffb35c', '#d79aff'];
+  for (let i = 0; i < 70; i++) {
+    const p = document.createElement('i');
+    p.style.left = (Math.random() * 100) + '%';
+    p.style.background = colors[i % colors.length];
+    p.style.width  = (6 + Math.random() * 6) + 'px';
+    p.style.height = (9 + Math.random() * 8) + 'px';
+    p.style.setProperty('--dx', (Math.random() * 140 - 70).toFixed(0) + 'px');
+    p.style.setProperty('--rz', (Math.random() * 900 - 450).toFixed(0) + 'deg');
+    p.style.setProperty('--rx', (360 + Math.random() * 540).toFixed(0) + 'deg');
+    p.style.animationDuration = (2.2 + Math.random() * 1.8).toFixed(2) + 's';
+    p.style.animationDelay = (Math.random() * 0.7).toFixed(2) + 's';
+    box.appendChild(p);
+  }
+  host.appendChild(box);
+  setTimeout(() => box.remove(), 5200);  // past the longest duration + delay
 }
 
 function triggerShake() {

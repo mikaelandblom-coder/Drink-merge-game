@@ -205,6 +205,24 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
 }
 .new-best.subtle { font-size: 16px; color: var(--brass); text-shadow: none; }
 
+/* Confetti burst behind the new-best banner (pieces built in ui.js) */
+#confetti {
+  position: absolute; inset: 0; overflow: hidden;
+  pointer-events: none; border-radius: 14px;
+}
+#confetti i {
+  position: absolute; top: -22px; display: block; opacity: .95;
+  border-radius: 2px;
+  animation: confettiFall linear both;
+}
+@keyframes confettiFall {
+  to {
+    transform: translate(var(--dx), 1080px) rotateZ(var(--rz)) rotateX(var(--rx));
+    opacity: .85;
+  }
+}
+@media (prefers-reduced-motion: reduce) { #confetti { display: none; } }
+
 @keyframes nbPop {
   from { opacity: 0; transform: scale(.7); }
   60%  { transform: scale(1.08); }
