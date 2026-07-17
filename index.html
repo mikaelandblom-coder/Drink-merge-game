@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Mixology Merge</title>
 <!-- PNG icons: iOS Safari ignores SVG/data-URI favicons, so a real apple-touch-icon is required -->
-<link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png?v=65">
-<link rel="icon" type="image/png" sizes="192x192" href="assets/images/icon-192.png?v=65">
-<link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=65">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png?v=66">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/images/icon-192.png?v=66">
+<link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=66">
 <meta name="apple-mobile-web-app-title" content="Mixology Merge">
-<link rel="stylesheet" href="style.css?v=65">
+<link rel="stylesheet" href="style.css?v=66">
 </head>
 <body>
 
@@ -64,7 +64,12 @@
     <!-- XP bar: DOM overlay (like #stage-bg) so the render loop never pays for
          it. Orientation is flippable: class "v" = left-edge vertical (default),
          "h" = bottom horizontal — set by initXpBar() in ui.js (?xpbar=h to try). -->
-    <div id="xp-bar" class="v" aria-hidden="true">
+    <!-- position:absolute inline as a stale-CSS guard: if a cached old
+         style.css ever loads with this (newer) HTML, an unpositioned #xp-bar
+         would join #stage's layout, making it taller than the canvas — and
+         #stage-bg would stretch the map art out of register with the horizon
+         (the 2026-07-17 iPad bug). Inline, div + style update atomically. -->
+    <div id="xp-bar" class="v" style="position:absolute" aria-hidden="true">
       <div class="xp-medal" id="xp-medal"><span id="xp-level">0</span></div>
       <div id="xp-frac">0 / 60</div>
       <div class="xp-track"><div id="xp-fill"></div></div>
@@ -107,18 +112,18 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
-<script src="config/constants.js?v=65"></script>
-<script src="config/hitboxes.js?v=65"></script>
-<script src="config/items.js?v=65"></script>
-<script src="config/maps.js?v=65"></script>
-<script src="scores.js?v=65"></script>
-<script src="progress.js?v=65"></script>
-<script src="audio.js?v=65"></script>
-<script src="render.js?v=65"></script>
-<script src="ui.js?v=65"></script>
-<script src="welcome.js?v=65"></script>
-<script src="game.js?v=65"></script>
+<script src="config/constants.js?v=66"></script>
+<script src="config/hitboxes.js?v=66"></script>
+<script src="config/items.js?v=66"></script>
+<script src="config/maps.js?v=66"></script>
+<script src="scores.js?v=66"></script>
+<script src="progress.js?v=66"></script>
+<script src="audio.js?v=66"></script>
+<script src="render.js?v=66"></script>
+<script src="ui.js?v=66"></script>
+<script src="welcome.js?v=66"></script>
+<script src="game.js?v=66"></script>
 <!-- Dev-only test harness: inert unless the URL has ?test (see test.js) -->
-<script src="test.js?v=65"></script>
+<script src="test.js?v=66"></script>
 </body>
 </html>
