@@ -377,11 +377,9 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
   background: url('assets/images/xp-medal.png') center / contain no-repeat;
   color: #241708; font-size: 13px; font-weight: bold;
   text-shadow: 0 1px 0 rgba(255, 244, 220, .5);
-  /* Permanent compositor layer: the button art is a big PNG, and iOS purges
-     decoded image data under pressure — any repaint (a level-text update, a
-     sibling change) then draws blank for a frame while it re-decodes ("art
-     flicker" per shot). A pinned layer rasters the art once and keeps it. */
-  will-change: transform;
+  /* NO will-change / transform here: iOS WebKit fails to paint the bar's art
+     on composited layers (tried 2026-07-17b — the art vanished entirely on
+     iPad). Keep the medal and the 9-slice frame strictly un-composited. */
 }
 /* Optical centering, measured against the button art's visual center: Georgia
    digits land ~1px low in the flex-centered line box, and the art's soft
@@ -424,23 +422,23 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
   content: ''; position: absolute; inset: 0; pointer-events: none;
   border: 14px solid transparent; border-left-width: 25.5px; border-right-width: 25.5px;
   border-image: url('assets/images/xp-bar-frame.png') 132 240 round;
-  /* Same pinned-layer treatment as .xp-medal: the 9-slice source PNG is large,
-     and re-slicing it after an iOS decoded-data purge blanks the frame for a
-     frame whenever a per-shot sibling repaint touches it. */
-  will-change: transform;
+  /* NO will-change here (see .xp-medal): composited border-image renders
+     BLANK on iOS WebKit. This frame must never be promoted to a layer —
+     which is also why #xp-fill below animates width, not transform. */
 }
 #xp-bar.h #xp-fill {
-  top: 7.4px; bottom: 9.1px; left: 15.6px; right: 15.3px;
+  top: 7.4px; bottom: 9.1px; left: 15.6px;
+  /* Fill length animates as WIDTH, deliberately NOT scaleX: a transform
+     transition promotes the fill to a compositor layer per shot, and the
+     overlapping frame ::after gets promoted with it (paint order) — where
+     iOS WebKit renders the border-image BLANK. That was the per-shot "art
+     flicker" in v65, and permanent will-change (v2026-07-17b) blanked the
+     art outright. Width repaints on the main thread, but the region is a
+     ~600×12px strip — trivial. 30.9px = left + right window insets. */
+  width: calc((100% - 30.9px) * var(--xp-frac, 0));
   border-radius: 5px;
   background: linear-gradient(to bottom, #ffe9a8, #e8b04e 45%, #c98a2e);
-  transform-origin: left center;
-  transform: scaleX(var(--xp-frac, 0));
-  transition: transform .45s cubic-bezier(.3, 1, .4, 1);
-  /* Every shot starts a .45s transform transition; without this, Safari
-     promotes the fill to a compositor layer at transition start and demotes
-     it at the end — that per-shot layer churn re-rasters the bar area and
-     reads as a blink. Keep the layer alive between shots. */
-  will-change: transform;
+  transition: width .45s cubic-bezier(.3, 1, .4, 1);
 }
 .xp-medal.pulse { animation: xpPulse .6s cubic-bezier(.2, 1.4, .4, 1); }
 @keyframes xpPulse {
