@@ -6,7 +6,14 @@
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { height: 100%; overflow: hidden; background: var(--bar-deep); font-family: Georgia, 'Times New Roman', serif; }
+html, body {
+  height: 100%; overflow: hidden; background: var(--bar-deep);
+  font-family: Georgia, 'Times New Roman', serif;
+  /* iPad: a long-press / double-tap-drag on overlay or menu text starts a
+     native selection that engulfs the whole page in blue. Nothing in the game
+     is meant to be selectable except the backup-code box (re-enabled below). */
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+}
 
 /* ── Welcome screen ─────────────────────────────────────────── */
 #welcome {
@@ -221,16 +228,12 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
   position: absolute; inset: 0; overflow: hidden;
   pointer-events: none; border-radius: 14px;
 }
+/* The fall itself is a WAAPI animation built in ui.js — keyframes that read
+   custom properties (the old var(--dx) approach) are ineligible for the
+   compositor, which made the burst janky and let it skip ahead. */
 #confetti i {
   position: absolute; top: -22px; display: block; opacity: .95;
   border-radius: 2px;
-  animation: confettiFall linear both;
-}
-@keyframes confettiFall {
-  to {
-    transform: translate(var(--dx), 1080px) rotateZ(var(--rz)) rotateX(var(--rx));
-    opacity: .85;
-  }
 }
 @media (prefers-reduced-motion: reduce) { #confetti { display: none; } }
 
@@ -449,6 +452,9 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
 #backup-panel[hidden] { display: none; }
 .backup-hint { font-size: 11px; line-height: 1.5; color: #9a7a52; }
 #backup-code {
+  /* The one place selection must work (copying a code out by hand) — the
+     global user-select:none on body would otherwise reach into the textarea. */
+  -webkit-user-select: text; user-select: text;
   width: 100%; resize: none;
   background: rgba(0, 0, 0, .4); border: 1px solid #3d2d1a; border-radius: 8px;
   color: #c8a870; font-family: monospace; font-size: 10px; padding: 8px;

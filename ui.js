@@ -154,29 +154,39 @@ function showGameOver(state, key) {
 }
 
 // Confetti rain over the game-over results when a record is beaten. DOM pieces
-// with one-shot transform keyframes — compositor-only work, so the burst never
-// touches the render-loop heat budget. Everything lives inside #over, so
-// closing/hiding the overlay takes the confetti with it.
+// animated via WAAPI, NOT CSS keyframes: keyframes that read custom properties
+// (the old var(--dx) approach) can't run on the compositor, so all 70 pieces
+// fell on the main thread — busy at game-over with fanfare() + the overlay
+// rebuild — and a CSS animation's clock starts at style resolution, so the
+// post-stall first paint teleported them half a screen down. element.animate()
+// with concrete values is compositor-eligible, and a pending WAAPI animation
+// only gets its start time when its first frame actually commits — no skip.
+// Everything lives inside #over, so closing the overlay takes it along.
 function spawnConfetti(host) {
   const old = document.getElementById('confetti');
   if (old) old.remove();
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const box = document.createElement('div');
   box.id = 'confetti';
   const colors = ['#ffd35c', '#ff7ab4', '#7ae0ff', '#9dff8a', '#ffb35c', '#d79aff'];
+  host.appendChild(box);
   for (let i = 0; i < 70; i++) {
     const p = document.createElement('i');
     p.style.left = (Math.random() * 100) + '%';
     p.style.background = colors[i % colors.length];
     p.style.width  = (6 + Math.random() * 6) + 'px';
     p.style.height = (9 + Math.random() * 8) + 'px';
-    p.style.setProperty('--dx', (Math.random() * 140 - 70).toFixed(0) + 'px');
-    p.style.setProperty('--rz', (Math.random() * 900 - 450).toFixed(0) + 'deg');
-    p.style.setProperty('--rx', (360 + Math.random() * 540).toFixed(0) + 'deg');
-    p.style.animationDuration = (2.2 + Math.random() * 1.8).toFixed(2) + 's';
-    p.style.animationDelay = (Math.random() * 0.7).toFixed(2) + 's';
+    const dx = (Math.random() * 140 - 70).toFixed(0);
+    const rz = (Math.random() * 900 - 450).toFixed(0);
+    const rx = (360 + Math.random() * 540).toFixed(0);
     box.appendChild(p);
+    p.animate(
+      [{ transform: 'translate(0, 0) rotateZ(0deg) rotateX(0deg)', opacity: 0.95 },
+       { transform: `translate(${dx}px, 1080px) rotateZ(${rz}deg) rotateX(${rx}deg)`, opacity: 0.85 }],
+      { duration: 2200 + Math.random() * 1800,
+        delay: Math.random() * 700,
+        easing: 'linear', fill: 'both' });
   }
-  host.appendChild(box);
   setTimeout(() => box.remove(), 5200);  // past the longest duration + delay
 }
 
