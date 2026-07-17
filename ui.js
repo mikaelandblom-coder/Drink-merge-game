@@ -203,12 +203,20 @@ function initXpBar() {
   updateXpBar();
 }
 
+// Both fill variables in one place: --xp-pct (a length, drives the vertical
+// bar's height) and --xp-frac (unitless 0..1, drives the horizontal bar's
+// scaleX — transforms can't consume percentages from a custom property).
+function setXpFill(pct) {
+  const bar = document.getElementById('xp-bar');
+  bar.style.setProperty('--xp-pct', pct.toFixed(2) + '%');
+  bar.style.setProperty('--xp-frac', (pct / 100).toFixed(4));
+}
+
 function updateXpBar() {
   const info = Progress.info(ACTIVE_MAP.id);
   document.getElementById('xp-level').textContent = info.level;
   document.getElementById('xp-frac').textContent  = info.into + ' / ' + info.need;
-  document.getElementById('xp-bar')
-    .style.setProperty('--xp-pct', (info.into / info.need * 100).toFixed(2) + '%');
+  setXpFill(info.into / info.need * 100);
 }
 
 // 1 XP per shot — called from makeDrink's shot path (game.js), which covers
@@ -222,10 +230,9 @@ function xpOnShot(state) {
 // Live level-up: fill to the brim, medal pulse + chime, then the liquid
 // "drains" (transition suppressed) and starts pouring toward the next level.
 function levelUpFx() {
-  const bar  = document.getElementById('xp-bar');
   const fill = document.getElementById('xp-fill');
   const medal = document.getElementById('xp-medal');
-  bar.style.setProperty('--xp-pct', '100%');
+  setXpFill(100);
   // The new level shows the moment the medal pulses — the drain to the new
   // remainder follows once the fill-to-the-brim has been seen.
   document.getElementById('xp-level').textContent = Progress.level(ACTIVE_MAP.id);
@@ -235,7 +242,7 @@ function levelUpFx() {
   levelUp();
   setTimeout(() => {
     fill.style.transition = 'none';
-    bar.style.setProperty('--xp-pct', '0%');
+    setXpFill(0);
     void fill.offsetWidth;
     fill.style.transition = '';
     updateXpBar();

@@ -88,6 +88,17 @@ PIPELINE = {
                 'receipt-stack', 'receipt-golden',
             ],
         },
+        # XP bar (progress.js): plush stitched frame + level medallion, one
+        # transparent sheet. The frame is consumed as a 9-slice border-image
+        # (style.css #xp-bar.h rules) — regenerate slices there if the art
+        # ever changes.
+        {
+            'file':   'xp_bar.png',
+            'type':   'spritesheet',
+            'grid':   (2, 1),
+            'chroma': 'alpha',
+            'names':  ['xp-bar-frame', 'xp-medal'],
+        },
     ],
 
     'tikibar': [

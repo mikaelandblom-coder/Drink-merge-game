@@ -364,19 +364,21 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
 #xp-bar.h {
   display: flex;
   left: 12px; right: 12px; bottom: 5px;
-  flex-direction: row; height: 26px;
+  flex-direction: row; height: 34px;
 }
+/* Plush button medallion (assets/source/shared/xp_bar.png via the pipeline).
+   border-radius stays 50% so the level-up pulse glow is round. */
 .xp-medal {
-  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  background: radial-gradient(circle at 35% 30%, #ffeec2, var(--brass) 62%, #7d5a2c);
-  border: 1px solid rgba(255, 240, 200, .75);
-  box-shadow: 0 1px 6px rgba(0,0,0,.5);
-  color: #241708; font-size: 12px; font-weight: bold;
+  background: url('assets/images/xp-medal.png') center / contain no-repeat;
+  color: #241708; font-size: 13px; font-weight: bold;
+  text-shadow: 0 1px 0 rgba(255, 244, 220, .5);
 }
 #xp-frac {
-  font-size: 9px; letter-spacing: .02em; white-space: nowrap;
-  color: var(--brass); text-shadow: 0 1px 3px rgba(0,0,0,.9);
+  font-size: 10px; letter-spacing: .02em; white-space: nowrap;
+  /* foam + hard dark shadow: must stay legible over EVERY map's table art */
+  color: var(--foam); text-shadow: 0 1px 3px rgba(0, 0, 0, .9), 0 0 6px rgba(0, 0, 0, .6);
 }
 .xp-track {
   position: relative; overflow: hidden; border-radius: 999px;
@@ -385,17 +387,38 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
   box-shadow: inset 0 1px 4px rgba(0,0,0,.6);
 }
 #xp-bar.v .xp-track { width: 10px; flex: 1; }
-#xp-bar.h .xp-track { height: 10px; flex: 1; }
 #xp-fill { position: absolute; border-radius: 999px; }
 #xp-bar.v #xp-fill {
   left: 0; right: 0; bottom: 0; height: var(--xp-pct);
   background: linear-gradient(to top, #8a5a1e, #e8b04e 60%, #ffe9a8);
   transition: height .45s cubic-bezier(.3, 1, .4, 1);
 }
+/* Horizontal (default): the plush stitched frame from xp-bar-frame.png,
+   consumed as a 9-slice so the end caps stay undistorted while the stitched
+   middle tiles. Source is 1394x264 with the open window at x147-1249,
+   y70-178; at track height 28px that maps to slice 132/240 at border-width
+   14px/25.5px, and the window insets below (recompute all four if the track
+   height changes: scale = borderWidth/slice per axis). The frame lives on
+   ::after so it paints ABOVE the golden fill; the fill's length is a scaleX
+   transform (compositor-only, and immune to the 9-slice's odd percentage
+   geometry). */
+#xp-bar.h .xp-track {
+  height: 28px; flex: 1;
+  background: none; border: none; border-radius: 0;
+  box-shadow: none; overflow: visible;
+}
+#xp-bar.h .xp-track::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  border: 14px solid transparent; border-left-width: 25.5px; border-right-width: 25.5px;
+  border-image: url('assets/images/xp-bar-frame.png') 132 240 round;
+}
 #xp-bar.h #xp-fill {
-  top: 0; bottom: 0; left: 0; width: var(--xp-pct);
-  background: linear-gradient(to right, #8a5a1e, #e8b04e 60%, #ffe9a8);
-  transition: width .45s cubic-bezier(.3, 1, .4, 1);
+  top: 7.4px; bottom: 9.1px; left: 15.6px; right: 15.3px;
+  border-radius: 5px;
+  background: linear-gradient(to bottom, #ffe9a8, #e8b04e 45%, #c98a2e);
+  transform-origin: left center;
+  transform: scaleX(var(--xp-frac, 0));
+  transition: transform .45s cubic-bezier(.3, 1, .4, 1);
 }
 .xp-medal.pulse { animation: xpPulse .6s cubic-bezier(.2, 1.4, .4, 1); }
 @keyframes xpPulse {
