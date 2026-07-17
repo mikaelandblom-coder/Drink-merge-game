@@ -375,8 +375,13 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
   color: #241708; font-size: 13px; font-weight: bold;
   text-shadow: 0 1px 0 rgba(255, 244, 220, .5);
 }
+/* Optical centering, measured against the button art's visual center: Georgia
+   digits land ~1px low in the flex-centered line box, and the art's soft
+   bottom glow pulls the button ~0.5px high of the image center. */
+#xp-level { display: block; transform: translateY(-1px); letter-spacing: -0.02em; }
 #xp-frac {
-  font-size: 10px; letter-spacing: .02em; white-space: nowrap;
+  font-size: 12px; font-weight: bold; letter-spacing: .02em; white-space: nowrap;
+  font-variant-numeric: tabular-nums;
   /* foam + hard dark shadow: must stay legible over EVERY map's table art */
   color: var(--foam); text-shadow: 0 1px 3px rgba(0, 0, 0, .9), 0 0 6px rgba(0, 0, 0, .6);
 }
