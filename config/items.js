@@ -83,6 +83,23 @@ const MELODY_ITEMS = [
   { name:'grand piano', r:71, glass:'#e8e8ec', liq:'#1a1a1a', sprite:'assets/images/melody-piano.png',     bodyRatio:0.78, vis:0.93 },
 ];
 
+// Le Petit Café (Paris pâtisserie). Pastries small -> large. bodyRatio values
+// are first-pass guesses — retrace each in tools/hitbox-editor.html; the
+// croissant and éclair are elongated and should get CAPSULE hitboxes there.
+// vis shrinks the DRAWN sprite of the wide items toward area parity
+// (sqrt(0.75/aspect)) so sizes read by tier.
+const PARIS_ITEMS = [
+  { name:'sugar cube',      r:15, glass:'#ffffff', liq:'#f0ece4', sprite:'assets/images/paris-sugarcube.png',      bodyRatio:0.85 },
+  { name:'macaron',         r:20, glass:'#ffd6e4', liq:'#f48fb1', sprite:'assets/images/paris-macaron.png',        bodyRatio:0.90 },
+  { name:'petit chou',      r:26, glass:'#fdf0dd', liq:'#e8b04a', sprite:'assets/images/paris-petitchou.png',      bodyRatio:0.85 },
+  { name:'croissant',       r:31, glass:'#fdeecd', liq:'#d89a3e', sprite:'assets/images/paris-croissant.png',      bodyRatio:0.70, vis:0.70 },
+  { name:'eclair',          r:37, glass:'#ffdfe9', liq:'#f2a0bd', sprite:'assets/images/paris-eclair.png',         bodyRatio:0.50, vis:0.64 },
+  { name:'berry tart',      r:44, glass:'#fde8e8', liq:'#d0384e', sprite:'assets/images/paris-berrytart.png',      bodyRatio:0.90 },
+  { name:'paris-brest',     r:52, glass:'#f7e6cf', liq:'#c9843a', sprite:'assets/images/paris-parisbrest.png',     bodyRatio:0.90, vis:0.85 },
+  { name:'charlotte',       r:60, glass:'#fff0f5', liq:'#e8879e', sprite:'assets/images/paris-charlotte.png',      bodyRatio:0.90 },
+  { name:'strawberry cake', r:71, glass:'#fff5f8', liq:'#e0344a', sprite:'assets/images/paris-strawberrycake.png', bodyRatio:0.80 },
+];
+
 // Happy Hour mode: the receipt merge chain, shared by every map. Serving a
 // customer's order spawns tier 0 (crumpled ball) where the served drink stood;
 // receipts merge among themselves in parallel with the drink chain. The FINAL
@@ -100,7 +117,7 @@ const RECEIPT_ITEMS = [
 // Pre-load all sprites and compute physics radii for every item set at startup.
 // Collision-circle overrides from config/hitboxes.js (edited visually with
 // tools/hitbox-editor.html) are applied before physR is derived.
-[...HAWAII_ITEMS, ...SAIGON_ITEMS, ...KYOTO_ITEMS, ...MAGE_ITEMS, ...TEDDY_ITEMS, ...MELODY_ITEMS, ...RECEIPT_ITEMS].forEach(item => {
+[...HAWAII_ITEMS, ...SAIGON_ITEMS, ...KYOTO_ITEMS, ...MAGE_ITEMS, ...TEDDY_ITEMS, ...MELODY_ITEMS, ...PARIS_ITEMS, ...RECEIPT_ITEMS].forEach(item => {
   const hb = (typeof ITEM_HITBOXES !== 'undefined') && ITEM_HITBOXES[item.sprite];
   if (hb && hb.bodyRatio) item.bodyRatio = hb.bodyRatio;
   // Collision-circle offset relative to the sprite anchor, in units of r

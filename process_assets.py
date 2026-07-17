@@ -205,6 +205,20 @@ PIPELINE = {
         # the commented `sizes` block in config/maps.js.
     ],
 
+    'paris': [
+        {
+            'file':   'items.png',
+            'type':   'spritesheet',
+            'grid':   (3, 3),
+            'chroma': 'alpha',        # real transparent background
+            'names':  [
+                'paris-sugarcube',  'paris-macaron',   'paris-petitchou',
+                'paris-croissant',  'paris-eclair',    'paris-berrytart',
+                'paris-parisbrest', 'paris-charlotte', 'paris-strawberrycake',
+            ],
+        },
+    ],
+
     # 'example-map': [
     #     {
     #         'file':      'items.png',

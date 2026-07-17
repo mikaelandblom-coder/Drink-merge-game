@@ -76,6 +76,17 @@ const MAPS = [
     //                small: 'assets/source/melody/bg.png' },
     // defaultSize: 'small',
   },
+  {
+    id:       'paris',
+    label:    'Paris',
+    sublabel: 'Le Petit Café',
+    // TEMP background until the Paris café art is generated — swap to
+    // assets/source/paris/bg.png and trace the boundary in the hitbox editor.
+    bg:       'assets/source/teddy/bg.png',
+    bgm:      'assets/audio/Le Petit Cafe.mp3',   // TODO: add track (lofi musette)
+    bgmVol:   0.35,
+    itemsData: null,
+  },
 ];
 
 // Wire item sets after items.js has defined them.
@@ -85,6 +96,7 @@ MAPS[2].itemsData = KYOTO_ITEMS;
 MAPS[3].itemsData = MAGE_ITEMS;
 MAPS[4].itemsData = TEDDY_ITEMS;
 MAPS[5].itemsData = MELODY_ITEMS;
+MAPS[6].itemsData = PARIS_ITEMS;
 
 // Storage key for a map's boundary in MAP_HITBOXES. Size-variant maps trace a
 // separate boundary per table framing (the tray/heart sits differently in each
