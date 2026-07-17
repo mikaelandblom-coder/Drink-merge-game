@@ -188,11 +188,10 @@ function triggerShake() {
 }
 
 // ---------- XP bar (progress.js) ----------
-// A DOM overlay, not canvas work — the render loop never pays for it. The
-// orientation is a one-flag experiment: 'v' = slim vertical bar on the left
-// edge (default), 'h' = horizontal along the bottom. Flip the default here or
-// try the other live with ?xpbar=h.
-const XP_BAR_ORIENT = /[?&]xpbar=h\b/.test(location.search) ? 'h' : 'v';
+// A DOM overlay, not canvas work — the render loop never pays for it.
+// Orientation: 'h' = horizontal along the bottom (default — Mikael's pick,
+// 2026-07-17), 'v' = slim vertical bar on the left edge; ?xpbar=v to compare.
+const XP_BAR_ORIENT = /[?&]xpbar=v\b/.test(location.search) ? 'v' : 'h';
 
 // Called from startGame() once the map (and its HORIZON) is known.
 function initXpBar() {

@@ -165,8 +165,8 @@ game-over "+N XP" line is literally shots-per-run, so calibrate it from a few
 real runs (target: level 1 after the first normal run).
 
 - **In-game XP bar** is a DOM overlay (like `#stage-bg`) — never draw it on
-  the canvas. Orientation flips via `XP_BAR_ORIENT` in ui.js (`?xpbar=h` to
-  try horizontal); vertical (default) runs launcher-edge→horizon on the left.
+  the canvas. Orientation flips via `XP_BAR_ORIENT` in ui.js; horizontal
+  along the bottom is the default (`?xpbar=v` for the vertical variant).
   Level-ups celebrate LIVE (medal pulse + `levelUp()` chime in audio.js) so
   they never compete with the game-over new-best fanfare.
 - **Storage safety:** localStorage is mirrored to IndexedDB (`mm-progress` db,
