@@ -135,9 +135,18 @@ function showGameOver(state, key) {
     </div>`;
   }).join('');
 
+  // Quiet XP recap — level-ups already celebrated live on the in-game bar, so
+  // this never competes with the new-best fanfare above.
+  const xpInfo = Progress.info(ACTIVE_MAP.id);
+  const xpLine = state.runXp
+    ? `<div class="over-xp">+${state.runXp} XP · Level ${xpInfo.level}
+         (${xpInfo.into} / ${xpInfo.need})</div>`
+    : '';
+
   document.getElementById('finalScore').innerHTML =
     `${banner}
      <div class="final-coins">You earned <strong>${score.toLocaleString()}</strong> coins</div>
+     ${xpLine}
      ${scores.length ? `<div class="score-list"><div class="score-list-title">Top scores</div>${rowsHtml}</div>` : ''}`;
 
   document.getElementById('over-peek').style.display = 'none';
@@ -176,4 +185,60 @@ function triggerShake() {
   stage.classList.remove('shake');
   void stage.offsetWidth;
   stage.classList.add('shake');
+}
+
+// ---------- XP bar (progress.js) ----------
+// A DOM overlay, not canvas work — the render loop never pays for it. The
+// orientation is a one-flag experiment: 'v' = slim vertical bar on the left
+// edge (default), 'h' = horizontal along the bottom. Flip the default here or
+// try the other live with ?xpbar=h.
+const XP_BAR_ORIENT = /[?&]xpbar=h\b/.test(location.search) ? 'h' : 'v';
+
+// Called from startGame() once the map (and its HORIZON) is known.
+function initXpBar() {
+  const bar = document.getElementById('xp-bar');
+  bar.className = XP_BAR_ORIENT;
+  // Vertical: run from the bottom edge up to the map's horizon, so the bar
+  // never reaches into the customers' strip on Happy Hour.
+  bar.style.top = XP_BAR_ORIENT === 'v' ? (HORIZON / H * 100) + '%' : '';
+  updateXpBar();
+}
+
+function updateXpBar() {
+  const info = Progress.info(ACTIVE_MAP.id);
+  document.getElementById('xp-level').textContent = info.level;
+  document.getElementById('xp-frac').textContent  = info.into + ' / ' + info.need;
+  document.getElementById('xp-bar')
+    .style.setProperty('--xp-pct', (info.into / info.need * 100).toFixed(2) + '%');
+}
+
+// 1 XP per shot — called from makeDrink's shot path (game.js), which covers
+// both live pointer shots and test-mode TT.shoot.
+function xpOnShot(state) {
+  state.runXp++;
+  const r = Progress.addXp(ACTIVE_MAP.id, 1);
+  if (r.leveled) levelUpFx(); else updateXpBar();
+}
+
+// Live level-up: fill to the brim, medal pulse + chime, then the liquid
+// "drains" (transition suppressed) and starts pouring toward the next level.
+function levelUpFx() {
+  const bar  = document.getElementById('xp-bar');
+  const fill = document.getElementById('xp-fill');
+  const medal = document.getElementById('xp-medal');
+  bar.style.setProperty('--xp-pct', '100%');
+  // The new level shows the moment the medal pulses — the drain to the new
+  // remainder follows once the fill-to-the-brim has been seen.
+  document.getElementById('xp-level').textContent = Progress.level(ACTIVE_MAP.id);
+  medal.classList.remove('pulse');
+  void medal.offsetWidth;
+  medal.classList.add('pulse');
+  levelUp();
+  setTimeout(() => {
+    fill.style.transition = 'none';
+    bar.style.setProperty('--xp-pct', '0%');
+    void fill.offsetWidth;
+    fill.style.transition = '';
+    updateXpBar();
+  }, 480);
 }

@@ -115,7 +115,7 @@ function buildWelcomeCards() {
     return `<div class="map-card" data-map="${map.id}">
       <div class="map-header">
         <div>
-          <div class="map-name">${map.label}</div>
+          <div class="map-name">${map.label}<span class="map-level">Lv ${Progress.level(map.id)}</span></div>
           <div class="map-sub">${map.sublabel || ''}</div>
         </div>
         <button class="play-btn" data-id="${map.id}">Play</button>
@@ -181,6 +181,8 @@ function wireWelcomeEvents() {
 function showWelcome() {
   document.getElementById('map-cards').innerHTML = buildWelcomeCards();
   document.getElementById('welcome-version').textContent = GAME_VERSION;
+  document.getElementById('welcome-level').textContent =
+    'Player level ' + Progress.totalLevel();
   // Cool mode is shelved for now — its checkbox is commented out in index.html.
   // Restore both together (startGame reads the saved value per run in game.js).
   // const coolCb = document.getElementById('cool-cb');
@@ -191,5 +193,61 @@ function showWelcome() {
   document.getElementById('wrap').style.display = 'none';
   document.getElementById('over').style.display = 'none';
 }
+
+// ---------- Backup & transfer (progress.js codes) ----------
+// The panel is static HTML outside #map-cards, so it's wired ONCE here — not
+// per showWelcome() rebuild.
+function wireBackup() {
+  const panel  = document.getElementById('backup-panel');
+  const code   = document.getElementById('backup-code');
+  const status = document.getElementById('backup-status');
+  const setStatus = (msg, err) => {
+    status.textContent = msg;
+    status.className = err ? 'err' : '';
+  };
+
+  document.getElementById('backup-toggle').onclick = () => {
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden) { code.value = Progress.exportCode(); setStatus(''); }
+  };
+
+  document.getElementById('backup-copy').onclick = async () => {
+    code.value = Progress.exportCode();   // regenerate: XP may have grown
+    try {
+      await navigator.clipboard.writeText(code.value);
+      setStatus('Copied! Paste it on the other device under Backup & transfer.');
+    } catch {
+      // Clipboard API needs a secure context / permission — fall back to
+      // selecting the text so a manual Ctrl/Cmd-C works.
+      code.focus(); code.select();
+      setStatus('Press Ctrl+C (or long-press) to copy the selected code.');
+    }
+  };
+
+  document.getElementById('backup-import').onclick = () => {
+    const val = code.value.trim();
+    if (!val) { setStatus('Paste a code into the box first.', true); return; }
+    if (val === Progress.exportCode()) {
+      setStatus('That\'s this device\'s own code — paste one from another device.', true);
+      return;
+    }
+    try {
+      const r = Progress.importCode(val);
+      setStatus(r.mapsUp || r.boardsUp
+        ? `Imported! ${r.mapsUp} map${r.mapsUp === 1 ? '' : 's'} gained XP, ${r.boardsUp} score board${r.boardsUp === 1 ? '' : 's'} updated.`
+        : 'Code accepted — this device already had everything in it.');
+      showWelcome();   // refresh badges, total level and score lists
+    } catch (e) {
+      setStatus(e.message, true);
+    }
+  };
+}
+wireBackup();
+
+// Async safety-net recovery (IndexedDB mirror) or an import can change levels
+// after first paint — refresh the visible menu when that happens.
+Progress.onChange = () => {
+  if (document.getElementById('welcome').style.display !== 'none') showWelcome();
+};
 
 showWelcome();

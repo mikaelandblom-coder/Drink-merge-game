@@ -152,6 +152,34 @@ and collision quality are unchanged. Re-enable by restoring the index.html
 block + welcome.js wiring + the localStorage read in startGame. It remains the
 biggest thermal lever if the DOM-layer background isn't enough.
 
+## XP & levels (progress.js)
+
+Every shot earns **1 XP** on every map/mode — shots ≈ time played, so no mode
+is the "optimal" way to level (deliberate; don't add merge/score bonuses).
+Each map has its own level; the **total player level** (welcome header) is the
+sum of map levels. Per-level cost doubles every 7 levels:
+`cost(n→n+1) = round(XP_A · 2^(n/7))`, no cap. **Only raw XP is stored**
+(`mm_xp_v1` in localStorage, one JSON blob) — levels are always derived, so
+`XP_A` can be retuned without migration. `XP_A = 60` is PROVISIONAL: the
+game-over "+N XP" line is literally shots-per-run, so calibrate it from a few
+real runs (target: level 1 after the first normal run).
+
+- **In-game XP bar** is a DOM overlay (like `#stage-bg`) — never draw it on
+  the canvas. Orientation flips via `XP_BAR_ORIENT` in ui.js (`?xpbar=h` to
+  try horizontal); vertical (default) runs launcher-edge→horizon on the left.
+  Level-ups celebrate LIVE (medal pulse + `levelUp()` chime in audio.js) so
+  they never compete with the game-over new-best fanfare.
+- **Storage safety:** localStorage is mirrored to IndexedDB (`mm-progress` db,
+  richer copy wins per map at startup) + `navigator.storage.persist()`.
+  **Backup codes** (`MM1.<checksum>.<base64url>`, welcome-screen "Backup &
+  transfer") carry XP + all `mm_s_*` score boards across devices; import
+  merges by MAX / union — a code can only ever add progress.
+- Test mode (?test=1) blanks `Progress._data.maps` and sets
+  `Progress.persistEnabled = false` — TT runs never touch real progress.
+- Future (agreed, not built): unlocks driven by total level — new maps, menu
+  backgrounds, BGM. Don't gate EXISTING maps behind levels (would regress
+  Mai's mid-save experience).
+
 ## High scores
 
 Scores are stored **per variant** (table size × combo state × Happy Hour) via `scoreKey()` in

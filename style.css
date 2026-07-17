@@ -325,6 +325,117 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
 }
 #over-peek:focus-visible { outline: 3px solid var(--neon); outline-offset: 2px; }
 
+/* ── XP / levels (progress.js) ──────────────────────────────── */
+
+/* Total player level (sum of map levels) under the version line */
+#welcome-level {
+  margin-top: -8px; margin-bottom: 6px;
+  font-size: 13px; letter-spacing: .12em;
+  color: var(--brass); text-shadow: 0 1px 6px rgba(0,0,0,.85);
+}
+
+/* Level badge next to each map card's name */
+.map-level {
+  display: inline-block; vertical-align: 3px;
+  margin-left: 8px; padding: 1px 9px;
+  font-size: 11px; font-style: normal; font-weight: bold; letter-spacing: .04em;
+  color: var(--bar-deep); background: var(--brass); border-radius: 999px;
+}
+
+/* Quiet run recap on the game-over overlay (the score stays the star) */
+.over-xp { font-size: 13px; color: var(--brass); opacity: .85; }
+
+/* In-game XP bar: a DOM overlay (compositor-only, like #stage-bg) so it costs
+   the render loop nothing; pointer-events:none so it can never eat an aim.
+   Orientation is flippable — .v (left-edge vertical, default) / .h (bottom
+   horizontal). The fill length is driven by one custom property (--xp-pct)
+   so both orientations share the JS. */
+#xp-bar {
+  position: absolute; z-index: 1; pointer-events: none;
+  display: none;  /* shown by initXpBar() once a run starts */
+  align-items: center; gap: 4px;
+  --xp-pct: 0%;
+}
+#xp-bar.v {
+  display: flex;
+  left: 5px; bottom: 8px;  /* top is set from the map's HORIZON by initXpBar() */
+  flex-direction: column; width: 30px;
+}
+#xp-bar.h {
+  display: flex;
+  left: 12px; right: 12px; bottom: 5px;
+  flex-direction: row; height: 26px;
+}
+.xp-medal {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 35% 30%, #ffeec2, var(--brass) 62%, #7d5a2c);
+  border: 1px solid rgba(255, 240, 200, .75);
+  box-shadow: 0 1px 6px rgba(0,0,0,.5);
+  color: #241708; font-size: 12px; font-weight: bold;
+}
+#xp-frac {
+  font-size: 9px; letter-spacing: .02em; white-space: nowrap;
+  color: var(--brass); text-shadow: 0 1px 3px rgba(0,0,0,.9);
+}
+.xp-track {
+  position: relative; overflow: hidden; border-radius: 999px;
+  background: rgba(10, 6, 3, .55);
+  border: 1px solid rgba(200, 155, 90, .55);
+  box-shadow: inset 0 1px 4px rgba(0,0,0,.6);
+}
+#xp-bar.v .xp-track { width: 10px; flex: 1; }
+#xp-bar.h .xp-track { height: 10px; flex: 1; }
+#xp-fill { position: absolute; border-radius: 999px; }
+#xp-bar.v #xp-fill {
+  left: 0; right: 0; bottom: 0; height: var(--xp-pct);
+  background: linear-gradient(to top, #8a5a1e, #e8b04e 60%, #ffe9a8);
+  transition: height .45s cubic-bezier(.3, 1, .4, 1);
+}
+#xp-bar.h #xp-fill {
+  top: 0; bottom: 0; left: 0; width: var(--xp-pct);
+  background: linear-gradient(to right, #8a5a1e, #e8b04e 60%, #ffe9a8);
+  transition: width .45s cubic-bezier(.3, 1, .4, 1);
+}
+.xp-medal.pulse { animation: xpPulse .6s cubic-bezier(.2, 1.4, .4, 1); }
+@keyframes xpPulse {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.5); box-shadow: 0 0 20px rgba(255, 220, 140, .95); }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { .xp-medal.pulse { animation: none; } }
+
+/* Backup & transfer panel on the welcome screen */
+#backup-box { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+#backup-toggle {
+  background: none; border: 1px solid #3d2d1a; color: #9a7a52;
+  font-family: inherit; font-size: 12px; letter-spacing: .05em;
+  padding: 7px 18px; border-radius: 999px; cursor: pointer;
+}
+#backup-toggle:hover { color: var(--brass); border-color: #5a4630; }
+#backup-panel {
+  width: 100%; display: flex; flex-direction: column; gap: 10px;
+  background: rgba(10, 6, 3, .82); border: 1px solid #3d2d1a;
+  border-radius: 14px; padding: 14px 16px;
+}
+#backup-panel[hidden] { display: none; }
+.backup-hint { font-size: 11px; line-height: 1.5; color: #9a7a52; }
+#backup-code {
+  width: 100%; resize: none;
+  background: rgba(0, 0, 0, .4); border: 1px solid #3d2d1a; border-radius: 8px;
+  color: #c8a870; font-family: monospace; font-size: 10px; padding: 8px;
+  word-break: break-all;
+}
+.backup-btns { display: flex; gap: 8px; }
+.backup-btns button {
+  flex: 1; background: var(--brass); border: none; color: var(--bar-deep);
+  font-family: inherit; font-size: 13px; font-weight: bold;
+  padding: 8px 0; border-radius: 999px; cursor: pointer;
+}
+#backup-import { background: transparent; border: 1px solid #5a4630; color: var(--brass); }
+#backup-status { font-size: 11px; min-height: 14px; color: var(--brass); }
+#backup-status.err { color: #ff8a8a; }
+
 @media (prefers-reduced-motion: reduce) { .shake { animation: none !important; } }
 .shake { animation: shk .18s; }
 @keyframes shk {

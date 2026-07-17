@@ -38,6 +38,12 @@ if (/[?&]test\b/.test(location.search)) {
   // High scores: a test run must never write into the real local boards.
   saveScore = () => ({ inTop: false, rank: 0 });
 
+  // XP (progress.js): same rule — no writes to the real store (localStorage or
+  // the IndexedDB mirror), and tests start from a blank slate so level/XP
+  // assertions are deterministic regardless of the machine's real progress.
+  Progress.persistEnabled = false;
+  Progress._data.maps = {};
+
   const TT = {};
 
   // ---- run control -------------------------------------------------------
@@ -189,6 +195,7 @@ if (/[?&]test\b/.test(location.search)) {
       score: state.coinCount, combo: state.combo, gameOver: state.gameOver,
       nextTier: state.nextTier, queuedTier: state.queuedTier,
       shotsFired: state.shotsFired, coinsInFlight: state.coins.length,
+      runXp: state.runXp, xp: Progress.info(ACTIVE_MAP.id),
       drinks: bodies('drink'), receipts: bodies('receipt'),
       customers: state.customers.map(c => ({
         slot: c.slot, tier: c.tier,

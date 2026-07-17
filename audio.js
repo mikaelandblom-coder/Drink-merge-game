@@ -414,6 +414,34 @@ function fanfare() {
   o3.connect(g3).connect(a.destination); o3.start(ts); o3.stop(ts + 0.48);
 }
 
+// XP level-up (progress.js): a quick bright ascending triad + sparkle.
+// Deliberately shorter and softer than fanfare() — level-ups happen mid-play,
+// so the chime rewards without interrupting (and can never be confused with
+// the new-high-score trumpets).
+function levelUp() {
+  if (muted) return;
+  const a = ac(), t = a.currentTime;
+  const notes = [523.25, 659.25, 783.99, 1046.5];   // C5 E5 G5 C6
+  notes.forEach((f, i) => {
+    const st = t + i * 0.065, last = i === notes.length - 1;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = 'triangle'; o.frequency.setValueAtTime(f, st);
+    g.gain.setValueAtTime(0.0001, st);
+    g.gain.exponentialRampToValueAtTime(last ? 0.14 : 0.09, st + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, st + (last ? 0.45 : 0.18));
+    o.connect(g).connect(a.destination); o.start(st); o.stop(st + (last ? 0.5 : 0.22));
+  });
+  // faint glass shimmer as the top note lands
+  const ts = t + 0.22;
+  const o2 = a.createOscillator(), g2 = a.createGain();
+  o2.type = 'sine'; o2.frequency.setValueAtTime(2093, ts);
+  o2.frequency.exponentialRampToValueAtTime(2637, ts + 0.16);
+  g2.gain.setValueAtTime(0.0001, ts);
+  g2.gain.exponentialRampToValueAtTime(0.05, ts + 0.02);
+  g2.gain.exponentialRampToValueAtTime(0.0001, ts + 0.3);
+  o2.connect(g2).connect(a.destination); o2.start(ts); o2.stop(ts + 0.32);
+}
+
 function coinTick() {
   if (muted) return;
   if (soundProfile === 'music') { coinTickMusical(); return; }

@@ -196,6 +196,9 @@ const state = {
   customers:  [],   // { slot, art, tier, bornAt, leaveAt }
   shotsFired: 0,
   nextCustomerAtShot: HH_FIRST_SHOT,
+  // XP earned this run (1/shot; committed to storage per shot by progress.js —
+  // this counter only feeds the game-over "+N XP" recap)
+  runXp: 0,
 };
 
 // Combo tint escalates like RPG loot rarity: blue → purple → magenta → gold.
@@ -231,7 +234,10 @@ function makeDrink(x, y, tier, shot = false, growIn = false, kind = 'drink') {
     b = Bodies.circle(x, y, it.physR, opts);
   }
   b.plugin = { tier, kind, item: it, born: performance.now(), merging: false, ghost };
-  if (shot) countShot();
+  // Every real shot (pointer or TT.shoot) counts for Happy Hour arrivals AND
+  // earns 1 XP (progress.js) — merge/receipt spawns never come through here
+  // with shot=true, so nothing else can farm XP.
+  if (shot) { countShot(); xpOnShot(state); }
   if (growIn) {
     // Merge products appear INSIDE a packed pile. A full-size body materialising
     // there gets separated by Matter's position solver in one violent shove —
@@ -261,6 +267,7 @@ function resetState() {
   state.coinCount = 0; state.combo = 0; state.lastMergeAt = 0;
   state.gameOver = false; state.canShoot = true;
   state.customers = []; state.shotsFired = 0; state.nextCustomerAtShot = HH_FIRST_SHOT;
+  state.runXp = 0;
   LAUNCH.x = W / 2;
   state.queuedTier = Math.floor(Math.random() * DROP_MAX);
   rollNext();
@@ -609,6 +616,7 @@ function startGame(map, opts = {}) {
   FREE_WY = (ACTIVE_MAP.freeLine !== undefined && ACTIVE_MAP.freeLine < H - 1)
     ? unpersp(0, ACTIVE_MAP.freeLine).y : Infinity;
   applyMapWalls(ACTIVE_MAP);
+  initXpBar();   // after HORIZON is set — the vertical bar's top tracks it
   loadMapAssets(ACTIVE_MAP, bgSrc);
   setSoundProfile(ACTIVE_MAP.id);
   initMusic(document.getElementById('bgm'), ACTIVE_MAP.bgmVol, ACTIVE_MAP.bgm);
