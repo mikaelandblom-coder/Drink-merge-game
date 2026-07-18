@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebKit reduction: border-image blank on composited layers (iOS)</title>
+<style>
+  /* Minimal reduction for a bug observed in Mixology Merge (2026-07-17):
+     on iPadOS Safari, border-image (and possibly background-image) fails to
+     paint when the element is promoted to a compositor layer — directly via
+     will-change:transform, or indirectly when an overlapping sibling runs a
+     transform transition (overlap-induced compositing). Desktop browsers
+     render every box below identically; on affected iOS versions the
+     "composited" column's art goes blank. */
+  body { font-family: -apple-system, system-ui, sans-serif; margin: 20px; background: #f4f0e8; }
+  h1 { font-size: 18px; }
+  p  { max-width: 640px; font-size: 14px; }
+  .case { display: flex; gap: 24px; align-items: center; margin: 18px 0; flex-wrap: wrap; }
+  .case h2 { font-size: 14px; flex-basis: 100%; margin: 0 0 4px; }
+  .box {
+    width: 260px; height: 64px; position: relative;
+    font-size: 11px; color: #555; display: flex; align-items: flex-end; justify-content: center;
+  }
+  .label { position: absolute; bottom: -18px; }
+
+  /* The 9-slice test frames. Small: 96x96, slice 24. Large: 1394x264 like the
+     game's real asset, slice 66. Blue squares mark the corners; if slicing
+     works you see blue corners + a red/gold ring. If the bug hits, NOTHING
+     of the frame paints. */
+  .bi-small::after, .bi-large::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    border: 20px solid transparent;
+  }
+  .bi-small::after { border-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAA/ElEQVR42u3dsQ2DMBBA0XPEHNQZIYUnyRwUjJCCOZiEghGoswj0dEhYyPD+AInwk08iRS7l77xGwYZ/FzXXtUPRz3+FLg0AAAACAEAAAAgAAAF4Vk3pL3j3lZ/Q6AYYQQIAQAAACID3gKMtv8pPqHUDjCABuG1pznk987ed/cz/TFOq+YD253P0+d0AI0gAAAgAAAEAIAAABACAAAAQAAACAACAAAAQAAACAEAAAAgAAAEAIAAABACAAAAQAAACAEAAAAgAAAEAoBNK9oiFPWJGkACE/w0N+wPC/gAjSAAACAAAAfAeEPYH2B9gBAkAAAEAIAAABACAANypDVdDG0c2Y8O2AAAAAElFTkSuQmCC) 24 round; }
+  .bi-large::after { border-image: url(data:image/png;base64,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) 66 round; }
+
+  /* Left column: plain. Right column: force a compositor layer. */
+  .composited::after { will-change: transform; }
+  .composited-self { will-change: transform; }
+
+  /* Background-image analog (the game's medal): a plain div with a bg image. */
+  .bg-img {
+    background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAA/ElEQVR42u3dsQ2DMBBA0XPEHNQZIYUnyRwUjJCCOZiEghGoswj0dEhYyPD+AInwk08iRS7l77xGwYZ/FzXXtUPRz3+FLg0AAAACAEAAAAgAAAF4Vk3pL3j3lZ/Q6AYYQQIAQAAACID3gKMtv8pPqHUDjCABuG1pznk987ed/cz/TFOq+YD253P0+d0AI0gAAAgAAAEAIAAABACAAAAQAAACAACAAAAQAAACAEAAAAgAAAEAIAAABACAAAAQAAACAEAAAAgAAAEAoBNK9oiFPWJGkACE/w0N+wPC/gAjSAAACAAAAfAeEPYH2B9gBAkAAAEAIAAABACAANypDVdDG0c2Y8O2AAAAAElFTkSuQmCC) center / contain no-repeat;
+  }
+
+  /* The game's exact scenario: a fill INSIDE the framed box runs a transform
+     scaleX transition (toggled by script every second). The fill overlaps the
+     frame ::after, so when WebKit promotes the transitioning fill it must
+     also composite the frame above it (paint order). On affected iOS builds
+     the frame blanks for the duration of every transition. */
+  .fill {
+    position: absolute; inset: 24px; background: linear-gradient(to bottom, #ffe9a8, #c98a2e);
+    transform-origin: left center; transform: scaleX(0.3);
+    transition: transform 0.6s ease;
+  }
+  .animating .fill { transform: scaleX(0.9); }
+</style>
+</head>
+<body>
+<h1>WebKit reduction — border-image blank on composited layers</h1>
+<p><strong>Expected:</strong> every box shows the same red/gold frame with blue
+corners (cases 1–3) or a gold fill inside a frame (case 4).<br>
+<strong>Bug (iOS/iPadOS Safari):</strong> the right-hand "composited" boxes
+render no frame art at all, and in case 4 the frame blinks off during each
+fill transition.</p>
+<p id="env"></p>
+
+<div class="case">
+  <h2>1. border-image, small source (96&times;96)</h2>
+  <div class="box bi-small"><span class="label">control</span></div>
+  <div class="box bi-small composited"><span class="label">will-change on ::after</span></div>
+</div>
+
+<div class="case">
+  <h2>2. border-image, large source (1394&times;264)</h2>
+  <div class="box bi-large"><span class="label">control</span></div>
+  <div class="box bi-large composited"><span class="label">will-change on ::after</span></div>
+</div>
+
+<div class="case">
+  <h2>3. background-image on the element itself</h2>
+  <div class="box bg-img"><span class="label">control</span></div>
+  <div class="box bg-img composited-self"><span class="label">will-change on element</span></div>
+</div>
+
+<div class="case">
+  <h2>4. overlap-induced compositing: transform transition under a border-image frame (auto-toggles)</h2>
+  <div class="box bi-small" id="toggler"><div class="fill"></div><span class="label">watch the frame during the slide</span></div>
+</div>
+
+<script>
+  document.getElementById('env').textContent = navigator.userAgent;
+  setInterval(() => document.getElementById('toggler').classList.toggle('animating'), 1000);
+</script>
+</body>
+</html>
