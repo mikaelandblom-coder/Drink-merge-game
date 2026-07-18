@@ -1,7 +1,7 @@
 // Deploy date — bump to today's date on every deploy so players can confirm
 // they're on the latest build just by comparing dates. Shown on the welcome
 // screen; bump the ?v= cache-buster in index.html at the same time.
-const GAME_VERSION = 'v2026-07-17';
+const GAME_VERSION = 'v2026-07-17c';
 
 // Fixed physics world dimensions. All other files read these.
 const W = 420;

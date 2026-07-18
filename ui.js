@@ -222,10 +222,18 @@ function setXpFill(pct) {
   bar.style.setProperty('--xp-frac', (pct / 100).toFixed(4));
 }
 
+// Write-only-on-change: this runs on EVERY shot, and even a same-value
+// textContent assignment replaces the text node — dirtying the medal / frame
+// paint and (on iOS, where purged image decodes redraw late) blinking the art.
+function setTextIfChanged(id, text) {
+  const el = document.getElementById(id);
+  if (el.textContent !== text) el.textContent = text;
+}
+
 function updateXpBar() {
   const info = Progress.info(ACTIVE_MAP.id);
-  document.getElementById('xp-level').textContent = info.level;
-  document.getElementById('xp-frac').textContent  = info.into + ' / ' + info.need;
+  setTextIfChanged('xp-level', String(info.level));
+  setTextIfChanged('xp-frac', info.into + ' / ' + info.need);
   setXpFill(info.into / info.need * 100);
 }
 
