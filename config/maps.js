@@ -80,12 +80,13 @@ const MAPS = [
     id:       'paris',
     label:    'Paris',
     sublabel: 'Le Petit Café',
-    // TEMP background until the Paris café art is generated — swap to
-    // assets/source/paris/bg.png and trace the boundary in the hitbox editor.
-    bg:       'assets/source/teddy/bg.png',
-    bgm:      'assets/audio/Le Petit Cafe.mp3',   // TODO: add track (lofi musette)
+    bg:       'assets/source/paris/bg_large.png',
+    bgm:      'assets/audio/Le Petit Cafe.mp3',
     bgmVol:   0.35,
     itemsData: null,
+    sizes:       { large: 'assets/source/paris/bg_large.png',
+                   small: 'assets/source/paris/bg_small.png' },
+    defaultSize: 'large',
   },
 ];
 
@@ -118,7 +119,6 @@ if (typeof MAP_HITBOXES !== 'undefined') {
     const hb = MAP_HITBOXES[m.id];
     if (hb) {
       m.cornerWalls = hb.cornerWalls;
-      m.sideInset = hb.sideInset || 0;
       if (hb.horizon !== undefined) m.horizon = hb.horizon;
       if (hb.freeLine !== undefined) m.freeLine = hb.freeLine;
     }

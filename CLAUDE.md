@@ -66,8 +66,7 @@ overrides save to `ITEM_HITBOXES` like any other item.
   double-click the curve to add a knot, double-click a knot (or Del) to remove.
   The magenta shapes are the actual perspective-corrected physics walls,
   regenerated live. "Enter test mode" runs real Matter.js physics: click to
-  shoot balls at the boundary exactly like in the game. `side inset` moves the
-  straight left/right walls (negative = wider field). Size-variant maps show a
+  shoot balls at the boundary exactly like in the game. Size-variant maps show a
   **framing** selector here (one boundary per framing).
 - **Merge items tab:** shows **all of the map's items at once** at true relative
   scale, so hitbox sizes are comparable across tiers. Click an item to select;

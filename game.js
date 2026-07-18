@@ -72,8 +72,8 @@ function unpersp(sx, sy) {
 const engine = Engine.create();
 engine.gravity.y = 0; engine.gravity.x = 0;
 const wallOpts = { isStatic: true, restitution: 0.02 };
-// Only the top wall is global; the left/right side walls are created per-map in
-// applyMapWalls so a map can widen its field (see map.sideInset).
+// Only the top wall is global; all lateral containment comes from each map's
+// traced spline boundary (applyMapWalls).
 Composite.add(engine.world, [
   Bodies.rectangle(W / 2, -30, W * 2, 60, wallOpts),
 ]);
@@ -143,13 +143,6 @@ const WALL_OVERLAP = 8;   // extra length so adjacent edges overlap at joints
 function applyMapWalls(map) {
   mapWalls.forEach(w => Composite.remove(engine.world, w));
   mapWalls = [];
-
-  // Left/right side walls. A negative sideInset lets items travel slightly past
-  // the normal physics edge, which the perspective transform then renders
-  // further out — i.e. a wider play field (used by round trays like Saigon).
-  const inset = map.sideInset || 0;
-  mapWalls.push(Bodies.rectangle(-30 + inset,     H / 2, 60, H * 2, wallOpts));
-  mapWalls.push(Bodies.rectangle(W + 30 - inset,  H / 2, 60, H * 2, wallOpts));
 
   trayWalls = [];
   trayPoly  = [];
@@ -551,6 +544,21 @@ function stepPhysics() {
     if (d.plugin.ghost && d.position.y < FREE_WY &&
         insideTray(d.position.x, d.position.y)) trySolidify(d);
   }
+  // With no side walls (splines are the only lateral containment), a shallow
+  // rail shot can slip past the traced boundary near the launcher opening and
+  // leave the world — as a ghost, or as a solid body on maps without a free
+  // line. Once it comes to rest well outside, cull it: it can never return
+  // (the walls block re-entry), and left alone a solid escapee would trigger
+  // checkOver's danger-line game-over from off-screen with no visible cause.
+  // The 0.3 threshold is above checkOver's 0.15 so the cull always wins.
+  for (let i = state.drinks.length - 1; i >= 0; i--) {
+    const d = state.drinks[i], p = d.position;
+    if (d.speed < 0.3 &&
+        (p.x < -60 || p.x > W + 60 || p.y > H + 60)) {
+      Composite.remove(engine.world, d);
+      state.drinks.splice(i, 1);
+    }
+  }
   // Grow freshly-merged bodies to full size in step with their sprite's grow
   // animation (spawned at 0.6 scale in makeDrink) — eases the pile apart over
   // 200ms instead of one violent position-solver shove.
@@ -605,7 +613,6 @@ function startGame(map, opts = {}) {
     const hb = MAP_HITBOXES[hitboxKey(ACTIVE_MAP, chosenSize)] || MAP_HITBOXES[ACTIVE_MAP.id];
     if (hb) {
       ACTIVE_MAP.cornerWalls = hb.cornerWalls;
-      ACTIVE_MAP.sideInset   = hb.sideInset || 0;
       ACTIVE_MAP.horizon     = hb.horizon;   // undefined -> game default below
       ACTIVE_MAP.freeLine    = hb.freeLine;  // undefined -> free-line off below
     }
