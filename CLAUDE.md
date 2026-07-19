@@ -64,6 +64,10 @@ Background tab is disabled — receipts have no boundary of their own) and its
 overrides save to `ITEM_HITBOXES` like any other item.
 - **Background tab:** edit the boundary as a Catmull-Rom spline — drag knots,
   double-click the curve to add a knot, double-click a knot (or Del) to remove.
+  Three draggable horizontal lines: **horizon** (red), **free-shot line**
+  (green), **danger line** (white, game-over threshold — saved as `dangerLine`
+  per boundary; never dragged = game default, physics H-150). The nearest line
+  to the pointer wins the grab; zoom in to separate close lines.
   The magenta shapes are the actual perspective-corrected physics walls,
   regenerated live. "Enter test mode" runs real Matter.js physics: click to
   shoot balls at the boundary exactly like in the game. Size-variant maps show a
@@ -460,7 +464,10 @@ Currently 4 — increase when adding more tiers.
   free-shot mechanic is accounted for.)
 - Optional combo multipliers (per-run, menu checkbox): fast successive merges
   stack a score multiplier (`COMBOS_ENABLED` in game.js)
-- Game over: any drink settled above the danger line (H-150) for >1.5s at speed <0.15
+- Game over: any drink settled above the danger line for >1.5s at speed <0.15.
+  The line's height is per-boundary (`dangerLine` in config/hitboxes.js, dragged
+  in the hitbox editor); default physics H-150. It has no effect on ghost
+  activation — that stays the free line's job.
 - Score: coin count (10 coins per merge, more for higher tiers). Beating a
   variant's best triggers a fanfare + banner on the game-over screen.
 

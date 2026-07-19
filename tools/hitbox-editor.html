@@ -149,6 +149,12 @@ let horizon = DEFAULT_HORIZON;
 // Free-shot line: below it, freshly shot items ignore the traced walls until
 // they cross it / touch another item. At the bottom edge (= H) it is inactive.
 let freeLine = H;
+// Danger line (game-over threshold): items settled past it end the game. Stored
+// in flat (editor) coords like freeLine; null = never dragged, map uses the
+// game default (physics H-150). Purely a game-over tunable — it has NOTHING to
+// do with ghost activation (that stays the free line's job).
+let dangerLine = null;
+function dangerFlatY() { return dangerLine !== null ? dangerLine : persp(0, H - 150).y; }
 function persp(wx, wy) {
   const t = wy / H, rowW = FAR_W + (W - FAR_W) * t;
   return { x: W/2 + (wx - W/2) * (rowW / W), y: horizon + (NEAR_Y - horizon) * t,
@@ -265,10 +271,11 @@ function loadBackground() {
     closed   = !!hb.closed;
     horizon  = (hb.horizon !== undefined) ? hb.horizon : DEFAULT_HORIZON;
     freeLine = (hb.freeLine !== undefined) ? hb.freeLine : H;
+    dangerLine = (hb.dangerLine !== undefined) ? hb.dangerLine : null;
   } else {
     // sensible default: gentle arc across the upper third
     knots  = [[60, 300], [120, 240], [210, 220], [300, 240], [360, 300]];
-    closed = false; horizon = DEFAULT_HORIZON; freeLine = H;
+    closed = false; horizon = DEFAULT_HORIZON; freeLine = H; dangerLine = null;
   }
   document.getElementById('closed').checked = closed;
   selKnot = -1; undoStack = []; dirtyWalls = true;
@@ -361,10 +368,13 @@ function drawMap() {
   ctx.fillStyle = 'rgba(125,255,154,.9)';
   ctx.beginPath(); ctx.arc(-EXT*0.5, freeLine, 5*sc, 0, Math.PI*2); ctx.fill();
 
-  // danger line + launcher, for context
-  const d1 = persp(0, H-150), d2 = persp(W, H-150);
-  ctx.setLineDash([7*sc,8*sc]); ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=2*sc;
-  ctx.beginPath(); ctx.moveTo(d1.x,d1.y); ctx.lineTo(d2.x,d2.y); ctx.stroke(); ctx.setLineDash([]);
+  // danger line (white, draggable): game-over threshold, saved per boundary
+  const dgy = dangerFlatY();
+  ctx.setLineDash([7*sc,8*sc]); ctx.strokeStyle='rgba(255,255,255,.6)'; ctx.lineWidth=2*sc;
+  ctx.beginPath(); ctx.moveTo(-EXT, dgy); ctx.lineTo(W+EXT, dgy); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(255,255,255,.9)';
+  ctx.beginPath(); ctx.arc(W + EXT*0.5, dgy, 5*sc, 0, Math.PI*2); ctx.fill();
+  // launcher, for context
   const lp = persp(W/2, H-60);
   ctx.strokeStyle='#7dff9a'; ctx.lineWidth=2*sc;
   ctx.beginPath(); ctx.arc(lp.x, lp.y, 8*sc, 0, Math.PI*2); ctx.stroke();
@@ -585,10 +595,10 @@ const toWorld = e => {
   return [px / view.z + view.ox, py / view.z + view.oy];   // both modes share the zoom/pan view
 };
 const near = (p, k, d) => Math.hypot(p[0]-k[0], p[1]-k[1]) < d;
-function snapshot() { undoStack.push(JSON.stringify({knots, closed, horizon, freeLine})); if (undoStack.length > 60) undoStack.shift(); }
+function snapshot() { undoStack.push(JSON.stringify({knots, closed, horizon, freeLine, dangerLine})); if (undoStack.length > 60) undoStack.shift(); }
 function changed() { dirtyWalls = true; if (testing) rebuildSim(); draw(); }
 
-let panning = false, panStart = null, dragHorizon = false, dragFree = false;
+let panning = false, panStart = null, dragHorizon = false, dragFree = false, dragDanger = false;
 let panMoved = false, pendingSelect = null;   // click-vs-drag on empty item space
 
 canvas.addEventListener('pointerdown', e => {
@@ -634,14 +644,21 @@ canvas.addEventListener('pointerdown', e => {
   dragKnot = knots.findIndex(k => near(p, k, 12 / view.z));
   selKnot = dragKnot;
   if (dragKnot >= 0) snapshot();
-  else if (Math.abs(p[1] - horizon) < 8 / view.z) { // grab the horizon line
-    snapshot(); dragHorizon = true;
-  }
-  else if (Math.abs(p[1] - freeLine) < 8 / view.z) { // grab the free-shot line
-    snapshot(); dragFree = true;
-  }
-  else {                                            // drag empty space to pan
-    panning = true; panStart = { x: e.clientX, y: e.clientY, ox: view.ox, oy: view.oy };
+  else {
+    // Grab the NEAREST of the three horizontal lines (the free and danger lines
+    // often sit within a few px of each other on screen — a fixed priority
+    // order would make the lower one ungrabbable). Zoom in to split fine ties.
+    const dH = Math.abs(p[1] - horizon), dF = Math.abs(p[1] - freeLine),
+          dD = Math.abs(p[1] - dangerFlatY()), m = Math.min(dH, dF, dD);
+    if (m < 8 / view.z) {
+      snapshot();
+      if (m === dH) dragHorizon = true;
+      else if (m === dF) dragFree = true;
+      else dragDanger = true;
+    }
+    else {                                          // drag empty space to pan
+      panning = true; panStart = { x: e.clientX, y: e.clientY, ox: view.ox, oy: view.oy };
+    }
   }
   draw();
 });
@@ -664,6 +681,12 @@ canvas.addEventListener('pointermove', e => {
     status(freeLine >= H - 1
       ? 'Free-shot line OFF (at bottom edge) — shots collide with walls immediately'
       : `Free-shot line: ${Math.round(freeLine)} — shots ignore the traced walls below it until they cross or touch an item`);
+    draw(); return;
+  }
+  if (dragDanger) {
+    dangerLine = Math.max(horizon + 20, Math.min(H, toWorld(e)[1]));
+    status(`Danger line: ${Math.round(dangerLine)} (physics y ${Math.round(unpersp(0, dangerLine).y)}; ` +
+      `game default ${H - 150}) — items settled past it for 1.5s end the game`);
     draw(); return;
   }
   const p = toWorld(e);
@@ -707,7 +730,7 @@ canvas.addEventListener('pointermove', e => {
 addEventListener('pointerup', () => {
   if (panning && !panMoved && pendingSelect) { activeItem = pendingSelect; draw(); }  // click (no drag) = select
   pendingSelect = null; panMoved = false;
-  dragKnot = -1; itemDrag = null; panning = false; dragHorizon = false; dragFree = false;
+  dragKnot = -1; itemDrag = null; panning = false; dragHorizon = false; dragFree = false; dragDanger = false;
 });
 
 // scroll-zoom toward the cursor — shared by map and item modes
@@ -750,6 +773,7 @@ addEventListener('keydown', e => {
     knots = s.knots; closed = s.closed;
     if (s.horizon !== undefined) horizon = s.horizon;
     if (s.freeLine !== undefined) freeLine = s.freeLine;
+    if ('dangerLine' in s) dangerLine = s.dangerLine;   // null (= default) restores too
     document.getElementById('closed').checked = closed;
     changed();
   }
@@ -899,13 +923,16 @@ function serialize() {
     closed,
     horizon: +horizon.toFixed(1),
     freeLine: Math.round(freeLine),
+    // Only written once dragged — an absent key keeps the game default (H-150).
+    ...(dangerLine !== null ? { dangerLine: Math.round(dangerLine) } : {}),
     knots: knots.map(k => [Math.round(k[0]), Math.round(k[1])]),
     cornerWalls: walls(),
   };
   const mapsSrc = Object.entries(MAP_HITBOXES).map(([id, hb]) => {
     const kn = hb.knots.map(k => `[${k[0]}, ${k[1]}]`).join(', ');
     const hz = ((hb.horizon !== undefined) ? `\n    horizon: ${hb.horizon},` : '') +
-               ((hb.freeLine !== undefined) ? `\n    freeLine: ${hb.freeLine},` : '');
+               ((hb.freeLine !== undefined) ? `\n    freeLine: ${hb.freeLine},` : '') +
+               ((hb.dangerLine !== undefined) ? `\n    dangerLine: ${hb.dangerLine},` : '');
     const cw = hb.cornerWalls.map(c =>
       `      { x: ${String(c.x).padStart(4)}, y: ${String(c.y).padStart(4)}, len: ${String(c.len).padStart(4)}, angle: ${c.angle >= 0 ? ' ' : ''}${c.angle.toFixed(3)} },`).join('\n');
     return `  ${id}: {\n    closed: ${hb.closed},${hz}\n    knots: [\n      ${kn},\n    ],\n    cornerWalls: [\n${cw}\n    ],\n  },`;
@@ -931,6 +958,9 @@ function serialize() {
 //   freeLine    — flat y of the free-shot line: freshly shot items ignore the
 //                 traced walls below it (until crossing it / touching an item).
 //                 At the bottom edge (= H) the mechanic is off.
+//   dangerLine  — flat y of the game-over line: items settled past it end the
+//                 game. Omitted = game default (physics H-150). Independent of
+//                 the free line / ghost activation.
 //   cornerWalls — GENERATED from the spline (perspective-corrected physics
 //                 segments consumed by game.js). Regenerated on every save.
 //

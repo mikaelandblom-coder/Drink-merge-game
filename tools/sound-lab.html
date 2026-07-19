@@ -1,5 +1,5 @@
 <meta charset="utf-8">
-<title>Sound Lab — musical merge audition</title>
+<title>Sound Lab — Paris & game-over audition</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -47,12 +47,92 @@
     border-radius: 7px; padding: 5px 8px; font: inherit; }
   code { background: #2a2636; padding: 1px 6px; border-radius: 5px; font-size: 12.5px; }
   .note-small { color: #7d7590; font-size: 12px; margin-top: 6px; }
+  .section {
+    margin: 34px 0 14px; padding-bottom: 6px; border-bottom: 1px solid #2e2a3d;
+    font-size: 13px; letter-spacing: .05em; text-transform: uppercase; color: #9b93b0;
+  }
+  .tier-btn .pn { font-weight: 600; font-size: 12px; }
 </style>
 
 <div class="lab">
   <h1>🎵 Sound Lab</h1>
-  <p class="sub">Auditioning merge sounds for the music-shop map. Each tier maps to a
-  scale degree — climbing tiers climbs the scale. Winner gets lifted into <code>audio.js</code>.</p>
+  <p class="sub">Audition synth sounds here before wiring them into <code>audio.js</code>.
+  On deck: the <strong>Paris</strong> map's café sound profile and a shared
+  <strong>game-over</strong> sound. The Melody Lane material that already shipped is kept at
+  the bottom for reference.</p>
+
+  <div class="section">🥐 Paris — Le Petit Café · merge pop candidates</div>
+
+  <div class="card" data-ppop="china">
+    <h2>A · Porcelain &amp; silver spoon — ✅ WINNER, shipped as <code>popCafe</code></h2>
+    <p class="desc">Dainty china "ting" — a teaspoon tapped on a teacup, with a faint upward
+    curl. Brighter and lighter than Kyoto's ceramic profile; pitch rises with tier.</p>
+    <div class="tiers"></div>
+    <div class="row"><button class="accent" data-act="run">▶ Play full chain (cascade)</button></div>
+  </div>
+
+  <div class="card" data-ppop="pastry">
+    <h2>B · Pâtisserie poof</h2>
+    <p class="desc">Soft cream-puff squish with a powdered-sugar sparkle on top. The squishiest
+    option — the items are pastries, so the merge sounds like pastry.</p>
+    <div class="tiers"></div>
+    <div class="row"><button class="accent" data-act="run">▶ Play full chain (cascade)</button></div>
+  </div>
+
+  <div class="card" data-ppop="musette">
+    <h2>C · Musette accordion</h2>
+    <p class="desc">A short wet-tuned accordion note per merge — instant Paris. Tiers climb an
+    F-major scale, so a combo cascade plays a little melody (same trick as Melody Lane).</p>
+    <div class="tiers"></div>
+    <div class="row"><button class="accent" data-act="run">▶ Play full chain (cascade)</button></div>
+  </div>
+
+  <div class="card" style="border-color:#4a3f6b">
+    <h2>☕ Collision &amp; coins (Paris)</h2>
+    <p class="desc">Collision: <strong>saucer tick</strong> (delicate china tap) vs
+    <strong>pastry bump</strong> (soft dusted thud). Coins: the shipping default blip vs a
+    little <strong>service bell</strong> "ding" with a slight pitch wobble per coin so showers
+    don't drill. Coins land ~110ms apart, real game tempo.
+    ✅ WINNERS: pastry bump (<code>clinkCafe</code>) + service bell (<code>coinTickCafe</code>).</p>
+    <div class="row" style="margin-bottom:12px">
+      <button data-pclink="saucer:4">Saucer · soft</button>
+      <button data-pclink="saucer:10">Saucer · medium</button>
+      <button data-pclink="saucer:18">Saucer · hard</button>
+    </div>
+    <div class="row" style="margin-bottom:12px">
+      <button data-pclink="pastry:4">Pastry · soft</button>
+      <button data-pclink="pastry:10">Pastry · medium</button>
+      <button data-pclink="pastry:18">Pastry · hard</button>
+    </div>
+    <div class="row">
+      <button data-pcoin="default:6">Default blip ×6</button>
+      <button data-pcoin="bell:2">Service bell ×2</button>
+      <button class="accent" data-pcoin="bell:6">Service bell ×6</button>
+      <button class="accent" data-pcoin="bell:12">Service bell ×12</button>
+    </div>
+  </div>
+
+  <div class="section">🔚 Game over — shared by all maps</div>
+
+  <div class="card" style="border-color:#6b3f4a">
+    <h2>Game-over sound</h2>
+    <p class="desc">Today NOTHING plays when a run ends — the only game-over-screen sound is the
+    new-best <code>fanfare()</code>. The winner gets called from <code>showGameOver()</code> in
+    ui.js. Tone target: "the café is closing", not "you failed" — it plays at the end of EVERY
+    run, including great ones.
+    ✅ WINNER: "Gently down", shipped as <code>gameOver()</code> — called from
+    <code>showGameOver()</code> on every run EXCEPT a new best, where the fanfare plays
+    instead (they'd clash together).</p>
+    <div class="row" style="margin-bottom:12px">
+      <button class="accent" data-go="down">A · Gently down ✅</button>
+      <button data-go="lastcall">B · Last-call bell</button>
+      <button data-go="slide">C · Slide &amp; plop (playful)</button>
+      <button data-go="resolve">D · Bittersweet resolve</button>
+    </div>
+    <label><input type="checkbox" id="go-fanfare"> follow with the shipped new-best fanfare (clash check)</label>
+  </div>
+
+  <div class="section">🎸 Melody Lane — shipped reference</div>
 
   <div class="global">
     <label>Scale
@@ -135,11 +215,12 @@
   <div class="card" style="border-color:#6b5a3f">
     <h2>🏆 Personal best (high-score flourish)</h2>
     <p class="desc">Plays on the game-over screen when a run beats that variant's best (the game's
-    <code>fanfare()</code>, currently map-agnostic). "Current" mirrors what ships today; the others are
-    alternatives — the harp and brass options would also tie into Melody Lane's musical theme.</p>
+    <code>fanfare()</code>, map-agnostic). The <strong>brass fanfare won</strong> and ships today;
+    the others are kept as also-rans. "Shipped" mirrors audio.js exactly — use it (or the
+    checkbox in the game-over card above) to check the new game-over sound against it.</p>
     <div class="row">
-      <button class="accent" data-pb="current">▶ Current (rising bells)</button>
-      <button data-pb="brass">Brass fanfare</button>
+      <button class="accent" data-pb="shipped">▶ Shipped (brass fanfare)</button>
+      <button data-pb="bells">Old rising bells</button>
       <button data-pb="harp">Harp run + chord</button>
       <button data-pb="musicbox">Music-box sparkle</button>
     </div>
@@ -390,28 +471,44 @@ function pbCurrent() {
   g3.gain.exponentialRampToValueAtTime(0.0001, ts + 0.45);
   o3.connect(g3).connect(a.destination); o3.start(ts); o3.stop(ts + 0.48);
 }
-// B · Brass fanfare: detuned sawtooth through a bright lowpass — a triumphant "ta-ta-ta-DAA"
-function brassNote(f, st, dur, vol = 0.15) {
-  const a = ac();
-  const o = a.createOscillator(), o2 = a.createOscillator(), g = a.createGain();
-  const lp = a.createBiquadFilter(); lp.type = 'lowpass';
-  lp.frequency.setValueAtTime(f * 2.2, st);
-  lp.frequency.exponentialRampToValueAtTime(f * 4.5, st + 0.06);
-  o.type = 'sawtooth';  o.frequency.setValueAtTime(f, st);
-  o2.type = 'sawtooth'; o2.frequency.setValueAtTime(f * 1.006, st); // detune for body
-  g.gain.setValueAtTime(0.0001, st);
-  g.gain.exponentialRampToValueAtTime(vol, st + 0.03);
-  g.gain.setValueAtTime(vol, st + dur * 0.6);
-  g.gain.exponentialRampToValueAtTime(0.0001, st + dur);
-  o.connect(lp); o2.connect(lp); lp.connect(g).connect(a.destination);
-  o.start(st); o2.start(st); o.stop(st + dur + 0.02); o2.stop(st + dur + 0.02);
-}
-function pbBrass() {
-  const t = ac().currentTime + 0.02;
-  brassNote(784, t,       0.12);          // G5
-  brassNote(784, t + 0.15, 0.12);         // G5
-  brassNote(1047, t + 0.30, 0.16);        // C6
-  [1047, 1319, 1568].forEach(f => brassNote(f, t + 0.52, 0.7, 0.12)); // C-major bloom
+// B · Shipped fanfare: EXACT port of fanfare() in audio.js (brass "ta-ta-ta-daaa" with
+// vibrato chord + sparkle tail). Keep in sync if audio.js changes.
+function fanfareShipped() {
+  const a = ac(), t = a.currentTime + 0.02;
+  const brass = (f, st, dur, vol, vib) => {
+    const o = a.createOscillator(), g = a.createGain(), lp = a.createBiquadFilter();
+    o.type = 'sawtooth'; o.frequency.setValueAtTime(f, st);
+    lp.type = 'lowpass'; lp.Q.value = 1.2;
+    lp.frequency.setValueAtTime(f * 1.5, st);
+    lp.frequency.linearRampToValueAtTime(f * 4.5, st + 0.06); // the brassy "blat"
+    g.gain.setValueAtTime(0.0001, st);
+    g.gain.exponentialRampToValueAtTime(vol, st + 0.025);
+    g.gain.setValueAtTime(vol, st + Math.max(0.03, dur - 0.09));
+    g.gain.exponentialRampToValueAtTime(0.0001, st + dur);
+    if (vib) {
+      const lfo = a.createOscillator(), lg = a.createGain();
+      lfo.frequency.value = 5.5; lg.gain.value = f * 0.014;
+      lfo.connect(lg).connect(o.frequency);
+      lfo.start(st + 0.18); lfo.stop(st + dur);
+    }
+    o.connect(lp).connect(g).connect(a.destination);
+    o.start(st); o.stop(st + dur + 0.02);
+  };
+  brass(784,  t + 0.00, 0.15, 0.15);
+  brass(784,  t + 0.17, 0.15, 0.15);
+  brass(784,  t + 0.34, 0.15, 0.15);
+  brass(1047, t + 0.52, 1.00, 0.17, true);   // lead: C6, held with vibrato
+  brass(659,  t + 0.52, 1.00, 0.07, true);   // harmony: E5
+  brass(784,  t + 0.52, 1.00, 0.07, true);   // harmony: G5
+  const ts = t + 0.62;
+  const o3 = a.createOscillator(), g3 = a.createGain();
+  o3.type = 'triangle';
+  o3.frequency.setValueAtTime(2093, ts);
+  o3.frequency.exponentialRampToValueAtTime(3136, ts + 0.20);
+  g3.gain.setValueAtTime(0.0001, ts);
+  g3.gain.exponentialRampToValueAtTime(0.13, ts + 0.02);
+  g3.gain.exponentialRampToValueAtTime(0.0001, ts + 0.45);
+  o3.connect(g3).connect(a.destination); o3.start(ts); o3.stop(ts + 0.48);
 }
 // C · Harp run + chord: fast ascending pentatonic pluck resolving on a bright major chord
 function harpPluck(f, st, vol = 0.13) {
@@ -443,8 +540,247 @@ function pbMusicbox() {
   notes.forEach((f, i) => musicbox(f, 0.30, t + i * 0.11));
   [2093, 2637, 3136].forEach(f => musicbox(f, 0.16, t + notes.length * 0.11 + 0.05));
 }
-const PB = { current: pbCurrent, brass: pbBrass, harp: pbHarp, musicbox: pbMusicbox };
+const PB = { shipped: fanfareShipped, bells: pbCurrent, harp: pbHarp, musicbox: pbMusicbox };
 document.querySelectorAll('[data-pb]').forEach(b => b.onclick = () => PB[b.dataset.pb]());
+
+// ================= Paris — Le Petit Café =================
+const PARIS_TIER_NAMES = ['sugar cube', 'macaron', 'petit chou', 'croissant', 'eclair',
+                          'berry tart', 'paris-brest', 'charlotte', 'strawb. cake'];
+
+// short shaped noise burst — shared texture helper for the Paris sounds
+function pnoise(t, dur, vol, type, ffreq) {
+  const a = ac();
+  const len = Math.max(8, Math.floor(a.sampleRate * dur));
+  const buf = a.createBuffer(1, len, a.sampleRate);
+  const ch = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 1.6);
+  const src = a.createBufferSource(); src.buffer = buf;
+  const g = a.createGain(); g.gain.setValueAtTime(vol, t);
+  const f = a.createBiquadFilter(); f.type = type; f.frequency.value = ffreq;
+  src.connect(f).connect(g).connect(a.destination); src.start(t);
+}
+
+// A · Porcelain & silver spoon: inharmonic china partials + a tiny spoon-tap attack
+function parisChina(tier, when) {
+  const a = ac(), t = when ?? a.currentTime + 0.02;
+  const base = 740 * Math.pow(1.09, tier);
+  [[1, 1, 0.4], [2.53, 0.42, 0.25], [4.9, 0.15, 0.12]].forEach(([m, amp, dec]) => {
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(base * m, t);
+    o.frequency.exponentialRampToValueAtTime(base * m * 1.015, t + dec); // faint upward curl
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.2 * amp, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
+    o.connect(g).connect(a.destination); o.start(t); o.stop(t + dec + 0.03);
+  });
+  pnoise(t, 0.008, 0.1, 'highpass', 3000); // spoon-tap click
+}
+
+// B · Pâtisserie poof: soft squishy body + cream poof + powdered-sugar sparkle
+function parisPastry(tier, when) {
+  const a = ac(), t = when ?? a.currentTime + 0.02;
+  const base = 250 * Math.pow(1.11, tier);
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(base * 1.25, t);
+  o.frequency.exponentialRampToValueAtTime(base * 0.85, t + 0.16);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.26, t + 0.014);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
+  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.28);
+  pnoise(t, 0.09, 0.15, 'lowpass', 750); // cream poof
+  const o2 = a.createOscillator(), g2 = a.createGain();
+  o2.type = 'sine'; o2.frequency.setValueAtTime(base * 6, t + 0.02);
+  g2.gain.setValueAtTime(0.0001, t + 0.02);
+  g2.gain.exponentialRampToValueAtTime(0.05, t + 0.04);
+  g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+  o2.connect(g2).connect(a.destination); o2.start(t + 0.02); o2.stop(t + 0.24);
+}
+
+// C · Musette accordion: three wet-tuned sawtooth reeds with a reed swell (not a pluck).
+// Tiers climb F major, so cascades play a melody.
+const PARIS_SCALE = [0, 2, 4, 5, 7, 9, 11, 12, 14]; // 9 tiers, F major
+function parisMusette(tier, when) {
+  const a = ac(), t = when ?? a.currentTime + 0.02;
+  const f = 349.23 * Math.pow(2, PARIS_SCALE[tier] / 12); // F4 root
+  const dur = 0.28 + tier * 0.02;
+  const g = a.createGain(), bp = a.createBiquadFilter();
+  bp.type = 'bandpass'; bp.frequency.value = f * 2.2; bp.Q.value = 0.8;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(0.16, t + 0.03);
+  g.gain.setValueAtTime(0.16, t + dur * 0.7);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  [0.988, 1, 1.012].forEach(det => { // ~±20 cents — the musette shimmer
+    const o = a.createOscillator();
+    o.type = 'sawtooth'; o.frequency.setValueAtTime(f * det, t);
+    o.connect(bp); o.start(t); o.stop(t + dur + 0.02);
+  });
+  bp.connect(g).connect(a.destination);
+}
+
+const PARIS_POPS = { china: parisChina, pastry: parisPastry, musette: parisMusette };
+document.querySelectorAll('.card[data-ppop]').forEach(card => {
+  const fn = PARIS_POPS[card.dataset.ppop];
+  const tiers = card.querySelector('.tiers');
+  PARIS_TIER_NAMES.forEach((name, i) => {
+    const b = document.createElement('button');
+    b.className = 'tier-btn';
+    b.innerHTML = `<span class="n">tier ${i}</span><span class="pn">${name}</span>`;
+    b.onclick = () => fn(i);
+    tiers.appendChild(b);
+  });
+  card.querySelector('[data-act=run]').onclick = () => {
+    const t0 = ac().currentTime + 0.02;
+    PARIS_TIER_NAMES.forEach((_, i) => fn(i, t0 + i * 0.13));
+  };
+});
+
+// Paris collisions
+function parisSaucer(impact) { // delicate china tap — daintier + quieter than default clink
+  const a = ac(), t = a.currentTime;
+  const vol = Math.min(0.11, impact * 0.026);
+  if (vol < 0.011) return;
+  const base = 2600 + Math.random() * 1000;
+  [[1, 0.08], [2.7, 0.05]].forEach(([m, dec], i) => {
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(base * m, t);
+    g.gain.setValueAtTime(vol * (i === 0 ? 1 : 0.4), t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
+    o.connect(g).connect(a.destination); o.start(t); o.stop(t + dec + 0.02);
+  });
+}
+function parisPastryBump(impact) { // soft dusted thud — pastry on plate
+  const a = ac(), t = a.currentTime;
+  const vol = Math.min(0.26, impact * 0.06);
+  if (vol < 0.018) return;
+  const base = 180 + Math.random() * 90;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(base, t);
+  o.frequency.exponentialRampToValueAtTime(base * 0.6, t + 0.1);
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
+  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.17);
+  pnoise(t, 0.06, vol * 0.7, 'lowpass', 800);
+}
+document.querySelectorAll('[data-pclink]').forEach(b => b.onclick = () => {
+  const [kind, imp] = b.dataset.pclink.split(':');
+  (kind === 'saucer' ? parisSaucer : parisPastryBump)(+imp);
+});
+
+// Paris coins
+function parisCoinDefault(when) { // mirrors the shipping coinTick() blip
+  const a = ac(), t = when;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = 'square'; o.frequency.setValueAtTime(1568, t);
+  o.frequency.setValueAtTime(2093, t + 0.04);
+  g.gain.setValueAtTime(0.05, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.13);
+}
+function parisCoinBell(when) { // tiny service-bell ding, pitch wobbles per coin
+  const a = ac(), t = when;
+  const f = 2093 * (1 + (Math.random() - 0.5) * 0.05);
+  [[1, 0.07, 0.22], [2.67, 0.025, 0.12]].forEach(([m, vol, dec]) => {
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(f * m, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
+    o.connect(g).connect(a.destination); o.start(t); o.stop(t + dec + 0.02);
+  });
+}
+document.querySelectorAll('[data-pcoin]').forEach(b => b.onclick = () => {
+  const [kind, n] = b.dataset.pcoin.split(':');
+  const fn = kind === 'bell' ? parisCoinBell : parisCoinDefault;
+  const t0 = ac().currentTime + 0.02;
+  for (let i = 0; i < +n; i++) fn(t0 + i * 0.11);
+});
+
+// ================= Game over (shared by all maps) =================
+// A · Gently down: three warm descending notes, soft low C under the last one
+function goDown() {
+  const a = ac(), t = a.currentTime + 0.02;
+  [659.25, 523.25, 392.00].forEach((f, i) => { // E5 C5 G4
+    const st = t + i * 0.22, last = i === 2;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = 'triangle'; o.frequency.setValueAtTime(f, st);
+    g.gain.setValueAtTime(0.0001, st);
+    g.gain.exponentialRampToValueAtTime(last ? 0.16 : 0.14, st + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, st + (last ? 0.8 : 0.3));
+    o.connect(g).connect(a.destination); o.start(st); o.stop(st + (last ? 0.85 : 0.34));
+  });
+  const st = t + 0.44; // soft low C3 landing under the G4
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(130.81, st);
+  g.gain.setValueAtTime(0.0001, st);
+  g.gain.exponentialRampToValueAtTime(0.08, st + 0.04);
+  g.gain.exponentialRampToValueAtTime(0.0001, st + 0.9);
+  o.connect(g).connect(a.destination); o.start(st); o.stop(st + 0.95);
+}
+// B · Last-call bell: two mellow low tolls — "the bar is closing"
+function goLastCall() {
+  const a = ac(), t = a.currentTime + 0.02;
+  [0, 0.55].forEach((dt, n) => {
+    const base = 392, vol = n === 0 ? 0.13 : 0.10; // second toll a touch softer
+    [[1, 1], [2.4, 0.35], [4.2, 0.12]].forEach(([m, amp]) => {
+      const dec = 1.1 / Math.sqrt(m);
+      const o = a.createOscillator(), g = a.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(base * m, t + dt);
+      g.gain.setValueAtTime(0.0001, t + dt);
+      g.gain.exponentialRampToValueAtTime(vol * amp, t + dt + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dt + dec);
+      o.connect(g).connect(a.destination); o.start(t + dt); o.stop(t + dt + dec + 0.03);
+    });
+  });
+}
+// C · Slide & plop: comedic slide-whistle deflate with a soft plop landing
+function goSlide() {
+  const a = ac(), t = a.currentTime + 0.02;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = 'triangle';
+  o.frequency.setValueAtTime(950, t);
+  o.frequency.exponentialRampToValueAtTime(340, t + 0.55);
+  const lfo = a.createOscillator(), lg = a.createGain(); // slide-whistle warble
+  lfo.frequency.value = 7; lg.gain.value = 14;
+  lfo.connect(lg).connect(o.frequency); lfo.start(t); lfo.stop(t + 0.6);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.12, t + 0.03);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.62);
+  const tp = t + 0.6; // plop
+  const o2 = a.createOscillator(), g2 = a.createGain();
+  o2.type = 'sine'; o2.frequency.setValueAtTime(180, tp);
+  o2.frequency.exponentialRampToValueAtTime(55, tp + 0.1);
+  g2.gain.setValueAtTime(0.2, tp);
+  g2.gain.exponentialRampToValueAtTime(0.0001, tp + 0.13);
+  o2.connect(g2).connect(a.destination); o2.start(tp); o2.stop(tp + 0.15);
+  pnoise(tp, 0.03, 0.1, 'lowpass', 500);
+}
+// D · Bittersweet resolve: descending line that lands on a warm low major chord —
+// "well played, the table's closed"
+function goResolve() {
+  const a = ac(), t = a.currentTime + 0.02;
+  [783.99, 659.25, 523.25].forEach((f, i) => { // G5 E5 C5
+    const st = t + i * 0.15;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = 'triangle'; o.frequency.setValueAtTime(f, st);
+    g.gain.setValueAtTime(0.0001, st);
+    g.gain.exponentialRampToValueAtTime(0.11, st + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, st + 0.28);
+    o.connect(g).connect(a.destination); o.start(st); o.stop(st + 0.3);
+  });
+  const tc = t + 0.5;
+  [261.63, 329.63, 392.00].forEach(f => { // C4 E4 G4, soft swell
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(f, tc);
+    g.gain.setValueAtTime(0.0001, tc);
+    g.gain.linearRampToValueAtTime(0.07, tc + 0.12);
+    g.gain.exponentialRampToValueAtTime(0.0001, tc + 0.9);
+    o.connect(g).connect(a.destination); o.start(tc); o.stop(tc + 0.95);
+  });
+}
+const GO = { down: goDown, lastcall: goLastCall, slide: goSlide, resolve: goResolve };
+document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => {
+  GO[b.dataset.go]();
+  if (document.getElementById('go-fanfare').checked) setTimeout(fanfareShipped, 1400);
+});
 
 ['scale', 'root', 'dir'].forEach(id =>
   document.getElementById(id).addEventListener('change', () =>

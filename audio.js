@@ -11,6 +11,7 @@ function setSoundProfile(mapId) {
   else if (mapId === 'mage') soundProfile = 'arcane';
   else if (mapId === 'teddy') soundProfile = 'plush';
   else if (mapId === 'melody') soundProfile = 'music';
+  else if (mapId === 'paris') soundProfile = 'cafe';
   else soundProfile = 'default';
 }
 
@@ -31,6 +32,7 @@ function pop(tier) {
   if (soundProfile === 'arcane')  { popArcane(tier);  return; }
   if (soundProfile === 'plush')   { popPlush(tier);   return; }
   if (soundProfile === 'music')   { popMusical(tier); return; }
+  if (soundProfile === 'cafe')    { popCafe(tier);    return; }
   const a = ac(), t = a.currentTime;
   const f = 220 * Math.pow(1.18, tier);
   const o = a.createOscillator(), g = a.createGain();
@@ -94,6 +96,7 @@ function clink(impact) {
   if (soundProfile === 'arcane')  { clinkArcane(impact);  return; }
   if (soundProfile === 'plush')   { clinkPlush(impact);   return; }
   if (soundProfile === 'music')   { clinkMusical(impact); return; }
+  if (soundProfile === 'cafe')    { clinkCafe(impact);    return; }
   const a = ac(), t = a.currentTime;
   const vol = Math.min(0.14, impact * 0.032);
   if (vol < 0.012) return;
@@ -366,6 +369,72 @@ function popMusical(tier) {
   src.connect(ng).connect(a.destination); src.start(t);
 }
 
+// Paris map: porcelain teacup "ting" — a teaspoon tapped on china. Inharmonic
+// bell partials with a faint upward curl + a tiny spoon-tap click. Daintier and
+// brighter than Kyoto's ceramic profile; pitch rises with tier (9-tier chain).
+// Won the 2026-07-19 sound-lab audition (tools/sound-lab.html).
+function popCafe(tier) {
+  const a = ac(), t = a.currentTime;
+  const base = 740 * Math.pow(1.09, tier);
+  [[1, 1, 0.4], [2.53, 0.42, 0.25], [4.9, 0.15, 0.12]].forEach(([m, amp, dec]) => {
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(base * m, t);
+    o.frequency.exponentialRampToValueAtTime(base * m * 1.015, t + dec);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.2 * amp, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
+    o.connect(g).connect(a.destination); o.start(t); o.stop(t + dec + 0.03);
+  });
+  // spoon-tap click at the front
+  const len = Math.floor(a.sampleRate * 0.008);
+  const buf = a.createBuffer(1, len, a.sampleRate);
+  const ch = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 1.6);
+  const src = a.createBufferSource(); src.buffer = buf;
+  const hp = a.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 3000;
+  const ng = a.createGain(); ng.gain.setValueAtTime(0.1, t);
+  src.connect(hp).connect(ng).connect(a.destination); src.start(t);
+}
+
+// Paris map: soft pastry-bump collision — a dusted thud, pastry landing on a
+// plate. The items are pastries, so no china clink between them.
+function clinkCafe(impact) {
+  const a = ac(), t = a.currentTime;
+  const vol = Math.min(0.26, impact * 0.06);
+  if (vol < 0.018) return;
+  const base = 180 + Math.random() * 90;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(base, t);
+  o.frequency.exponentialRampToValueAtTime(base * 0.6, t + 0.1);
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
+  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.17);
+  // powdered-sugar dust
+  const len = Math.floor(a.sampleRate * 0.06);
+  const buf = a.createBuffer(1, len, a.sampleRate);
+  const ch = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 1.6);
+  const src = a.createBufferSource(); src.buffer = buf;
+  const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 800;
+  const ng = a.createGain(); ng.gain.setValueAtTime(vol * 0.7, t);
+  src.connect(lp).connect(ng).connect(a.destination); src.start(t);
+}
+
+// Paris map: tiny service-bell "ding" per coin. A slight random pitch wobble
+// per coin keeps a 110ms shower from drilling.
+function coinTickCafe() {
+  const a = ac(), t = a.currentTime;
+  const f = 2093 * (1 + (Math.random() - 0.5) * 0.05);
+  [[1, 0.07, 0.22], [2.67, 0.025, 0.12]].forEach(([m, vol, dec]) => {
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(f * m, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
+    o.connect(g).connect(a.destination); o.start(t); o.stop(t + dec + 0.02);
+  });
+}
+
 // Triumphant flourish for a beaten high score — a bright rising major arpeggio
 // with a shimmering sparkle tail. Map-agnostic: always celebratory.
 // New-best celebration: a proper brass "ta-ta-ta-daaa!". A sawtooth through a
@@ -442,9 +511,36 @@ function levelUp() {
   o2.connect(g2).connect(a.destination); o2.start(ts); o2.stop(ts + 0.32);
 }
 
+// Game-over chime, shared by every map: three warm descending notes (E5 C5 G4)
+// landing on a soft low C — "the café is closing", not "you failed". Called
+// from showGameOver() in ui.js on every run EXCEPT a new best, where the
+// fanfare() trumpets take over instead (both at once would clash).
+function gameOver() {
+  if (muted) return;
+  const a = ac(), t = a.currentTime;
+  [659.25, 523.25, 392.00].forEach((f, i) => {
+    const st = t + i * 0.22, last = i === 2;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = 'triangle'; o.frequency.setValueAtTime(f, st);
+    g.gain.setValueAtTime(0.0001, st);
+    g.gain.exponentialRampToValueAtTime(last ? 0.16 : 0.14, st + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, st + (last ? 0.8 : 0.3));
+    o.connect(g).connect(a.destination); o.start(st); o.stop(st + (last ? 0.85 : 0.34));
+  });
+  // soft low C3 landing under the final note
+  const st = t + 0.44;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(130.81, st);
+  g.gain.setValueAtTime(0.0001, st);
+  g.gain.exponentialRampToValueAtTime(0.08, st + 0.04);
+  g.gain.exponentialRampToValueAtTime(0.0001, st + 0.9);
+  o.connect(g).connect(a.destination); o.start(st); o.stop(st + 0.95);
+}
+
 function coinTick() {
   if (muted) return;
   if (soundProfile === 'music') { coinTickMusical(); return; }
+  if (soundProfile === 'cafe')  { coinTickCafe();    return; }
   const a = ac(), t = a.currentTime;
   const o = a.createOscillator(), g = a.createGain();
   o.type = 'square'; o.frequency.setValueAtTime(1568, t);

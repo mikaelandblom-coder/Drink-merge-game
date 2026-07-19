@@ -199,7 +199,10 @@ function customerLayout(slot) {
   // squeeze is 1 (unchanged layout) for every horizon >= 150.
   const squeeze = Math.max(0.46, Math.min(1, HORIZON / 150));
   const cx = W * (0.5 + 0.26 * squeeze * (slot - 1)); // three slots across the strip
-  const ch = HORIZON * 0.46;                 // customer sprite height
+  // Customer sprite height scales with the horizon strip, but capped at what
+  // the tallest tuned map (Melody Lane, horizon 233) produces — deep-horizon
+  // maps (Paris ~336, Kyoto Small ~320) otherwise render giant customers.
+  const ch = Math.min(108, HORIZON * 0.46);
   // Bubble scales with the strip but never below 24px — it's also the tap
   // target for serving, and Mage Tower's strip would shrink it to ~17px.
   const fs = Math.min(44, Math.max(24, HORIZON * 0.26));

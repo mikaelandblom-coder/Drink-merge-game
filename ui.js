@@ -114,6 +114,8 @@ function showGameOver(state, key) {
   const scores = getScores(key);
 
   // Celebrate topping the board: a beaten record, or the very first score set.
+  // A new best gets the fanfare; every other run ends on the soft gameOver()
+  // chime instead (never both — they'd clash).
   let banner = '';
   if (score > 0 && score > prevBest && prevBest > 0) {
     banner = `<div class="new-best">🏆 New high score!
@@ -121,8 +123,11 @@ function showGameOver(state, key) {
     </div>`;
     fanfare();
     spawnConfetti(document.getElementById('over'));
-  } else if (score > 0 && prevBest === 0 && result.rank === 1) {
-    banner = `<div class="new-best subtle">✨ First score on the board!</div>`;
+  } else {
+    if (score > 0 && prevBest === 0 && result.rank === 1) {
+      banner = `<div class="new-best subtle">✨ First score on the board!</div>`;
+    }
+    gameOver();
   }
 
   const rowsHtml = scores.map((e, i) => {

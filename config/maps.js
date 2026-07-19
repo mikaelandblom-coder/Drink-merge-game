@@ -121,6 +121,7 @@ if (typeof MAP_HITBOXES !== 'undefined') {
       m.cornerWalls = hb.cornerWalls;
       if (hb.horizon !== undefined) m.horizon = hb.horizon;
       if (hb.freeLine !== undefined) m.freeLine = hb.freeLine;
+      if (hb.dangerLine !== undefined) m.dangerLine = hb.dangerLine;
     }
   }
 }

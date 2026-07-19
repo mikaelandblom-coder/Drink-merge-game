@@ -87,12 +87,15 @@ let mapWalls = [];
 // ("interacts with the environment") the moment it crosses above the line,
 // touches another item, or settles — and stays solid forever after.
 const CAT_TRAY = 0x0002;          // collision category of the traced walls
+const GHOST_STEER_MS = 150;       // ghost age before escape-steering may kick in
+const GHOST_STEER    = 0.7;       // px/frame of velocity bent toward the centroid
 let FREE_WY = Infinity;           // physics y of the free line (Infinity = off)
 let COMBOS_ENABLED = false;       // cascade-merge multipliers (set per run in startGame)
 let HAPPY_HOUR = false;           // orders mode (set per run in startGame; forces combos off)
 let ACTIVE_SIZE = null;           // table-size variant of the current run (for score keys)
 let trayWalls = [];               // just the traced boundary bodies
 let trayPoly  = [];               // boundary polygon (physics coords) for the inside test
+let trayCentroid = null;          // area centroid of trayPoly — steering target for escaped ghosts
 
 function solidify(d) {
   d.plugin.ghost = false;
@@ -146,6 +149,7 @@ function applyMapWalls(map) {
 
   trayWalls = [];
   trayPoly  = [];
+  trayCentroid = null;
   if (map.cornerWalls) {
     for (const c of map.cornerWalls) {
       trayWalls.push(Bodies.rectangle(c.x, c.y, c.len + WALL_OVERLAP, WALL_THICK, {
@@ -155,13 +159,25 @@ function applyMapWalls(map) {
     }
     mapWalls.push(...trayWalls);
     trayPoly = buildTrayPoly(map.cornerWalls);
+    // Area centroid of the traced polygon (implicitly closed across the
+    // launcher mouth) — where escaped ghosts get steered back toward.
+    let a2 = 0, cx = 0, cy = 0;
+    for (let i = 0, j = trayPoly.length - 1; i < trayPoly.length; j = i++) {
+      const cr = trayPoly[j].x * trayPoly[i].y - trayPoly[i].x * trayPoly[j].y;
+      a2 += cr;
+      cx += (trayPoly[j].x + trayPoly[i].x) * cr;
+      cy += (trayPoly[j].y + trayPoly[i].y) * cr;
+    }
+    if (a2) trayCentroid = { x: cx / (3 * a2), y: cy / (3 * a2) };
   }
   Composite.add(engine.world, mapWalls);
 }
 
 // ---------- game state ----------
 const DROP_MAX   = 4;
-const DANGER_WY  = H - 150;
+// Game-over threshold (physics y). Per-boundary via the hitbox editor's
+// dangerLine (stored flat, converted in startGame); H-150 is the default.
+let DANGER_WY    = H - 150;
 
 const COMBO_WINDOW = 1400;  // ms; merges within this of each other chain a combo
 
@@ -276,8 +292,14 @@ function resetState() {
 function countShot() {
   if (!HAPPY_HOUR) return;
   state.shotsFired++;
-  while (state.shotsFired >= state.nextCustomerAtShot &&
-         state.customers.length < HH_QUEUE_MAX) {
+  if (state.customers.length >= HH_QUEUE_MAX) {
+    // Queue full: the arrival clock idles instead of accruing a backlog, so a
+    // freed slot still costs HH_SHOTS_BETWEEN shots before the next walk-in —
+    // serving never triggers an instant replacement.
+    state.nextCustomerAtShot = state.shotsFired + HH_SHOTS_BETWEEN;
+    return;
+  }
+  if (state.shotsFired >= state.nextCustomerAtShot) {
     spawnCustomer();
     state.nextCustomerAtShot = state.shotsFired + HH_SHOTS_BETWEEN;
   }
@@ -544,6 +566,30 @@ function stepPhysics() {
     if (d.plugin.ghost && d.position.y < FREE_WY &&
         insideTray(d.position.x, d.position.y)) trySolidify(d);
   }
+  // A ghost still outside the traced shape after its launch transit is an
+  // escaped shot (an angled shot that missed the launcher mouth — easy on
+  // Paris, whose mouth is narrow). Steer it toward the tray centroid each
+  // frame until it curves inside and solidifies. The age gate keeps normal
+  // shots untouched: at speed 27 they are deep inside (or solid) long before
+  // GHOST_STEER_MS, so aim feel doesn't change.
+  if (trayCentroid) {
+    const now = performance.now();
+    for (const d of state.drinks) {
+      if (!d.plugin.ghost || now - d.plugin.born < GHOST_STEER_MS) continue;
+      const p = d.position;
+      if (insideTray(p.x, p.y)) continue;
+      let vx = d.velocity.x, vy = d.velocity.y;
+      // Mirror the outward component at the world edge so an escapee never
+      // coasts far off-screen (steering alone lets a fast shallow shot travel
+      // ~400px out before it turns around, then fling back in too hard).
+      if ((p.x < 0 && vx < 0) || (p.x > W && vx > 0)) vx *= -0.5;
+      if (p.y > H && vy > 0) vy *= -0.5;
+      const dx = trayCentroid.x - p.x, dy = trayCentroid.y - p.y;
+      const len = Math.hypot(dx, dy) || 1;
+      Body.setVelocity(d, { x: vx + dx / len * GHOST_STEER,
+                            y: vy + dy / len * GHOST_STEER });
+    }
+  }
   // With no side walls (splines are the only lateral containment), a shallow
   // rail shot can slip past the traced boundary near the launcher opening and
   // leave the world — as a ghost, or as a solid body on maps without a free
@@ -613,8 +659,9 @@ function startGame(map, opts = {}) {
     const hb = MAP_HITBOXES[hitboxKey(ACTIVE_MAP, chosenSize)] || MAP_HITBOXES[ACTIVE_MAP.id];
     if (hb) {
       ACTIVE_MAP.cornerWalls = hb.cornerWalls;
-      ACTIVE_MAP.horizon     = hb.horizon;   // undefined -> game default below
-      ACTIVE_MAP.freeLine    = hb.freeLine;  // undefined -> free-line off below
+      ACTIVE_MAP.horizon     = hb.horizon;    // undefined -> game default below
+      ACTIVE_MAP.freeLine    = hb.freeLine;   // undefined -> free-line off below
+      ACTIVE_MAP.dangerLine  = hb.dangerLine; // undefined -> default H-150 below
     }
   }
   HORIZON = (ACTIVE_MAP.horizon !== undefined) ? ACTIVE_MAP.horizon : DEFAULT_HORIZON;
@@ -622,6 +669,9 @@ function startGame(map, opts = {}) {
   // constant physics y, so convert once here
   FREE_WY = (ACTIVE_MAP.freeLine !== undefined && ACTIVE_MAP.freeLine < H - 1)
     ? unpersp(0, ACTIVE_MAP.freeLine).y : Infinity;
+  // Danger line: same flat->physics conversion; per-boundary game-over height.
+  DANGER_WY = (ACTIVE_MAP.dangerLine !== undefined)
+    ? unpersp(0, ACTIVE_MAP.dangerLine).y : H - 150;
   applyMapWalls(ACTIVE_MAP);
   initXpBar();   // after HORIZON is set — the vertical bar's top tracks it
   loadMapAssets(ACTIVE_MAP, bgSrc);
