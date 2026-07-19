@@ -226,7 +226,13 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
 /* Confetti burst behind the new-best banner (pieces built in ui.js) */
 #confetti {
   position: absolute; inset: 0; overflow: hidden;
-  pointer-events: none; border-radius: 14px;
+  pointer-events: none;
+  /* NO border-radius here: a rounded-corner clip over the 70 individually
+     composited (WAAPI) pieces made iOS WebKit drop the whole burst for a
+     beat mid-fall (all-at-once blink, observed on iPad 2026-07-19 — same
+     family as the XP bar's composited border-image bug). A rectangular
+     clip is the well-behaved path; the square corners sit over #over's
+     dark backdrop where the difference is invisible. */
 }
 /* The fall itself is a WAAPI animation built in ui.js — keyframes that read
    custom properties (the old var(--dx) approach) are ineligible for the
