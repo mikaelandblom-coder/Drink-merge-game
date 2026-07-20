@@ -15,6 +15,27 @@ function setSoundProfile(mapId) {
   else soundProfile = 'default';
 }
 
+// Master SFX output bus. On iOS, ctx.destination is tied to the RINGER/alerts
+// channel — with that channel muted or at zero volume, every synth sound is
+// silent while <audio> music plays on the media channel (diagnosed on Mai's
+// iPad 2026-07-20: context state running, render clock advancing, direct beep
+// inaudible, MediaStream-routed beep audible). So on iOS the bus feeds a
+// MediaStreamDestination piped into an <audio> element — same channel as the
+// music. Everywhere else it connects straight to ctx.destination.
+let sfxBus = null, sfxEl = null;
+let SFX_VIA_ELEMENT = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS reports as Mac
+
+function routeSfx() {
+  if (!SFX_VIA_ELEMENT) { sfxBus.connect(actx.destination); return; }
+  const dest = actx.createMediaStreamDestination();
+  sfxBus.connect(dest);
+  sfxEl = document.createElement('audio');
+  sfxEl.setAttribute('playsinline', '');
+  sfxEl.srcObject = dest.stream;
+  sfxEl.play().catch(() => {});   // ac() runs inside a tap gesture
+}
+
 function ac() {
   if (!actx) {
     actx = new (window.AudioContext || window.webkitAudioContext)();
@@ -22,12 +43,16 @@ function ac() {
     // lock, app switch or Siri; the bgm <audio> element recovers on its own,
     // but synth SFX stay silent until the context is explicitly resumed.
     actx.onstatechange = () => { if (!document.hidden) resumeCtx(); };
+    sfxBus = actx.createGain();
+    routeSfx();
   }
   return actx;
 }
 
 function resumeCtx() {
   if (actx && actx.state !== 'running') actx.resume().catch(() => {});
+  // iOS pauses media elements on background — the SFX carrier included.
+  if (sfxEl && sfxEl.paused) sfxEl.play().catch(() => {});
 }
 
 function initAudio() {
@@ -53,13 +78,13 @@ function pop(tier) {
   o.frequency.exponentialRampToValueAtTime(f * 1.8, t + 0.09);
   g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t + 0.01);
   g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
-  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.25);
+  o.connect(g).connect(sfxBus); o.start(t); o.stop(t + 0.25);
 
   const o2 = a.createOscillator(), g2 = a.createGain();
   o2.type = 'triangle'; o2.frequency.setValueAtTime(f * 2.5, t);
   g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(0.08, t + 0.02);
   g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
-  o2.connect(g2).connect(a.destination); o2.start(t); o2.stop(t + 0.32);
+  o2.connect(g2).connect(sfxBus); o2.start(t); o2.stop(t + 0.32);
 }
 
 // Pho map: bubbly "bloop" merge sound — like soup combining in a pot
@@ -72,13 +97,13 @@ function popWood(tier) {
   o.frequency.exponentialRampToValueAtTime(f * 0.8, t + 0.18);
   g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.28, t + 0.015);
   g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
-  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.3);
+  o.connect(g).connect(sfxBus); o.start(t); o.stop(t + 0.3);
   // Soft thump underneath
   const o2 = a.createOscillator(), g2 = a.createGain();
   o2.type = 'triangle'; o2.frequency.setValueAtTime(80 + tier * 12, t);
   o2.frequency.exponentialRampToValueAtTime(40, t + 0.12);
   g2.gain.setValueAtTime(0.18, t); g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
-  o2.connect(g2).connect(a.destination); o2.start(t); o2.stop(t + 0.15);
+  o2.connect(g2).connect(sfxBus); o2.start(t); o2.stop(t + 0.15);
 }
 
 function shoot() {
@@ -93,13 +118,13 @@ function shoot() {
   f.frequency.setValueAtTime(700, t); f.frequency.exponentialRampToValueAtTime(2200, t + 0.12);
   const g = a.createGain();
   g.gain.setValueAtTime(0.22, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
-  src.connect(f).connect(g).connect(a.destination); src.start(t);
+  src.connect(f).connect(g).connect(sfxBus); src.start(t);
 
   const o = a.createOscillator(), g2 = a.createGain();
   o.type = 'triangle'; o.frequency.setValueAtTime(320, t);
   o.frequency.exponentialRampToValueAtTime(520, t + 0.08);
   g2.gain.setValueAtTime(0.1, t); g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
-  o.connect(g2).connect(a.destination); o.start(t); o.stop(t + 0.14);
+  o.connect(g2).connect(sfxBus); o.start(t); o.stop(t + 0.14);
 }
 
 function clink(impact) {
@@ -124,13 +149,13 @@ function clink(impact) {
     const pv = vol * (i === 0 ? 1 : 0.45 / i);
     g.gain.setValueAtTime(pv, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + decays[i]);
-    o.connect(g).connect(a.destination);
+    o.connect(g).connect(sfxBus);
     o.start(t); o.stop(t + decays[i] + 0.02);
   });
   const o2 = a.createOscillator(), g2 = a.createGain();
   o2.type = 'triangle'; o2.frequency.setValueAtTime(base * 6, t);
   g2.gain.setValueAtTime(vol * 0.5, t); g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.02);
-  o2.connect(g2).connect(a.destination); o2.start(t); o2.stop(t + 0.025);
+  o2.connect(g2).connect(sfxBus); o2.start(t); o2.stop(t + 0.025);
 }
 
 // Pho map: wooden chopstick/bowl "tok" collision sound
@@ -148,7 +173,7 @@ function clinkWood(impact) {
     const pv = vol * (i === 0 ? 1 : 0.5);
     g.gain.setValueAtTime(pv, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
-    o.connect(g).connect(a.destination);
+    o.connect(g).connect(sfxBus);
     o.start(t); o.stop(t + 0.1);
   });
   // Short noise burst for the "attack" click
@@ -160,7 +185,7 @@ function clinkWood(impact) {
   const flt = a.createBiquadFilter(); flt.type = 'bandpass';
   flt.frequency.value = 900; flt.Q.value = 1.5;
   const ng = a.createGain(); ng.gain.setValueAtTime(vol * 0.6, t);
-  src.connect(flt).connect(ng).connect(a.destination); src.start(t);
+  src.connect(flt).connect(ng).connect(sfxBus); src.start(t);
 }
 
 // Music-shop map: hollow wooden-body knock, like tapping the side of a guitar —
@@ -178,7 +203,7 @@ function clinkMusical(impact) {
     const pv = vol * (i === 0 ? 1 : 0.4);
     g.gain.setValueAtTime(pv, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
-    o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.11);
+    o.connect(g).connect(sfxBus); o.start(t); o.stop(t + 0.11);
   });
   // soft felt attack — short low-passed noise, no hard edge
   const len = Math.floor(a.sampleRate * 0.02);
@@ -188,7 +213,7 @@ function clinkMusical(impact) {
   const src = a.createBufferSource(); src.buffer = buf;
   const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 700;
   const ng = a.createGain(); ng.gain.setValueAtTime(vol * 0.5, t);
-  src.connect(lp).connect(ng).connect(a.destination); src.start(t);
+  src.connect(lp).connect(ng).connect(sfxBus); src.start(t);
 }
 
 // Kyoto map: soft marimba pop — warm wooden tone like a mochi squish
@@ -201,13 +226,13 @@ function popCeramic(tier) {
   o.frequency.exponentialRampToValueAtTime(base * 0.88, t + 0.12);
   g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.3, t + 0.012);
   g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
-  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.32);
+  o.connect(g).connect(sfxBus); o.start(t); o.stop(t + 0.32);
   // Soft harmonic — just a touch of sweetness on top
   const o2 = a.createOscillator(), g2 = a.createGain();
   o2.type = 'sine'; o2.frequency.setValueAtTime(base * 2.0, t);
   g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(0.1, t + 0.01);
   g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
-  o2.connect(g2).connect(a.destination); o2.start(t); o2.stop(t + 0.2);
+  o2.connect(g2).connect(sfxBus); o2.start(t); o2.stop(t + 0.2);
   // Tiny soft pop at the front — the merge "squish"
   const len = Math.floor(a.sampleRate * 0.03);
   const buf = a.createBuffer(1, len, a.sampleRate);
@@ -216,7 +241,7 @@ function popCeramic(tier) {
   const src = a.createBufferSource(); src.buffer = buf;
   const flt = a.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 600;
   const ng = a.createGain(); ng.gain.setValueAtTime(0.18, t);
-  src.connect(flt).connect(ng).connect(a.destination); src.start(t);
+  src.connect(flt).connect(ng).connect(sfxBus); src.start(t);
 }
 
 // Kyoto map: soft food bump — mochi/dango squishing together, no hard edges
@@ -232,7 +257,7 @@ function clinkCeramic(impact) {
   o.frequency.exponentialRampToValueAtTime(base * 0.55, t + 0.1);
   g.gain.setValueAtTime(vol, t);
   g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
-  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.2);
+  o.connect(g).connect(sfxBus); o.start(t); o.stop(t + 0.2);
   // Squish texture — noise burst, less aggressively filtered so it's audible
   const len = Math.floor(a.sampleRate * 0.07);
   const buf = a.createBuffer(1, len, a.sampleRate);
@@ -241,7 +266,7 @@ function clinkCeramic(impact) {
   const src = a.createBufferSource(); src.buffer = buf;
   const flt = a.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 900;
   const ng = a.createGain(); ng.gain.setValueAtTime(vol * 0.9, t);
-  src.connect(flt).connect(ng).connect(a.destination); src.start(t);
+  src.connect(flt).connect(ng).connect(sfxBus); src.start(t);
 }
 
 // Mage map: shimmering magical "cast" chime for a merge — a bright bell that
@@ -255,21 +280,21 @@ function popArcane(tier) {
   o.frequency.exponentialRampToValueAtTime(base * 1.5, t + 0.12);
   g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.24, t + 0.01);
   g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
-  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.55);
+  o.connect(g).connect(sfxBus); o.start(t); o.stop(t + 0.55);
   // Glassy overtone
   const o2 = a.createOscillator(), g2 = a.createGain();
   o2.type = 'sine'; o2.frequency.setValueAtTime(base * 3.02, t);
   o2.frequency.exponentialRampToValueAtTime(base * 3.8, t + 0.12);
   g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(0.08, t + 0.015);
   g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
-  o2.connect(g2).connect(a.destination); o2.start(t); o2.stop(t + 0.35);
+  o2.connect(g2).connect(sfxBus); o2.start(t); o2.stop(t + 0.35);
   // High sparkle tail
   const o3 = a.createOscillator(), g3 = a.createGain();
   o3.type = 'triangle'; o3.frequency.setValueAtTime(base * 5.5, t + 0.04);
   o3.frequency.exponentialRampToValueAtTime(base * 7, t + 0.2);
   g3.gain.setValueAtTime(0.0001, t + 0.04); g3.gain.exponentialRampToValueAtTime(0.05, t + 0.07);
   g3.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
-  o3.connect(g3).connect(a.destination); o3.start(t + 0.04); o3.stop(t + 0.3);
+  o3.connect(g3).connect(sfxBus); o3.start(t + 0.04); o3.stop(t + 0.3);
 }
 
 // Mage map: soft crystalline "tink" collision — light, glassy, with a quick ring.
@@ -286,7 +311,7 @@ function clinkArcane(impact) {
     const pv = vol * (i === 0 ? 1 : 0.4);
     g.gain.setValueAtTime(pv, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
-    o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.14);
+    o.connect(g).connect(sfxBus); o.start(t); o.stop(t + 0.14);
   });
 }
 
@@ -305,7 +330,7 @@ function popPlush(tier) {
   o.frequency.exponentialRampToValueAtTime(base * 0.9, t + 0.16);
   g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.26, t + 0.015);
   g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
-  o.connect(f).connect(g).connect(a.destination); o.start(t); o.stop(t + 0.24);
+  o.connect(f).connect(g).connect(sfxBus); o.start(t); o.stop(t + 0.24);
   // soft stuffing poof underneath
   const len = Math.floor(a.sampleRate * 0.09);
   const buf = a.createBuffer(1, len, a.sampleRate);
@@ -314,7 +339,7 @@ function popPlush(tier) {
   const src = a.createBufferSource(); src.buffer = buf;
   const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500;
   const ng = a.createGain(); ng.gain.setValueAtTime(0.16, t);
-  src.connect(lp).connect(ng).connect(a.destination); src.start(t);
+  src.connect(lp).connect(ng).connect(sfxBus); src.start(t);
 }
 
 // Teddy map: fabric poof collision — the softest profile in the game, a plush
@@ -331,7 +356,7 @@ function clinkPlush(impact) {
   o.frequency.exponentialRampToValueAtTime(base * 0.55, t + 0.11);
   g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.015);
   g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
-  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.18);
+  o.connect(g).connect(sfxBus); o.start(t); o.stop(t + 0.18);
   // fabric brush texture
   const len = Math.floor(a.sampleRate * 0.08);
   const buf = a.createBuffer(1, len, a.sampleRate);
@@ -340,7 +365,7 @@ function clinkPlush(impact) {
   const src = a.createBufferSource(); src.buffer = buf;
   const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 650;
   const ng = a.createGain(); ng.gain.setValueAtTime(vol * 0.8, t);
-  src.connect(lp).connect(ng).connect(a.destination); src.start(t);
+  src.connect(lp).connect(ng).connect(sfxBus); src.start(t);
 }
 
 // Music-shop map: a plucked-string merge (ukulele / harp). Each tier plays the
@@ -364,14 +389,14 @@ function popMusical(tier) {
   g.gain.setValueAtTime(0.0001, t);
   g.gain.exponentialRampToValueAtTime(0.3, t + 0.004);
   g.gain.exponentialRampToValueAtTime(0.0001, t + sustain);
-  o.connect(lp).connect(g).connect(a.destination); o.start(t); o.stop(t + sustain + 0.05);
+  o.connect(lp).connect(g).connect(sfxBus); o.start(t); o.stop(t + sustain + 0.05);
   // warm body — pure fundamental under the saw so single merges aren't thin
   const ob = a.createOscillator(), gb = a.createGain();
   ob.type = 'sine'; ob.frequency.setValueAtTime(f, t);
   gb.gain.setValueAtTime(0.0001, t);
   gb.gain.exponentialRampToValueAtTime(0.135, t + 0.01);
   gb.gain.exponentialRampToValueAtTime(0.0001, t + sustain * 0.9);
-  ob.connect(gb).connect(a.destination); ob.start(t); ob.stop(t + sustain);
+  ob.connect(gb).connect(sfxBus); ob.start(t); ob.stop(t + sustain);
   // tiny noise pluck for the string attack
   const len = Math.floor(a.sampleRate * 0.012);
   const buf = a.createBuffer(1, len, a.sampleRate);
@@ -379,7 +404,7 @@ function popMusical(tier) {
   for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / len);
   const src = a.createBufferSource(); src.buffer = buf;
   const ng = a.createGain(); ng.gain.setValueAtTime(0.15, t);
-  src.connect(ng).connect(a.destination); src.start(t);
+  src.connect(ng).connect(sfxBus); src.start(t);
 }
 
 // Paris map: porcelain teacup "ting" — a teaspoon tapped on china. Inharmonic
@@ -396,7 +421,7 @@ function popCafe(tier) {
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(0.2 * amp, t + 0.004);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
-    o.connect(g).connect(a.destination); o.start(t); o.stop(t + dec + 0.03);
+    o.connect(g).connect(sfxBus); o.start(t); o.stop(t + dec + 0.03);
   });
   // spoon-tap click at the front
   const len = Math.floor(a.sampleRate * 0.008);
@@ -406,7 +431,7 @@ function popCafe(tier) {
   const src = a.createBufferSource(); src.buffer = buf;
   const hp = a.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 3000;
   const ng = a.createGain(); ng.gain.setValueAtTime(0.1, t);
-  src.connect(hp).connect(ng).connect(a.destination); src.start(t);
+  src.connect(hp).connect(ng).connect(sfxBus); src.start(t);
 }
 
 // Paris map: soft pastry-bump collision — a dusted thud, pastry landing on a
@@ -421,7 +446,7 @@ function clinkCafe(impact) {
   o.frequency.exponentialRampToValueAtTime(base * 0.6, t + 0.1);
   g.gain.setValueAtTime(vol, t);
   g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
-  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.17);
+  o.connect(g).connect(sfxBus); o.start(t); o.stop(t + 0.17);
   // powdered-sugar dust
   const len = Math.floor(a.sampleRate * 0.06);
   const buf = a.createBuffer(1, len, a.sampleRate);
@@ -430,7 +455,7 @@ function clinkCafe(impact) {
   const src = a.createBufferSource(); src.buffer = buf;
   const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 800;
   const ng = a.createGain(); ng.gain.setValueAtTime(vol * 0.7, t);
-  src.connect(lp).connect(ng).connect(a.destination); src.start(t);
+  src.connect(lp).connect(ng).connect(sfxBus); src.start(t);
 }
 
 // Paris map: tiny service-bell "ding" per coin. A slight random pitch wobble
@@ -444,7 +469,7 @@ function coinTickCafe() {
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(vol, t + 0.005);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
-    o.connect(g).connect(a.destination); o.start(t); o.stop(t + dec + 0.02);
+    o.connect(g).connect(sfxBus); o.start(t); o.stop(t + dec + 0.02);
   });
 }
 
@@ -474,7 +499,7 @@ function fanfare() {
       lfo.connect(lg).connect(o.frequency);
       lfo.start(st + 0.18); lfo.stop(st + dur);
     }
-    o.connect(lp).connect(g).connect(a.destination);
+    o.connect(lp).connect(g).connect(sfxBus);
     o.start(st); o.stop(st + dur + 0.02);
   };
   // Pickup triplet on G5, then the long C6 with E5+G5 harmony under it.
@@ -493,7 +518,7 @@ function fanfare() {
   g3.gain.setValueAtTime(0.0001, ts);
   g3.gain.exponentialRampToValueAtTime(0.13, ts + 0.02);
   g3.gain.exponentialRampToValueAtTime(0.0001, ts + 0.45);
-  o3.connect(g3).connect(a.destination); o3.start(ts); o3.stop(ts + 0.48);
+  o3.connect(g3).connect(sfxBus); o3.start(ts); o3.stop(ts + 0.48);
 }
 
 // XP level-up (progress.js): a quick bright ascending triad + sparkle.
@@ -511,7 +536,7 @@ function levelUp() {
     g.gain.setValueAtTime(0.0001, st);
     g.gain.exponentialRampToValueAtTime(last ? 0.14 : 0.09, st + 0.02);
     g.gain.exponentialRampToValueAtTime(0.0001, st + (last ? 0.45 : 0.18));
-    o.connect(g).connect(a.destination); o.start(st); o.stop(st + (last ? 0.5 : 0.22));
+    o.connect(g).connect(sfxBus); o.start(st); o.stop(st + (last ? 0.5 : 0.22));
   });
   // faint glass shimmer as the top note lands
   const ts = t + 0.22;
@@ -521,7 +546,7 @@ function levelUp() {
   g2.gain.setValueAtTime(0.0001, ts);
   g2.gain.exponentialRampToValueAtTime(0.05, ts + 0.02);
   g2.gain.exponentialRampToValueAtTime(0.0001, ts + 0.3);
-  o2.connect(g2).connect(a.destination); o2.start(ts); o2.stop(ts + 0.32);
+  o2.connect(g2).connect(sfxBus); o2.start(ts); o2.stop(ts + 0.32);
 }
 
 // Game-over chime, shared by every map: three warm descending notes (E5 C5 G4)
@@ -538,7 +563,7 @@ function gameOver() {
     g.gain.setValueAtTime(0.0001, st);
     g.gain.exponentialRampToValueAtTime(last ? 0.16 : 0.14, st + 0.02);
     g.gain.exponentialRampToValueAtTime(0.0001, st + (last ? 0.8 : 0.3));
-    o.connect(g).connect(a.destination); o.start(st); o.stop(st + (last ? 0.85 : 0.34));
+    o.connect(g).connect(sfxBus); o.start(st); o.stop(st + (last ? 0.85 : 0.34));
   });
   // soft low C3 landing under the final note
   const st = t + 0.44;
@@ -547,7 +572,7 @@ function gameOver() {
   g.gain.setValueAtTime(0.0001, st);
   g.gain.exponentialRampToValueAtTime(0.08, st + 0.04);
   g.gain.exponentialRampToValueAtTime(0.0001, st + 0.9);
-  o.connect(g).connect(a.destination); o.start(st); o.stop(st + 0.95);
+  o.connect(g).connect(sfxBus); o.start(st); o.stop(st + 0.95);
 }
 
 function coinTick() {
@@ -559,7 +584,7 @@ function coinTick() {
   o.type = 'square'; o.frequency.setValueAtTime(1568, t);
   o.frequency.setValueAtTime(2093, t + 0.04);
   g.gain.setValueAtTime(0.05, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
-  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.13);
+  o.connect(g).connect(sfxBus); o.start(t); o.stop(t + 0.13);
 }
 
 // Music-shop coin sound: instead of a repeated blip, each coin plays the next
@@ -584,13 +609,13 @@ function coinTickMusical() {
   g.gain.setValueAtTime(0.0001, t);
   g.gain.exponentialRampToValueAtTime(0.09, t + 0.006);
   g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
-  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.2);
+  o.connect(g).connect(sfxBus); o.start(t); o.stop(t + 0.2);
   const o2 = a.createOscillator(), g2 = a.createGain();
   o2.type = 'sine'; o2.frequency.setValueAtTime(f * 2, t);
   g2.gain.setValueAtTime(0.0001, t);
   g2.gain.exponentialRampToValueAtTime(0.028, t + 0.006);
   g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
-  o2.connect(g2).connect(a.destination); o2.start(t); o2.stop(t + 0.13);
+  o2.connect(g2).connect(sfxBus); o2.start(t); o2.stop(t + 0.13);
 }
 
 // ---------- music ----------
@@ -687,6 +712,7 @@ function audioDiag(cb) {
     cb('state:' + a.state +
        ' rate:' + a.sampleRate +
        ' clock:' + (a.currentTime > t0 ? 'ok' : 'STALLED') +
+       ' out:' + (SFX_VIA_ELEMENT ? 'element' + (sfxEl && !sfxEl.paused ? '(playing)' : '(PAUSED)') : 'direct') +
        ' sfxMuted:' + muted + ' musicOn:' + musicOn);
   }, 300);
 }
