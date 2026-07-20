@@ -27,6 +27,8 @@ audio.js              — Web Audio API synthesis (pop, shoot, clink, coinTick,
                          fanfare) + BGM. pop/clink/coinTick are per-map via
                          `soundProfile` (wood/ceramic/arcane/plush/music); add a
                          profile branch + synth fns to theme a new map's sounds.
+                         ALL synths must connect to `sfxBus`, NEVER straight to
+                         ctx.destination (iOS routing — see "Known issues").
 render.js             — All canvas drawing (bg, drinks, coins, bag, particles, aim)
 ui.js                 — Pointer input, HUD buttons, game-over overlay, LAUNCH pos
 welcome.js            — Main menu: map cards, size/combo checkboxes, score lists
@@ -402,6 +404,18 @@ Currently 4 — increase when adding more tiers.
   cool mode (30fps), rate-limit `clink()` node creation.
 - **Collision sounds**: synthesised via Web Audio API (no files). This is intentional —
   instant, zero-size, procedurally variable by tier.
+- **iOS SFX routing (diagnosed on Mai's iPad 2026-07-20, fix confirmed)**: iOS
+  puts Web Audio's `ctx.destination` on the RINGER/alerts volume channel —
+  with that channel at zero, all synth SFX are silent while `<audio>` music
+  (media channel) plays fine, even though the context reports
+  `state:running` with an advancing clock. Therefore every synth connects to
+  the master `sfxBus` gain (never `ctx.destination` directly); on iOS the bus
+  pipes through `createMediaStreamDestination()` → a playsinline `<audio>`
+  element (media channel), elsewhere straight to destination. `resumeCtx()`
+  restarts both the context and the carrier element (iOS pauses media
+  elements on background). The 🐞 bug panel has a built-in sound check:
+  Beep 1 = raw `ctx.destination` path (silent on affected devices — expected),
+  Beep 2 = element path, plus a diag line (`state/rate/clock/out/...`).
 - **No Node.js installed**: use `python -m http.server 5500` to serve locally.
   Install Node.js to use `npx serve .` and enable the Claude Code preview panel.
 - **Screenshot/rAF time-outs: the preview tab is often HIDDEN** (root cause,
