@@ -223,23 +223,14 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
 }
 .new-best.subtle { font-size: 16px; color: var(--brass); text-shadow: none; }
 
-/* Confetti burst behind the new-best banner (pieces built in ui.js) */
+/* Confetti burst behind the new-best banner — a single rAF-driven CANVAS
+   (built in ui.js). Deliberately not DOM pieces: both composited variants
+   (CSS keyframes, then per-piece WAAPI) blinked out on iPadOS — see the
+   spawnConfetti comment. Keep this element OFF the compositor: no
+   border-radius, no will-change, no transforms. */
 #confetti {
-  position: absolute; inset: 0; overflow: hidden;
+  position: absolute; inset: 0;
   pointer-events: none;
-  /* NO border-radius here: a rounded-corner clip over the 70 individually
-     composited (WAAPI) pieces made iOS WebKit drop the whole burst for a
-     beat mid-fall (all-at-once blink, observed on iPad 2026-07-19 — same
-     family as the XP bar's composited border-image bug). A rectangular
-     clip is the well-behaved path; the square corners sit over #over's
-     dark backdrop where the difference is invisible. */
-}
-/* The fall itself is a WAAPI animation built in ui.js — keyframes that read
-   custom properties (the old var(--dx) approach) are ineligible for the
-   compositor, which made the burst janky and let it skip ahead. */
-#confetti i {
-  position: absolute; top: -22px; display: block; opacity: .95;
-  border-radius: 2px;
 }
 @media (prefers-reduced-motion: reduce) { #confetti { display: none; } }
 
@@ -308,6 +299,26 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
 .hud-btn.off .icon-off { display: block; }
 .hud-btn.off { color: #8a6a44; border-color: rgba(138, 106, 68, .5); }
 .hud-btn:focus-visible { outline: 3px solid var(--neon); outline-offset: 2px; }
+
+/* Bug-report panel (🐞 HUD button): copyable MMB1. code from buglog.js.
+   Same overlay pattern as #confirm-menu. */
+#bug-panel {
+  position: absolute; inset: 0; display: none;
+  flex-direction: column; align-items: center; justify-content: center;
+  background: rgba(15, 9, 6, .92); color: var(--foam);
+  text-align: center; gap: 12px; padding: 32px;
+  border-radius: 14px; z-index: 4;
+}
+#bug-code {
+  /* Selection must work here (copying the code out by hand) despite the
+     global user-select:none on body — same exemption as #backup-code. */
+  -webkit-user-select: text; user-select: text;
+  width: 100%; resize: none;
+  background: rgba(0, 0, 0, .4); border: 1px solid #3d2d1a; border-radius: 8px;
+  color: #c8a870; font-family: monospace; font-size: 10px; padding: 8px;
+  word-break: break-all;
+}
+#bug-status { font-size: 11px; min-height: 14px; color: var(--brass); }
 
 /* Close (✕) on the game-over overlay: hides the results so the final pile can
    be inspected; #over-peek brings them back. Top-LEFT because the top-right

@@ -118,9 +118,60 @@ if (/[?&]test\b/.test(location.search)) {
     const dx = tx - LAUNCH.x, dy = ty - LAUNCH.y;
     const len = Math.max(1, Math.hypot(dx, dy));
     Body.setVelocity(d, { x: dx / len * 27, y: dy / len * 27 });
+    BUGLOG.shot(d);   // record like a real pointerup shot (round-trip testing)
     state.combo = 0;
     rollNext();
     return d.id;
+  };
+
+  // ---- bug-report replay (MMB1. codes from the 🐞 HUD button) -------------
+  // TT.bug(code)          — validate + summarize a code (meta, shots, events).
+  // TT.bugLoad(code, i)   — rebuild the board exactly as it was when shot i
+  //                         was fired (default: the LAST recorded shot) and
+  //                         re-fire that shot; then TT.step / TT.settle to
+  //                         watch what happened. Board tuples are
+  //                         [tier, receipt?, ghost?, x, y, vx?, vy?].
+  TT.bug = function (code) {
+    const p = BUGLOG.decode(code);
+    return {
+      meta: p.meta,
+      shots: p.shots.map((s, i) => ({
+        i, t: s.t, tier: s.tier, x: s.x, y: s.y, vx: s.vx, vy: s.vy,
+        boardDrinks: s.board.length,
+      })),
+      events: p.events,
+      boardAtReport: p.board.length,
+    };
+  };
+
+  TT.bugLoad = function (code, i) {
+    const p = BUGLOG.decode(code);
+    if (!p.shots.length) throw new Error('code has no recorded shots');
+    if (i === undefined) i = p.shots.length - 1;
+    const s = p.shots[i];
+    if (!s) throw new Error('shot index must be 0..' + (p.shots.length - 1));
+    if (!MAPS.find(m => m.id === p.meta.map))
+      throw new Error('unknown map in code: ' + p.meta.map);
+    TT.start(p.meta.map, {                    // sync part is all we need —
+      size: p.meta.size,                      // the ready() promise is ignored
+      combos: !!p.meta.combos,
+      happyHour: !!p.meta.happyHour,
+    });
+    for (const b of s.board) {
+      const d = makeDrink(b[3], b[4], b[0], false, false, b[1] ? 'receipt' : 'drink');
+      d.plugin.born -= 10000;   // pre-existing bodies: grace long since expired
+      // Restore the recorded ghost state — makeDrink re-derives it from
+      // position, which is wrong for e.g. a stray ghost parked inside the tray.
+      d.plugin.ghost = !!b[2];
+      d.collisionFilter.mask = b[2] ? ~CAT_TRAY : -1;
+      if (b.length > 5) Body.setVelocity(d, { x: b[5], y: b[6] });
+    }
+    const d = makeDrink(s.x, s.y, s.tier, true);
+    Body.setVelocity(d, { x: s.vx, y: s.vy });
+    return {
+      replaying: 'shot ' + i + ' of 0..' + (p.shots.length - 1),
+      meta: p.meta, shotId: d.id, state: TT.state(),
+    };
   };
 
   // Place a body directly (no flight). Inside the tray it spawns solid.
@@ -235,6 +286,8 @@ if (/[?&]test\b/.test(location.search)) {
       "TT.settle(max=1800)       — step until nothing moves; adds .settledIn",
       "TT.state()                — compact JSON snapshot",
       "TT.customer(tier?) / TT.serve(i=0) — happy-hour queue control",
+      "TT.bug(code)              — validate + summarize an MMB1. bug-report code",
+      "TT.bugLoad(code, i?)      — rebuild board before shot i (default last) and re-fire it",
       "await TT.shot(label)      — composite screenshot -> shot-receiver.py :5599",
       "TT.live(true|false)       — hand control back to the real rAF loop",
       "TT.reset()                — fresh board, same run settings",

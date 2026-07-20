@@ -280,6 +280,7 @@ function resetState() {
   LAUNCH.x = W / 2;
   state.queuedTier = Math.floor(Math.random() * DROP_MAX);
   rollNext();
+  BUGLOG.run();    // fresh bug-report ring for the new run (buglog.js)
   idleFrames = 0;  // ensure the fresh board draws even if we were idle
 }
 
@@ -422,6 +423,12 @@ function checkOver() {
     const speed = Math.hypot(d.velocity.x, d.velocity.y);
     if (d.position.y + d.plugin.item.physR > DANGER_WY && speed < 0.15) {
       state.gameOver = true;
+      // Bug-report ring: which drink ended the run, and where it sat.
+      BUGLOG.event('gameover', {
+        tier: d.plugin.tier, kind: d.plugin.kind,
+        x: Math.round(d.position.x), y: Math.round(d.position.y),
+        ghost: d.plugin.ghost ? 1 : undefined,
+      });
       // Coins still flying to the bag haven't landed, so their value isn't in
       // coinCount yet. Settle them now so the saved/displayed score matches what
       // the player earned (otherwise the bag keeps ticking up behind the overlay

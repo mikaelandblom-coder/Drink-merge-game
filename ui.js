@@ -53,6 +53,7 @@ function wireInput(canvas, state) {
     const d = makeDrink(LAUNCH.x, LAUNCH.y - ITEMS[state.nextTier].physR - 4, state.nextTier, true);
     const speed = 27;
     Body.setVelocity(d, { x: dx / len * speed, y: dy / len * speed });
+    BUGLOG.shot(d);   // bug-report ring: shot + the board it flew into
     state.combo = 0;  // each throw starts a fresh combo chain
     shoot();
     recoil = 6;
@@ -104,6 +105,31 @@ function wireHUD(state) {
   };
   document.getElementById('confirm-no').onclick = () => {
     confirmOverlay.style.display = 'none';
+  };
+
+  // Bug report (🐞): show the MMB1. code for the current run's last shots.
+  // Regenerated on every open so it always reflects "just now".
+  const bugPanel = document.getElementById('bug-panel');
+  const bugCode  = document.getElementById('bug-code');
+  const bugStat  = document.getElementById('bug-status');
+  document.getElementById('bugBtn').onclick = () => {
+    bugCode.value = BUGLOG.code();
+    bugStat.textContent = '';
+    bugPanel.style.display = 'flex';
+  };
+  document.getElementById('bug-copy').onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(bugCode.value);
+      bugStat.textContent = 'Copied! Now paste it in a message to Mikael.';
+    } catch {
+      // Clipboard API needs a secure context / permission — fall back to
+      // selecting the text so a manual copy works (same as backup codes).
+      bugCode.focus(); bugCode.select();
+      bugStat.textContent = 'Long-press (or Ctrl+C) the selected code to copy it.';
+    }
+  };
+  document.getElementById('bug-close').onclick = () => {
+    bugPanel.style.display = 'none';
   };
 }
 
@@ -158,41 +184,72 @@ function showGameOver(state, key) {
   document.getElementById('over').style.display = 'flex';
 }
 
-// Confetti rain over the game-over results when a record is beaten. DOM pieces
-// animated via WAAPI, NOT CSS keyframes: keyframes that read custom properties
-// (the old var(--dx) approach) can't run on the compositor, so all 70 pieces
-// fell on the main thread — busy at game-over with fanfare() + the overlay
-// rebuild — and a CSS animation's clock starts at style resolution, so the
-// post-stall first paint teleported them half a screen down. element.animate()
-// with concrete values is compositor-eligible, and a pending WAAPI animation
-// only gets its start time when its first frame actually commits — no skip.
+// Confetti rain over the game-over results when a record is beaten — drawn on
+// ONE small canvas inside #over, rAF-driven. This is the third rendering of
+// this effect, and it exists because iPadOS WebKit repeatedly failed to paint
+// the composited versions: CSS keyframes skipped after the game-over stall,
+// then WAAPI pieces (70 individually composited 3D layers) blanked out
+// all-at-once mid-fall — same family as the XP bar's composited border-image
+// bug. A single canvas never touches the compositor's problem paths, and
+// positions derive from elapsed TIME, so even a main-thread stall just drops
+// frames — the burst can neither vanish nor teleport. One rAF loop for ~5s
+// once per game-over is nothing next to the live render loop's budget.
 // Everything lives inside #over, so closing the overlay takes it along.
 function spawnConfetti(host) {
   const old = document.getElementById('confetti');
   if (old) old.remove();
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const box = document.createElement('div');
-  box.id = 'confetti';
+  const cv = document.createElement('canvas');
+  cv.id = 'confetti';
+  host.appendChild(cv);
+  // Size from #stage, NOT from the canvas's own box: we run before
+  // showGameOver() flips #over to display:flex, so everything inside the
+  // overlay still measures 0×0. #over is inset:0 of #stage — same box.
+  const stage = document.getElementById('stage');
+  const cw = stage.clientWidth, ch = stage.clientHeight;
+  const pr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = Math.round(cw * pr); cv.height = Math.round(ch * pr);
+  const c = cv.getContext('2d');
+  c.scale(pr, pr);
+
   const colors = ['#ffd35c', '#ff7ab4', '#7ae0ff', '#9dff8a', '#ffb35c', '#d79aff'];
-  host.appendChild(box);
+  const fall = ch + 44;                              // exits the box before it ends
+  const pieces = [];
   for (let i = 0; i < 70; i++) {
-    const p = document.createElement('i');
-    p.style.left = (Math.random() * 100) + '%';
-    p.style.background = colors[i % colors.length];
-    p.style.width  = (6 + Math.random() * 6) + 'px';
-    p.style.height = (9 + Math.random() * 8) + 'px';
-    const dx = (Math.random() * 140 - 70).toFixed(0);
-    const rz = (Math.random() * 900 - 450).toFixed(0);
-    const rx = (360 + Math.random() * 540).toFixed(0);
-    box.appendChild(p);
-    p.animate(
-      [{ transform: 'translate(0, 0) rotateZ(0deg) rotateX(0deg)', opacity: 0.95 },
-       { transform: `translate(${dx}px, 1080px) rotateZ(${rz}deg) rotateX(${rx}deg)`, opacity: 0.85 }],
-      { duration: 2200 + Math.random() * 1800,
-        delay: Math.random() * 700,
-        easing: 'linear', fill: 'both' });
+    pieces.push({
+      x: Math.random() * cw, w: 6 + Math.random() * 6, h: 9 + Math.random() * 8,
+      color: colors[i % colors.length],
+      dx: Math.random() * 140 - 70,                  // sideways drift over the fall
+      rz: (Math.random() * 900 - 450) * Math.PI / 180,
+      // rotateX tumble is faked with a scaleY flutter — full 3D per-piece
+      // layers are exactly what iOS choked on
+      flut: (2 + Math.random() * 3) * Math.PI, phase: Math.random() * Math.PI,
+      delay: Math.random() * 700, dur: 2200 + Math.random() * 1800,
+    });
   }
-  setTimeout(() => box.remove(), 5200);  // past the longest duration + delay
+
+  const start = performance.now();
+  (function frame(now) {
+    if (!cv.isConnected) return;                     // overlay closed mid-burst
+    const elapsed = now - start;
+    c.clearRect(0, 0, cw, ch);
+    let live = false;
+    for (const p of pieces) {
+      const t = (elapsed - p.delay) / p.dur;         // 0..1 along the fall
+      if (t >= 1) continue;
+      live = true;
+      if (t < 0) continue;                           // still waiting above the box
+      c.save();
+      c.translate(p.x + p.dx * t, -22 + fall * t);
+      c.rotate(p.rz * t);
+      c.scale(1, 0.25 + 0.75 * Math.abs(Math.cos(p.phase + p.flut * t)));
+      c.globalAlpha = 0.95 - 0.1 * t;
+      c.fillStyle = p.color;
+      c.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      c.restore();
+    }
+    if (live) requestAnimationFrame(frame); else cv.remove();
+  })(start);
 }
 
 function triggerShake() {

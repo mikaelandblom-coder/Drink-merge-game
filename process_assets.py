@@ -206,6 +206,8 @@ PIPELINE = {
     ],
 
     'paris': [
+        # Row 1 (sugar cube / macaron / petit chou) stays from the original
+        # sheet; rows 2-3 were re-generated with more colour in "items v2.png".
         {
             'file':   'items.png',
             'type':   'spritesheet',
@@ -213,6 +215,19 @@ PIPELINE = {
             'chroma': 'alpha',        # real transparent background
             'names':  [
                 'paris-sugarcube',  'paris-macaron',   'paris-petitchou',
+                None,               None,              None,
+                None,               None,              None,
+            ],
+        },
+        {
+            'file':   'items v2.png',
+            'type':   'spritesheet',
+            'grid':   (3, 3),
+            'chroma': 'alpha',
+            'min_component_frac': 0.05,   # croissant/charlotte cells grabbed slivers of
+                                          # their neighbours (<=0.3%); items are one blob
+            'names':  [
+                None,               None,              None,
                 'paris-croissant',  'paris-eclair',    'paris-berrytart',
                 'paris-parisbrest', 'paris-charlotte', 'paris-strawberrycake',
             ],

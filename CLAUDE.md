@@ -19,6 +19,10 @@ config/maps.js        — MAPS array + ACTIVE_MAP (bg, bgm, bgmVol, items ref,
                          MAP_HITBOXES overrides at the bottom
 scores.js             — Per-variant high scores in localStorage; scoreKey() maps a
                          (map, size, combos) run to a storage key
+buglog.js             — Bug-report capture: rolling ring of the last 10 shots
+                         (each with the pre-shot board) + game-over events →
+                         copyable MMB1. code via the 🐞 HUD button. Replay a
+                         code with TT.bug / TT.bugLoad in test mode.
 audio.js              — Web Audio API synthesis (pop, shoot, clink, coinTick,
                          fanfare) + BGM. pop/clink/coinTick are per-map via
                          `soundProfile` (wood/ceramic/arcane/plush/music); add a
@@ -29,8 +33,8 @@ welcome.js            — Main menu: map cards, size/combo checkboxes, score lis
 game.js               — Physics engine, state object, merge logic, render loop
 style.css             — All CSS
 index.html            — Shell: loads scripts in order (constants → hitboxes →
-                         items → maps → scores → audio → render → ui →
-                         welcome → game)
+                         items → maps → scores → buglog → audio → render →
+                         ui → welcome → game)
 process_assets.py     — Asset pipeline: source images → game-ready PNGs
 tools/
   hitbox-editor.html  — Visual hitbox editor (see "Hitbox editing" below)
@@ -227,6 +231,9 @@ TT.step(120);             // advance exactly 2s of game time, synchronously
 TT.settle();              // step until nothing moves; returns state + .settledIn
 TT.state();               // compact JSON snapshot (drinks/receipts/customers/score)
 TT.customer(2); TT.serve(0);      // Happy Hour queue control
+TT.bug(code);             // validate + summarize an MMB1. bug-report code
+TT.bugLoad(code, i?);     // rebuild the board before shot i (default last)
+                          // and re-fire it — then TT.step()/TT.settle() to watch
 await TT.shot('label');   // composite bg+canvas -> tools/shot-receiver.py :5599
 TT.live(true);            // hand back to the real rAF loop to watch in a pane
 ```
