@@ -644,3 +644,49 @@ function setToggleBtn(btn, on) {
   btn.classList.toggle('off', !on);
   btn.setAttribute('aria-pressed', String(on));
 }
+
+// ---------- audio self-test (bug panel) ----------
+// Isolates WHERE iPad "SFX silent, music fine" happens. Two beeps:
+//   beep 1: oscillator -> ctx.destination — the normal SFX path.
+//   beep 2: oscillator -> MediaStreamDestination -> <audio> element — the BGM
+//           path, which is known to work on the affected device.
+// Hearing 2 but not 1 = the context renders fine but Web Audio's OUTPUT
+// channel is muted/misrouted (e.g. iOS ties it to the ringer volume, a
+// separate slider from media volume). Hearing neither = the context itself
+// is dead. The diag line reports whether the render clock even advances.
+let diagEl = null, diagDest = null;
+
+function audioTestBeep(via) {
+  const a = ac(); resumeCtx();
+  let dest = a.destination;
+  if (via === 'element') {
+    if (!diagDest) {
+      diagDest = a.createMediaStreamDestination();
+      diagEl = document.createElement('audio');
+      diagEl.setAttribute('playsinline', '');
+      diagEl.srcObject = diagDest.stream;
+    }
+    diagEl.play().catch(() => {});   // inside the tap gesture — autoplay-safe
+    dest = diagDest;
+  }
+  const t = a.currentTime;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(via === 'element' ? 440 : 660, t);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.3, t + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+  o.connect(g).connect(dest); o.start(t); o.stop(t + 0.55);
+}
+
+function audioDiag(cb) {
+  const a = actx;
+  if (!a) { cb('no AudioContext yet - tap the table once, then reopen'); return; }
+  const t0 = a.currentTime;
+  setTimeout(() => {
+    cb('state:' + a.state +
+       ' rate:' + a.sampleRate +
+       ' clock:' + (a.currentTime > t0 ? 'ok' : 'STALLED') +
+       ' sfxMuted:' + muted + ' musicOn:' + musicOn);
+  }, 300);
+}

@@ -112,11 +112,16 @@ function wireHUD(state) {
   const bugPanel = document.getElementById('bug-panel');
   const bugCode  = document.getElementById('bug-code');
   const bugStat  = document.getElementById('bug-status');
+  const bugDiag = document.getElementById('bug-audio-diag');
+  const refreshDiag = () => audioDiag(line => { bugDiag.textContent = line; });
   document.getElementById('bugBtn').onclick = () => {
     bugCode.value = BUGLOG.code();
     bugStat.textContent = '';
     bugPanel.style.display = 'flex';
+    refreshDiag();
   };
+  document.getElementById('bug-beep1').onclick = () => { audioTestBeep('direct');  refreshDiag(); };
+  document.getElementById('bug-beep2').onclick = () => { audioTestBeep('element'); refreshDiag(); };
   document.getElementById('bug-copy').onclick = async () => {
     try {
       await navigator.clipboard.writeText(bugCode.value);

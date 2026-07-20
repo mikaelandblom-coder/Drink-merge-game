@@ -319,6 +319,10 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
   word-break: break-all;
 }
 #bug-status { font-size: 11px; min-height: 14px; color: var(--brass); }
+#bug-audio-diag {
+  font-family: monospace; font-size: 10px; min-height: 13px;
+  color: #c8a870;
+}
 
 /* Close (✕) on the game-over overlay: hides the results so the final pile can
    be inspected; #over-peek brings them back. Top-LEFT because the top-right
