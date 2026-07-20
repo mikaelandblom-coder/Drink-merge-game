@@ -16,13 +16,26 @@ function setSoundProfile(mapId) {
 }
 
 function ac() {
-  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+  if (!actx) {
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+    // iOS Safari parks the context in 'interrupted'/'suspended' after a screen
+    // lock, app switch or Siri; the bgm <audio> element recovers on its own,
+    // but synth SFX stay silent until the context is explicitly resumed.
+    actx.onstatechange = () => { if (!document.hidden) resumeCtx(); };
+  }
   return actx;
 }
 
+function resumeCtx() {
+  if (actx && actx.state !== 'running') actx.resume().catch(() => {});
+}
+
 function initAudio() {
-  // Call once on first user gesture to unlock AudioContext on mobile.
+  // Called on every pointerdown (ui.js) — creates the AudioContext on the
+  // first gesture and re-resumes it inside a gesture thereafter (iOS
+  // sometimes only honours resume() from within a user gesture).
   ac();
+  resumeCtx();
 }
 
 function pop(tier) {

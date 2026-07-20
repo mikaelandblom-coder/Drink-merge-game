@@ -640,6 +640,7 @@ document.addEventListener('visibilitychange', () => {
     pauseMusicForHide();
   } else if (onGameScreen && !running) {
     resumeMusicAfterHide();
+    resumeCtx();  // SFX context can come back 'interrupted' from a lock/app switch
     running = true; lastTs = 0; idleFrames = 0; requestAnimationFrame(loop);
   }
 });
