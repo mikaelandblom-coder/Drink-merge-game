@@ -306,6 +306,103 @@ function drawHitboxes() {
   ctx.restore();
 }
 
+// ---------- X-ray: show WHY same-tier drinks aren't merging ----------
+// A player-facing diagnostic (the HUD scan button), distinct from the dev-only
+// drawHitboxes overlay above. Suika-style merges get confusing when two matching
+// drinks sit apart without merging — often a smaller item is wedged between them.
+// X-ray dims the art and draws every collision shape colour-coded BY TIER (so
+// matching drinks share a colour, and gaps between them are plainly visible),
+// then calls out the wedged case: a red link + ringed intruder whenever
+// something sits between two near same-tier drinks. Toggled from the HUD; see
+// showXray / toggleXray in game.js.
+const XRAY_GAP = 55;   // world px between hitbox edges to still test a pair's corridor
+
+// Tier -> hue: spread around the wheel so neighbouring tiers stay distinct;
+// the Happy Hour receipt chain gets its own band so it never colour-clashes
+// with the drink it grew from.
+function xrayHue(tier, kind) {
+  const base = kind === 'receipt' ? 45 : 190;
+  return (base + tier * 47) % 360;
+}
+
+// Trace a body's actual collision polygon (projected through persp, like
+// drawHitboxes) and stroke/fill it.
+function xrayTrace(b, stroke, fill, lw) {
+  ctx.beginPath();
+  b.vertices.forEach((v, i) => {
+    const p = persp(v.x, v.y);
+    if (i) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y);
+  });
+  ctx.closePath();
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke();
+}
+
+function drawXray(drinks, wob) {
+  ctx.save();
+  // Dim the field so outlines read clearly — the sprites recede to a ghost of
+  // themselves (the "see-through to the skeleton" feel) while the HUD, drawn
+  // after this, stays bright.
+  ctx.fillStyle = 'rgba(8, 12, 20, .52)';
+  ctx.fillRect(0, 0, W, H);
+
+  // 1) Every collision shape, tier-hued. Same colour === same tier === "these
+  //    two want to merge", which is exactly the question the player is asking.
+  for (const b of drinks) {
+    if (!b.plugin || !b.plugin.item) continue;
+    const h = xrayHue(b.plugin.tier, b.plugin.kind);
+    const ghost = b.plugin.ghost;
+    xrayTrace(b,
+      `hsla(${h},85%,66%,${ghost ? 0.35 : 0.95})`,
+      `hsla(${h},80%,55%,${ghost ? 0.05 : 0.16})`,
+      2);
+  }
+
+  // 2) Call out the wedged case: for each near same-tier pair, if something sits
+  //    in the corridor between their centres, link them red and ring the
+  //    intruder. Pure-gap pairs are left to the tier outlines above (they show
+  //    the gap on their own — no clutter of "get closer" links).
+  const set = kind => (kind === 'receipt' ? RECEIPT_ITEMS : ITEMS);
+  const solids = drinks.filter(b => b.plugin && b.plugin.item && !b.plugin.ghost &&
+    !b.plugin.merging && b.plugin.tier < set(b.plugin.kind).length - 1);
+  const pulse = 0.6 + 0.4 * Math.sin(wob * 3);
+  const allBodies = Matter.Composite.allBodies(engine.world);
+  const blockers = new Set();
+
+  for (let i = 0; i < solids.length; i++) {
+    for (let j = i + 1; j < solids.length; j++) {
+      const a = solids[i], b = solids[j];
+      if (a.plugin.kind !== b.plugin.kind || a.plugin.tier !== b.plugin.tier) continue;
+      const ra = a.plugin.item.physR, rb = b.plugin.item.physR;
+      const dist = Math.hypot(a.position.x - b.position.x, a.position.y - b.position.y);
+      if (dist - (ra + rb) > XRAY_GAP) continue;   // too far apart to be the question
+
+      // What sits in the corridor between their centres? Exclude the pair
+      // itself and any ghost still flying through the dead zone.
+      const hits = Matter.Query.ray(allBodies, a.position, b.position, Math.min(ra, rb) * 0.7)
+        .map(c => c.body)
+        .filter(bd => bd !== a && bd !== b && !(bd.plugin && bd.plugin.ghost));
+
+      if (!hits.length) continue;   // pure gap — the outlines already tell that story
+      // Blocked: solid red link now, ring the intruder(s) on top afterwards.
+      const pa = persp(a.position.x, a.position.y);
+      const pb = persp(b.position.x, b.position.y);
+      ctx.strokeStyle = `rgba(255,74,74,${0.55 + 0.35 * pulse})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
+      hits.forEach(bd => blockers.add(bd));
+    }
+  }
+
+  // Ring blockers last so they sit above the tier outlines and both links.
+  for (const bd of blockers) {
+    xrayTrace(bd, `rgba(255,66,66,${0.7 + 0.3 * pulse})`, 'rgba(255,66,66,.15)', 3);
+  }
+
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
 // ---------- coins ----------
 const BAG_POS = { x: 40, y: 40 };
 let coinPop = 0;

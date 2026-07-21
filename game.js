@@ -455,6 +455,16 @@ window.addEventListener('keydown', e => {
   if (e.key === 'h' || e.key === 'H') showHitbox = !showHitbox;
 });
 
+// Player-facing X-ray diagnostic (HUD scan button) — draws the collision
+// shapes and flags why matching drinks aren't merging (render.js drawXray).
+let showXray = false;
+function toggleXray(btn) {
+  showXray = !showXray;
+  btn.classList.toggle('active', showXray);
+  btn.setAttribute('aria-pressed', String(showXray));
+  idleFrames = 0;   // repaint even if the board has settled into the idle skip
+}
+
 function render(dt) {
   wob += 0.05 * dt;
   // The background is a DOM layer under this (transparent) canvas — just clear.
@@ -486,6 +496,7 @@ function render(dt) {
   drawTextPops(state.textPops, dt);
   state.textPops = state.textPops.filter(p => p.life > 0);
 
+  if (showXray) drawXray(state.drinks, wob);
   if (showHitbox) drawHitboxes();
 
   drawNextPreview(state.queuedTier);
@@ -518,6 +529,7 @@ const SUBSTEPS = 3;
 // long idle stretches a merge game spends waiting for input.
 let idleFrames = 0;
 function sceneBusy() {
+  if (showXray) return true;   // keep the diagnostic live while a settled board idles
   if (aiming || !state.canShoot) return true;
   if (state.coins.length || state.particles.length || state.textPops.length) return true;
   if (recoil > 0.1) return true;

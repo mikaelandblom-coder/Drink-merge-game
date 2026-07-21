@@ -298,6 +298,12 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
 .hud-btn.off .icon-on { display: none; }
 .hud-btn.off .icon-off { display: block; }
 .hud-btn.off { color: #8a6a44; border-color: rgba(138, 106, 68, .5); }
+/* X-ray toggle when active: a cool cyan glow marks it as a "mode", distinct
+   from the brass everyday controls. */
+.hud-btn.active {
+  color: #7ae0ff; border-color: #7ae0ff;
+  box-shadow: 0 0 10px rgba(122, 224, 255, .55), inset 0 0 6px rgba(122, 224, 255, .3);
+}
 .hud-btn:focus-visible { outline: 3px solid var(--neon); outline-offset: 2px; }
 
 /* Bug-report panel (🐞 HUD button): copyable MMB1. code from buglog.js.

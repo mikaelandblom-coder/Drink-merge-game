@@ -29,7 +29,9 @@ audio.js              — Web Audio API synthesis (pop, shoot, clink, coinTick,
                          profile branch + synth fns to theme a new map's sounds.
                          ALL synths must connect to `sfxBus`, NEVER straight to
                          ctx.destination (iOS routing — see "Known issues").
-render.js             — All canvas drawing (bg, drinks, coins, bag, particles, aim)
+render.js             — All canvas drawing (bg, drinks, coins, bag, particles,
+                         aim); `drawXray` is the player-facing X-ray diagnostic
+                         (see "X-ray" below), separate from the dev `drawHitboxes`
 ui.js                 — Pointer input, HUD buttons, game-over overlay, LAUNCH pos
 welcome.js            — Main menu: map cards, size/combo checkboxes, score lists
 game.js               — Physics engine, state object, merge logic, render loop
@@ -188,6 +190,25 @@ real runs (target: level 1 after the first normal run).
 - Future (agreed, not built): unlocks driven by total level — new maps, menu
   backgrounds, BGM. Don't gate EXISTING maps behind levels (would regress
   Mai's mid-save experience).
+
+## X-ray (why aren't these merging?)
+
+A player-facing diagnostic on the HUD (the crosshair/scan button in `#hud-btns`,
+next to 🐞), toggled via `toggleXray` in game.js → `showXray` → `drawXray` in
+render.js. Suika merges get confusing when two matching drinks sit apart:
+sometimes a smaller item is wedged between them, sometimes there's just a gap.
+X-ray dims the field and draws every collision shape **colour-coded by tier**
+(same colour = same tier = "these want to merge"), so plain gaps between matching
+drinks are visible on their own. On top of that it calls out the wedged case: for
+each near same-tier pair (gap ≤ `XRAY_GAP` = 55 world px between hitbox edges), if
+`Matter.Query.ray` finds a body in the centre-to-centre corridor it draws a **red
+link + a red ring** around the intruder. (Pure-gap pairs are deliberately NOT
+linked — an earlier amber "get closer" link was dropped as too busy, 2026-07-21.)
+
+It's a toggle (touch-friendly for Mai), glows cyan when active (`.hud-btn.active`
+in style.css), and forces the render loop to stay live while on (`sceneBusy`
+returns true for `showXray`, so a settled board still repaints the overlay).
+Distinct from the dev-only `drawHitboxes` (the `h`-key / `?hitbox` overlay).
 
 ## High scores
 

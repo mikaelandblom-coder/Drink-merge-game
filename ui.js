@@ -68,6 +68,7 @@ function wireHUD(state) {
   // currentTarget, not target: clicks can land on the buttons' SVG icons.
   document.getElementById('mute').onclick     = e => toggleMute(e.currentTarget);
   document.getElementById('musicBtn').onclick = e => toggleMusic(e.currentTarget);
+  document.getElementById('xrayBtn').onclick  = e => toggleXray(e.currentTarget);
 
   const over = document.getElementById('over');
   const peek = document.getElementById('over-peek');
