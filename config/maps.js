@@ -88,6 +88,27 @@ const MAPS = [
                    small: 'assets/source/paris/bg_small.png' },
     defaultSize: 'large',
   },
+  {
+    id:       'farm',
+    label:    'Farm',
+    sublabel: 'Sprout Valley',   // working name, not locked (see memory/design-farm-map)
+    bg:       'assets/source/farm/bg_large.png',
+    bgm:      'assets/audio/Sprout Valley.mp3',  // TODO: add Suno track (Stardew-vibe
+                                                 // folk loop). Missing file just 404s — no crash.
+    bgmVol:   0.35,
+    itemsData: null,
+    // Sounds: the `garden` profile (sprout-bloop merge + dirt-thud collision +
+    // wooden coin tick) is selected by setSoundProfile('farm') in audio.js — no
+    // map field needed, same as the other maps' profiles.
+    // TEMP: only the LARGE framing art exists yet. Omitting `sizes` hides the
+    // "Large table" checkbox and plays `bg` above. defaultSize is intended
+    // 'large', and since the default size keeps the plain map-id key ('farm'),
+    // the boundary you trace NOW is the large boundary and is reused when sizes
+    // is restored. Drop assets/source/farm/bg_small.png in, then uncomment:
+    // sizes:       { large: 'assets/source/farm/bg_large.png',
+    //                small: 'assets/source/farm/bg_small.png' },
+    // defaultSize: 'large',
+  },
 ];
 
 // Wire item sets after items.js has defined them.
@@ -98,6 +119,7 @@ MAPS[3].itemsData = MAGE_ITEMS;
 MAPS[4].itemsData = TEDDY_ITEMS;
 MAPS[5].itemsData = MELODY_ITEMS;
 MAPS[6].itemsData = PARIS_ITEMS;
+MAPS[7].itemsData = FARM_ITEMS;
 
 // Storage key for a map's boundary in MAP_HITBOXES. Size-variant maps trace a
 // separate boundary per table framing (the tray/heart sits differently in each

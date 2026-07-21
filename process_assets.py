@@ -234,6 +234,24 @@ PIPELINE = {
         },
     ],
 
+    'farm': [
+        # Combined sheet assembled in-session from two AI gens ("items 1.png" +
+        # "items 2.png"): sheet 1 as the base, purple cabbage swapped in from
+        # sheet 2, tail reordered. Already a clean transparent grid with wide
+        # gutters, so split_alpha_grid separates the 9 cells directly.
+        {
+            'file':   'items_combined.png',
+            'type':   'spritesheet',
+            'grid':   (3, 3),
+            'chroma': 'alpha',        # real transparent background
+            'names':  [
+                'farm-seed',       'farm-sprout',      'farm-strawberry',
+                'farm-blueberry',  'farm-pepper',      'farm-cabbage',
+                'farm-watermelon', 'farm-cauliflower', 'farm-prizepumpkin',
+            ],
+        },
+    ],
+
     # 'example-map': [
     #     {
     #         'file':      'items.png',

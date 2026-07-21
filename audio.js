@@ -12,6 +12,7 @@ function setSoundProfile(mapId) {
   else if (mapId === 'teddy') soundProfile = 'plush';
   else if (mapId === 'melody') soundProfile = 'music';
   else if (mapId === 'paris') soundProfile = 'cafe';
+  else if (mapId === 'farm') soundProfile = 'garden';
   else soundProfile = 'default';
 }
 
@@ -71,6 +72,7 @@ function pop(tier) {
   if (soundProfile === 'plush')   { popPlush(tier);   return; }
   if (soundProfile === 'music')   { popMusical(tier); return; }
   if (soundProfile === 'cafe')    { popCafe(tier);    return; }
+  if (soundProfile === 'garden')  { popGarden(tier);  return; }
   const a = ac(), t = a.currentTime;
   const f = 220 * Math.pow(1.18, tier);
   const o = a.createOscillator(), g = a.createGain();
@@ -135,6 +137,7 @@ function clink(impact) {
   if (soundProfile === 'plush')   { clinkPlush(impact);   return; }
   if (soundProfile === 'music')   { clinkMusical(impact); return; }
   if (soundProfile === 'cafe')    { clinkCafe(impact);    return; }
+  if (soundProfile === 'garden')  { clinkGarden(impact);  return; }
   const a = ac(), t = a.currentTime;
   const vol = Math.min(0.14, impact * 0.032);
   if (vol < 0.012) return;
@@ -473,6 +476,74 @@ function coinTickCafe() {
   });
 }
 
+// Farm map: cute "sprout bloop" merge — a rounded sine that bends upward as if
+// the crop pops out of the soil, plus a tiny high sparkle. Pitch climbs a C
+// major pentatonic by tier so a combo cascade stays sweet. (Auditioned in
+// tools/sound-lab.html; Mikael picked this "Sprout bloop".)
+const FARM_PENT = [0, 2, 4, 7, 9, 12, 14, 16, 19]; // C major pentatonic, 9 tiers
+function popGarden(tier) {
+  const a = ac(), t = a.currentTime;
+  const f = 261.63 * Math.pow(2, FARM_PENT[Math.min(tier, FARM_PENT.length - 1)] / 12); // C4 root
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(f * 0.6, t);
+  o.frequency.exponentialRampToValueAtTime(f, t + 0.07);   // the "bloop" bend up
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.28, t + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+  o.connect(g).connect(sfxBus); o.start(t); o.stop(t + 0.22);
+  const o2 = a.createOscillator(), g2 = a.createGain();     // sparkle
+  o2.type = 'sine'; o2.frequency.setValueAtTime(f * 4, t + 0.02);
+  g2.gain.setValueAtTime(0.0001, t + 0.02);
+  g2.gain.exponentialRampToValueAtTime(0.05, t + 0.04);
+  g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+  o2.connect(g2).connect(sfxBus); o2.start(t + 0.02); o2.stop(t + 0.18);
+}
+
+// Farm map: soft earthy "dirt thud" collision — a low body dropping in pitch
+// plus a lowpassed soil crumble, produce settling into the bed. (Mikael's pick.)
+function clinkGarden(impact) {
+  const a = ac(), t = a.currentTime;
+  const vol = Math.min(0.24, impact * 0.055);
+  if (vol < 0.016) return;
+  const base = 140 + Math.random() * 70;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(base, t);
+  o.frequency.exponentialRampToValueAtTime(base * 0.55, t + 0.11);
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+  o.connect(g).connect(sfxBus); o.start(t); o.stop(t + 0.16);
+  // soil crumble
+  const len = Math.floor(a.sampleRate * 0.07);
+  const buf = a.createBuffer(1, len, a.sampleRate);
+  const ch = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 1.6);
+  const src = a.createBufferSource(); src.buffer = buf;
+  const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 550;
+  const ng = a.createGain(); ng.gain.setValueAtTime(vol * 0.85, t);
+  src.connect(lp).connect(ng).connect(sfxBus); src.start(t);
+}
+
+// Farm map: bright wooden xylophone tick per coin, slight pitch wobble so a fast
+// shower doesn't drill. DEFAULT pick (coins weren't auditioned) — swap for the
+// "sparkle chime" candidate in sound-lab.html if Mikael prefers it.
+function coinTickGarden() {
+  const a = ac(), t = a.currentTime;
+  const f = 1568 * (1 + (Math.random() - 0.5) * 0.04);
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = 'triangle'; o.frequency.setValueAtTime(f, t);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.08, t + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
+  o.connect(g).connect(sfxBus); o.start(t); o.stop(t + 0.14);
+  const o2 = a.createOscillator(), g2 = a.createGain();
+  o2.type = 'sine'; o2.frequency.setValueAtTime(f * 4, t);
+  g2.gain.setValueAtTime(0.0001, t);
+  g2.gain.exponentialRampToValueAtTime(0.02, t + 0.005);
+  g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+  o2.connect(g2).connect(sfxBus); o2.start(t); o2.stop(t + 0.08);
+}
+
 // Triumphant flourish for a beaten high score — a bright rising major arpeggio
 // with a shimmering sparkle tail. Map-agnostic: always celebratory.
 // New-best celebration: a proper brass "ta-ta-ta-daaa!". A sawtooth through a
@@ -579,6 +650,7 @@ function coinTick() {
   if (muted) return;
   if (soundProfile === 'music') { coinTickMusical(); return; }
   if (soundProfile === 'cafe')  { coinTickCafe();    return; }
+  if (soundProfile === 'garden') { coinTickGarden(); return; }
   const a = ac(), t = a.currentTime;
   const o = a.createOscillator(), g = a.createGain();
   o.type = 'square'; o.frequency.setValueAtTime(1568, t);

@@ -100,6 +100,25 @@ const PARIS_ITEMS = [
   { name:'strawberry cake', r:71, glass:'#fff5f8', liq:'#e0344a', sprite:'assets/images/paris-strawberrycake.png', bodyRatio:0.80 },
 ];
 
+// Farm map ("Harvest Basket" chain). Combined in-session from two AI gens
+// (see process_assets.py 'farm' entry + memory/design-farm-map). Deliberately
+// ALL ROUND, CENTERED items — no capsules — to fix the awkward-hitbox feel that
+// made Melody Lane unpopular. r curve reuses Paris's proven 15->71 ramp; vis is
+// area-parity (sqrt(0.75/aspect)) for the mildly-wide produce; bodyRatio values
+// are STARTING points sized to the round body — trace/tune each in
+// tools/hitbox-editor.html before shipping. Background art still pending.
+const FARM_ITEMS = [
+  { name:'seed',         r:15, glass:'#7a4a24', liq:'#9a5a2c', sprite:'assets/images/farm-seed.png',         bodyRatio:0.90, vis:0.80 },
+  { name:'sprout',       r:20, glass:'#7ec84f', liq:'#3f8f2f', sprite:'assets/images/farm-sprout.png',       bodyRatio:0.90, vis:0.83 },
+  { name:'strawberry',   r:26, glass:'#e5382b', liq:'#c22a20', sprite:'assets/images/farm-strawberry.png',   bodyRatio:0.90, vis:0.88 },
+  { name:'blueberries',  r:31, glass:'#4646a8', liq:'#33337a', sprite:'assets/images/farm-blueberry.png',    bodyRatio:0.90, vis:0.81 },
+  { name:'bell pepper',  r:37, glass:'#ffcf2e', liq:'#efb000', sprite:'assets/images/farm-pepper.png',       bodyRatio:0.90, vis:0.85 },
+  { name:'purple cabbage', r:44, glass:'#8f43b3', liq:'#6b2f8c', sprite:'assets/images/farm-cabbage.png',    bodyRatio:0.90, vis:0.78 },
+  { name:'watermelon',   r:52, glass:'#3fa04a', liq:'#2c7838', sprite:'assets/images/farm-watermelon.png',   bodyRatio:0.90, vis:0.86 },
+  { name:'cauliflower',  r:60, glass:'#eef0dd', liq:'#cfe0ad', sprite:'assets/images/farm-cauliflower.png',  bodyRatio:0.90, vis:0.80 },
+  { name:'prize pumpkin',r:71, glass:'#ff9a2e', liq:'#e87a1f', sprite:'assets/images/farm-prizepumpkin.png', bodyRatio:0.90, vis:0.80 },
+];
+
 // Happy Hour mode: the receipt merge chain, shared by every map. Serving a
 // customer's order spawns tier 0 (crumpled ball) where the served drink stood;
 // receipts merge among themselves in parallel with the drink chain. The FINAL
@@ -117,7 +136,7 @@ const RECEIPT_ITEMS = [
 // Pre-load all sprites and compute physics radii for every item set at startup.
 // Collision-circle overrides from config/hitboxes.js (edited visually with
 // tools/hitbox-editor.html) are applied before physR is derived.
-[...HAWAII_ITEMS, ...SAIGON_ITEMS, ...KYOTO_ITEMS, ...MAGE_ITEMS, ...TEDDY_ITEMS, ...MELODY_ITEMS, ...PARIS_ITEMS, ...RECEIPT_ITEMS].forEach(item => {
+[...HAWAII_ITEMS, ...SAIGON_ITEMS, ...KYOTO_ITEMS, ...MAGE_ITEMS, ...TEDDY_ITEMS, ...MELODY_ITEMS, ...PARIS_ITEMS, ...FARM_ITEMS, ...RECEIPT_ITEMS].forEach(item => {
   const hb = (typeof ITEM_HITBOXES !== 'undefined') && ITEM_HITBOXES[item.sprite];
   if (hb && hb.bodyRatio) item.bodyRatio = hb.bodyRatio;
   // Collision-circle offset relative to the sprite anchor, in units of r
