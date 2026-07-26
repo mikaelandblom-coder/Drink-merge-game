@@ -48,6 +48,13 @@ index.html            — Shell: loads scripts in order (constants → hitboxes 
                          items → maps → sounds → soundmap → scores → buglog →
                          audio → render → ui → welcome → game)
 process_assets.py     — Asset pipeline: source images → game-ready PNGs
+compress_backgrounds.py — Background/chrome PNG → WebP (~-91%). Separate from
+                         process_assets.py because backgrounds need no keying,
+                         only recompression. See "Bandwidth".
+compress_audio.py     — BGM mp3 → 112 kbps (ran 2026-07-26: 40.8→24.4 MB).
+                         `--check` reports the true AVERAGE bitrate with no
+                         ffmpeg (these files are VBR, so the first frame header
+                         lies); re-encoding needs ffmpeg. Idempotent.
 tools/
   hitbox-editor.html  — Visual hitbox editor (see "Hitbox editing" below)
   sprite-editor.html  — Visual sprite prep: AI sheet -> individual PNGs, then
@@ -75,9 +82,10 @@ tools/
                          (often hidden) preview tab — see "Known issues".
 assets/
   source/             — Raw AI-generated images (white background). NEVER edit these.
-                         Backgrounds are served straight from here (config/maps.js
-                         `bg:` paths) — they need no processing, so they are NOT
-                         duplicated into images/.
+                         Backgrounds live here as the ~2.5MB PNG masters, but are
+                         NOT served: compress_backgrounds.py emits a ~200KB WebP
+                         into images/<map>/ and config/maps.js `bg:` points there
+                         (see "Bandwidth" below).
     _archive/         — Superseded source art, kept for reference
     shared/           — coins_and_bag.png (shared across all maps)
     tikibar/          — Per-map source images
@@ -333,8 +341,9 @@ in localStorage and passed into `startGame(map, {size, combos, happyHour})`:
 - **Large table** (only for maps with a `sizes` field in config/maps.js). Swaps
   the background art between framings; `defaultSize` sets the initial state
   (Kyoto → large, Plushie → small). Each size has its own hitbox (see above) and
-  its own high-score board. Background art loads straight from
-  `assets/source/<map>/` (no pipeline step — see `sizes:` in config/maps.js).
+  its own high-score board. Each framing's PNG master goes in
+  `assets/source/<map>/`; run `python compress_backgrounds.py` and point `sizes:`
+  at the generated `assets/images/<map>/*.webp` (see "Bandwidth").
 - **Combo multipliers** (every map). Cascade-merge score multipliers. The map's
   `combos: true` is now just the *default* checkbox state (on for Mage Tower &
   Plushie Factory), not a hard setting — `COMBOS_ENABLED` is set per run.
@@ -509,8 +518,11 @@ Each map lists its source files. Entry types:
 | `pair` | two items side by side (coin + bag) |
 | `spritesheet` | grid of items; use `separator` for reliable splits |
 
-Backgrounds are not pipeline entries — they need no processing, so the game
-loads them directly from `assets/source/<map>/` via `bg:` in config/maps.js.
+Backgrounds are not PIPELINE entries — they need no keying, only recompression,
+so they have their own script: `python compress_backgrounds.py` turns each
+`assets/source/<map>/bg*.png` master into a ~200KB WebP under
+`assets/images/<map>/`, which is what `bg:` in config/maps.js points at. See
+"Bandwidth" for why that matters.
 
 Key per-entry options:
 - `fill_holes: True` — makes enclosed white regions transparent (handle holes,
@@ -558,15 +570,19 @@ The background stays white as normal; only the separator line changes.
 
 1. Create `assets/source/<mapname>/` and drop in AI images
 2. Add entries to `PIPELINE` in `process_assets.py`
-3. Add a map entry in `config/maps.js` pointing to the new bg/bgm/items
-4. Add new drink tiers in `config/items.js` (sprite path, r, colors, bodyRatio)
-5. Run `python process_assets.py --map <mapname>`
-6. Set `ACTIVE_MAP = MAPS[n]` in `config/maps.js`
+3. Add the background to `TARGETS` in `compress_backgrounds.py` and run
+   `python compress_backgrounds.py` (backgrounds are served as WebP from
+   `assets/images/<map>/`, never as the source PNG — see "Bandwidth")
+4. Add a map entry in `config/maps.js` pointing to the new bg (`.webp`)/bgm/items
+5. Add new drink tiers in `config/items.js` (sprite path, r, colors, bodyRatio)
+6. Run `python process_assets.py --map <mapname>`
+7. Set `ACTIVE_MAP = MAPS[n]` in `config/maps.js`
 
 Optional per-map fields (see "Menu options"): `combos: true` to default the combo
 checkbox on; `sizes: {large, small}` + `defaultSize` to offer a Large-table
-toggle (drop the extra background in `assets/source/<map>/`, point the `sizes`
-paths at it, then trace each size's boundary in the hitbox editor); `coin:` /
+toggle (drop the extra background master in `assets/source/<map>/`, add it to
+`compress_backgrounds.py` and re-run it, point the `sizes` paths at the generated
+`.webp`, then trace each size's boundary in the hitbox editor); `coin:` /
 `bag:` to override the
 shared coin/money-bag art with map-specific PNGs (omit to use the shared art).
 To theme the map's sounds, add a `SOUND_MAP` entry for it in the sound lab (see
@@ -615,6 +631,89 @@ in the editor.
 
 `DROP_MAX` in `game.js` controls how many of the lowest tiers can be shot.
 Currently 4 — increase when adding more tiers.
+
+---
+
+## Bandwidth (why the loading is structured this way)
+
+The game is hosted on **GitHub Pages' free tier**, whose binding limit is a
+**100 GB/month soft bandwidth cap** (plus a 1 GB site-size cap — we're at ~130MB,
+a non-issue). Soft means GitHub emails and may throttle rather than hard-cutting,
+but a throttle lands exactly when a shared link is doing well.
+
+Audited 2026-07-26, before any fixes, one visitor cost **~27 MB** (20.6 MB before
+even picking a map). That is ~3,800 visitors a month — low enough that a single
+decent Reddit post could exhaust the month in an afternoon. Almost all of it was
+waste rather than content:
+
+| Fix | Saved |
+|-----|-------|
+| `<audio id="bgm">` `preload="auto"` → `"none"` (index.html) | 4.4 MB off the menu |
+| Item sprites fetched per map, not all 9 chains (`loadItemSprites`) | ~10 MB |
+| Coin/bag + Happy-Hour customer art no longer eager (render.js) | 2.9 MB |
+| Backgrounds + menu/XP chrome PNG → WebP (`compress_backgrounds.py`) | ~2 MB/load, ~2.3 MB per map switch |
+| BGM re-encoded 180–193 → 112 kbps (`compress_audio.py`) | 16.4 MB across the 8 tracks |
+
+Result, measured: **menu first load 20.6 MB → 397 KB** (52×), and a full one-map
+session **27 MB → 4.8-5.9 MB** (Mage, the heaviest, 33.6 → 9.6 MB). Visitor
+headroom goes from ~3,800/month to **~17,000–21,000** on a typical map.
+
+Once a session's art is a few hundred KB, the **BGM track IS the payload** — Mage
+is still the outlier purely because `Arcane Sanctum.mp3` is 8 minutes long. If a
+future map needs trimming, shorten the loop rather than dropping the bitrate again.
+
+**Rules to keep it that way:**
+- **Never fetch art for a map that isn't being played.** `config/items.js` builds
+  every item's `Image` object and physR at startup (cheap, no network) but sets
+  `.src` only via `loadItemSprites(items)`. `startGame()` calls it for the active
+  chain, plus `RECEIPT_ITEMS` + `loadCustomerSprites()` when Happy Hour is on.
+  Tools call it for whatever set they display (see `selectMap` in the hitbox
+  editor). Anything that draws an item must tolerate a not-yet-loaded sprite —
+  they all gate on `img.complete && img.naturalWidth` and fall back to the
+  glass/liq colours, so art simply pops in when it lands.
+- **Backgrounds ship as WebP**, generated from the PNG masters by
+  `compress_backgrounds.py` (q82 backdrops / q92 for alpha UI chrome, since
+  `xp-bar-frame` is sliced by `border-image` at fixed pixel offsets). New map or
+  framing = drop the PNG master in `assets/source/<map>/`, run the script, point
+  `bg:`/`sizes:` at the `.webp`.
+- **Item sprites are deliberately still PNG.** Lazy loading already cuts them to
+  ~1 MB per map, and lossy WebP with alpha risks haloing the carefully feathered
+  edges the pipeline produces. Revisit only with a visual A/B.
+- **BGM: `preload="none"` must stay.** `initMusic()` swaps `src` per map, so
+  preloading only ever fetched a track most players never hear. Caveat worth
+  knowing: an explicit `load()` call buffers anyway — Chrome treats it as intent
+  and ignores the hint (measured). So `preload="none"` is what keeps the MENU
+  audio-free; the chosen track then starts buffering at `initMusic()`, which is
+  the right time. Don't read `preload="none"` as "nothing loads until play()".
+
+**TODO — move hosting to Cloudflare Pages.** The payload work bought ~4× headroom;
+it did not remove the cap. Cloudflare Pages' free tier has **unlimited bandwidth**
+and a real CDN, deploys from this same GitHub repo, and needs no code change — so
+it, not the byte-shaving, is what makes a Reddit-scale spike a non-question. Do
+this before sharing the link anywhere broad. (Netlify's free tier is also
+100 GB/month, so it buys nothing here.)
+
+**BGM bitrate — DONE 2026-07-26.** All 8 tracks re-encoded from ~180–193 kbps VBR
+to **112 kbps** by `compress_audio.py` (ffmpeg/libmp3lame): `assets/audio/`
+40.8 MB → **24.4 MB**. Durations and stereo are unchanged and every track was
+verified to decode to real audio (peak 0.75–0.96, RMS ~0.15) — not silence.
+Originals are recoverable from git history if 112 ever sounds thin.
+
+Two traps that script now handles, both of which cost real time:
+- **`--check` is the only trustworthy bitrate reading.** These are VBR files whose
+  FIRST FRAME HEADER advertises 64 kbps, which is not the average. An earlier
+  version believed it and skipped all 8 files as "already small". The probe reads
+  the Xing/Info frame count instead, validated against the browser's own
+  `HTMLAudioElement.duration`.
+- **`Melody Lane.mp3` had the Windows READ-ONLY attribute set** (alone among the
+  8). `os.replace` onto a read-only target fails with WinError 5 — identical to
+  the error a real file lock gives, so it looks like a stuck handle that no amount
+  of waiting fixes. The script now distinguishes the two (`os.access(W_OK)`) and
+  clears the flag. If a future asset script hits WinError 5 on Windows, check the
+  attribute before hunting for the process holding the file.
+- ffmpeg is NOT part of a fresh setup: `winget install --id Gyan.FFmpeg -e`.
+  Re-running the script is safe — anything already at/below target is skipped, so
+  generation loss can't stack.
 
 ---
 
