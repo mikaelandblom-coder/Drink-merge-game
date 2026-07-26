@@ -14,6 +14,7 @@
   #side { width:280px; min-width:280px; border-right:1px solid var(--line); padding:14px;
           display:flex; flex-direction:column; gap:10px; overflow-y:auto; }
   label { justify-content:space-between; }
+  #dirty { align-self:flex-start; }   /* don't stretch across the column sidebar */
   button.act, button.ghost { padding:8px; }
   #stage { flex:1; display:flex; align-items:center; justify-content:center; background:var(--sunken); }
   canvas { border-radius:10px; box-shadow:0 0 0 2px var(--line), 0 18px 50px rgba(0,0,0,.6); }
@@ -29,6 +30,7 @@
 <div id="side">
   <h1>Hitbox editor</h1>
   <div data-toolnav="hitbox"></div>
+  <span id="dirty" class="dirty clean">saved</span>
   <fieldset>
     <legend>Map</legend>
     <select id="mapPick"></select>
@@ -558,6 +560,7 @@ function ensureOrig(it) {
 }
 
 function pushItemHB(it) {
+  markEdited();
   const hb = it.hbShape === 'capsule'
     ? { shape: 'capsule', w: +it.capW.toFixed(3), h: +it.capH.toFixed(3) }
     : { bodyRatio: +it.bodyRatio.toFixed(3) };
@@ -577,7 +580,35 @@ const toWorld = e => {
 };
 const near = (p, k, d) => Math.hypot(p[0]-k[0], p[1]-k[1]) < d;
 function snapshot() { undoStack.push(JSON.stringify({knots, closed, horizon, freeLine, dangerLine})); if (undoStack.length > 60) undoStack.shift(); }
-function changed() { dirtyWalls = true; if (testing) rebuildSim(); draw(); }
+function changed() { markEdited(); dirtyWalls = true; if (testing) rebuildSim(); draw(); }
+
+// ── unsaved-work guard ───────────────────────────────────────────────────────
+// Nothing here is persisted until you export, and the tool switcher makes it
+// easy to click away mid-trace. Every edit goes through changed() (boundary) or
+// pushItemHB() (items), so flagging both is enough. Deliberately conservative:
+// an edit that happens to restore the loaded state still counts as unsaved —
+// a false "you have changes" costs a click, the reverse costs a traced spline.
+// NOTE: `unsaved` is separate from `dirtyWalls`, which only means "the wall
+// geometry needs recomputing" and is true at load.
+let unsaved = false;
+function markEdited() {
+  if (unsaved) return;
+  unsaved = true;
+  const el = document.getElementById('dirty');
+  el.textContent = 'unsaved changes'; el.classList.remove('clean');
+}
+// All three exports produce the complete config/hitboxes.js contents, so any of
+// them means the work is out of the tool.
+function markExported() {
+  unsaved = false;
+  const el = document.getElementById('dirty');
+  el.textContent = 'saved'; el.classList.add('clean');
+}
+addEventListener('beforeunload', e => {
+  if (!unsaved) return;
+  e.preventDefault();
+  e.returnValue = '';   // required by older browsers to trigger the prompt
+});
 
 let panning = false, panStart = null, dragHorizon = false, dragFree = false, dragDanger = false;
 let panMoved = false, pendingSelect = null;   // click-vs-drag on empty item space
@@ -858,6 +889,7 @@ document.getElementById('itemReset').onclick = () => {
   it.bodyRatio = o.bodyRatio; it.hbOffX = o.dx; it.hbOffY = o.dy; it.physR = physR(it);
   it.hbShape = o.hbShape; it.capW = o.capW; it.capH = o.capH; it.capRot = o.capRot;
   if (o.hb) ITEM_HITBOXES[it.sprite] = { ...o.hb }; else delete ITEM_HITBOXES[it.sprite];
+  markEdited();   // mutates ITEM_HITBOXES without going through pushItemHB
   rebuildItemsLayout(); draw();
   status(`"${it.name}" restored to page-load state.`);
 };
@@ -974,16 +1006,27 @@ document.getElementById('saveDisk').onclick = async () => {
       types: [{ description: 'JavaScript', accept: { 'text/javascript': ['.js'] } }],
     });
     const w = await fileHandle.createWritable(); await w.write(text); await w.close();
+    markExported();
     status('Saved. Reload the game tab to play with the new hitbox.');
   } catch (err) { if (err.name !== 'AbortError') status('Save failed: ' + err.message); }
 };
 document.getElementById('copyBtn').onclick = async () => {
-  await navigator.clipboard.writeText(serialize()); status('Copied config/hitboxes.js contents to clipboard.');
+  // A rejected clipboard write (denied permission, non-secure context) used to
+  // fail silently — looking exactly like a successful copy. Now it says so, and
+  // the unsaved pill correctly stays lit.
+  try {
+    await navigator.clipboard.writeText(serialize());
+    markExported();
+    status('Copied config/hitboxes.js contents to clipboard.');
+  } catch (err) {
+    status('Copy failed (' + err.name + ') — use Save or Download instead.');
+  }
 };
 document.getElementById('dlBtn').onclick = () => {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([serialize()], { type: 'text/javascript' }));
   a.download = 'hitboxes.js'; a.click();
+  markExported();
   status('Downloaded — replace config/hitboxes.js with it.');
 };
 

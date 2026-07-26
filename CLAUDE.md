@@ -123,6 +123,12 @@ overrides save to `ITEM_HITBOXES` like any other item.
   leaves too much sprite uncovered (drinks visually overlap when packed).
 - **Save:** writes `config/hitboxes.js` (File System API asks for the file once,
   then overwrites on every save). Reload the game tab to play with the result.
+- **Unsaved work:** nothing is persisted until you export, so the sidebar shows a
+  `saved` / `unsaved changes` pill and leaving the page prompts for confirmation.
+  Every edit funnels through `changed()` (boundary) or `pushItemHB()` (items) —
+  route any NEW edit path through one of those, or the guard won't see it. All
+  three exports (Save / Download / Copy) clear it, since each produces the
+  complete file; a failed clipboard write correctly leaves it lit.
 
 **Capsule (stadium) item hitboxes.** A second per-item primitive alongside the
 circle, for elongated/non-circular art (guitars, violins, saxes). Toggle it with
