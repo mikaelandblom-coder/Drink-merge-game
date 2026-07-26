@@ -190,7 +190,19 @@ transparent`), which is the standing antidote to the Read-preview trap where a
 good transparent sheet looks like it has a painted backdrop. Cells come from
 the transparent gutters (a live JS port of `split_alpha_grid`), so grid drift
 is fine; the sliders (gutter alpha / min px / merge gap / min band) tune band
-detection when glow bridges a gutter. Each item is then isolated by
+detection when glow bridges a gutter. **Rows are found over the whole sheet,
+then columns are found INSIDE each row band** — never a second full-height
+scan. Two neighbours can touch in ONE row and still leave a clean gutter in
+every other row; a full-height column profile then sees no gutter anywhere and
+fuses those columns into one double-wide cell, with no slider setting that can
+recover it (`shared/customers 2.png`, 2026-07-26 — its column gutter sits at
+x654-685 in row 1 but x697-726 in row 3, so the union is solid). A row-local
+scan is always at least as fine as the global one, so it only ever splits more;
+the readout says `3 cols × 4 rows` when every row agrees and
+`4 rows, 3/3/3/2 cols` when they don't. The mirror case — items JOINED across a
+row by a shared prop (`shared/customers 3.png`, where a wooden shelf runs under
+all three) — is not a detection bug and no slider fixes it: regenerate the art
+with the "generous gaps, nothing touches" clause. Each item is then isolated by
 **connected component flood-fill**, not by rigid grid lines — the fix for a
 neighbour's stem poking into the cell. "keep parts ≥" is the floor for
 genuinely separate pieces (a violin bow ≈ 13% of the item, stray specks ≈ 1%);
@@ -198,6 +210,18 @@ rejected blobs are excluded from the feather pass so they can't reappear.
 "Strip baked shadow" raises the core threshold to 128 (the game draws its own
 `SHADOW_SPRITE`, so a baked one double-shadows). Save writes the PNGs straight
 into a folder you pick once.
+
+**TODO — the extract tab should save at a TARGET SIZE, not at source
+resolution.** `$('saveCells')` blobs `c.canvas` as-is, so a 1024×1536 AI sheet
+yields ~420–460 px sprites for art the game draws at ~108 px (customers) or
+`r*2.4` ≈ 36–170 px (items) — roughly 4× oversampled, ~265 KB per PNG. That is
+how the Happy Hour cast reached 4.0 MB on 2026-07-26 (see "Menu options →
+Happy Hour"), and every future sheet will do the same by default. Wanted: a
+"max height" control (default ~256 px, off = source) applied at save time via a
+high-quality downscale, with the readout showing the resulting file size. Note
+the right size is per-USE, not per-sheet — customers draw far bigger than a
+tier-0 item — so it must be a control, not a constant. Until it exists, resample
+by hand after extracting.
 
 **2 · Tier chain** — a **set picker** mirroring the hitbox editor's map
 dropdown: one row per map (same labels, same order, built from `MAPS` by
@@ -402,7 +426,30 @@ in localStorage and passed into `startGame(map, {size, combos, happyHour})`:
   to be a hardcoded `HH_CAST = 9` in game.js beside a hardcoded array in
   render.js, so a tenth face would have been silently unreachable. No two queued
   customers share a face — only enforceable while the cast outnumbers the queue,
-  so a cast of ≤3 allows repeats rather than spinning forever.
+  so a cast of ≤3 allows repeats rather than spinning forever. The cast went
+  **9 → 18** on 2026-07-26 (a second AI sheet through the sprite editor).
+
+  **TODO — rename the new customer files (deliberately deferred past this
+  deploy).** Nine faces shipped under the sprite editor's placeholder names:
+  `customer-11/22/33/44/55/66/7/9.png` and `customer-viking.png`, against the
+  original nine's descriptive `customer-granny/girl/sailor/…`. They should
+  become descriptive too (`customer-fox`, `customer-biker`, `customer-elf`, …).
+  Renaming is two edits — the file on disk and its line in `CUSTOMER_SPRITES` —
+  and unlike item sprites there is NO hidden coupling: `ITEM_HITBOXES` is keyed
+  by sprite path, but customers are not items and have no hitbox entry, so
+  nothing detaches. Do it in one pass after these assets are live. Two things to
+  fold into the same pass:
+  - **Five extracted PNGs are on disk but not in the cast** (`customer-3/4/5/6`
+    and the current `customer-fox`, ~1.2 MB) — the ones that didn't make the
+    cut. Delete them rather than committing dead weight. NOTE the name clash:
+    `customer-fox.png` today is an UNUSED reject; the fox that IS in the cast is
+    `customer-11.png`, so the rename has to free that name first.
+  - **The new art is oversized.** It draws at `min(108, HORIZON*0.46)` px tall
+    but ships at 419–460 px — ~4× oversampled, ~265 KB each. The cast is now
+    4.0 MB (was 1.6 MB) and `loadCustomerSprites()` fetches ALL of it when a
+    Happy Hour run starts, so an HH session went from ~6.4 MB to ~8.8 MB (see
+    "Bandwidth"). Downscaling the cast to ~220 px tall would give back most of
+    that with nothing visible at the drawn size.
 
 **Cool mode (30 fps cap) — built but SHELVED.** The welcome-screen checkbox is
 commented out in index.html (with its wiring in welcome.js), and startGame pins

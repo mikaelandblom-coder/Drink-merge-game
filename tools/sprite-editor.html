@@ -149,7 +149,10 @@
         <input type="range" id="minSize" min="4" max="200" value="20">
         <span class="val" id="vMinSize">20</span></label>
       <div class="hint">Green boxes = detected cells. Too few boxes → glow is
-        bridging a gutter: raise “gutter alpha”. Too many → raise “merge gap”.</div>
+        bridging a gutter: raise “gutter alpha”. Too many → raise “merge gap”.
+        Columns are found inside each row, so a gutter that closes in one row
+        can’t fuse that column across the whole sheet. If two items are still
+        boxed together, they touch in the art itself — no slider fixes that.</div>
     </fieldset>
 
     <fieldset>
@@ -331,7 +334,7 @@ $('tabTier').onclick    = () => setTab('tier');
 let rawID  = null;    // ImageData straight from the file
 let workID = null;    // after optional white-keying
 let cells  = [];      // {canvas,name,include,band,aspect,liq,glass,coverage}
-let bandsC = [], bandsR = [];
+let bandsR = [], colsByRow = [];   // colsByRow[i] = column bands inside row i
 
 // ── pixel helpers ─────────────────────────────────────────────────────────
 function imgToImageData(img) {
@@ -370,13 +373,16 @@ function keyWhiteBg(src, thresh) {
 // counts as content if it has more than minPx solid pixels: generators leave
 // faint 1px alpha streaks across the whole sheet that would otherwise bridge
 // every gutter.
-function contentBands(id, axis, o) {
-  const w = id.width, h = id.height, d = id.data;
-  const len = axis === 0 ? w : h;
+// `rect` restricts the profile to a sub-region of the sheet (see rebuild()).
+function contentBands(id, axis, o, rect) {
+  const w = id.width, d = id.data, r = rect || {};
+  const y0 = r.y0 ?? 0, y1 = r.y1 ?? id.height;   // rect may name one axis only
+  const x0 = r.x0 ?? 0, x1 = r.x1 ?? w;
+  const len = axis === 0 ? x1 : y1;
   const prof = new Int32Array(len);
-  for (let y = 0; y < h; y++) {
+  for (let y = y0; y < y1; y++) {
     const row = y * w;
-    for (let x = 0; x < w; x++) {
+    for (let x = x0; x < x1; x++) {
       if (d[(row + x) * 4 + 3] > o.alphaThresh) prof[axis === 0 ? x : y]++;
     }
   }
@@ -556,24 +562,37 @@ function rebuild() {
     `${(100*soft/n).toFixed(0)}% soft edge` +
     (zero > n*0.15 ? '' : '<br>Looks opaque — is this a white-background sheet?');
 
-  bandsC = contentBands(workID, 0, o);
   bandsR = contentBands(workID, 1, o);
-  $('gridInfo').textContent =
-    `${bandsC.length} cols × ${bandsR.length} rows → ${bandsC.length*bandsR.length} cells`;
+  // Columns are found INSIDE each row band, never over the whole sheet. Two
+  // neighbouring items can touch in ONE row and still leave a clean gutter in
+  // every other row; a full-height column profile sees no gutter anywhere and
+  // fuses those two columns into one double-wide cell, with no slider setting
+  // that can recover it ('customers 2.png', 2026-07-26). A row-local scan is
+  // always at least as fine as the global one — a column that is empty over the
+  // full height is empty within every row too — so this only ever splits more.
+  colsByRow = bandsR.map(([y0, y1]) => contentBands(workID, 0, o, { y0, y1 }));
+
+  const counts = colsByRow.map(c => c.length);
+  const total  = counts.reduce((a, b) => a + b, 0);
+  $('gridInfo').textContent = counts.every(n => n === counts[0])
+    ? `${counts[0] || 0} cols × ${bandsR.length} rows → ${total} cells`
+    : `${bandsR.length} rows, ${counts.join('/')} cols → ${total} cells`;
 
   const prev = new Map(cells.map(c => [c.key, c]));
   cells = [];
-  for (const [y0, y1] of bandsR) for (const [x0, x1] of bandsC) {
-    const band = { x0, x1, y0, y1 };
-    const c = extractCell(workID, band, o);
-    if (!c) continue;
-    c.band = band;
-    c.key  = `${x0},${y0}`;
-    const old = prev.get(c.key);
-    c.name    = old ? old.name : '';
-    c.include = old ? old.include : true;
-    cells.push(c);
-  }
+  bandsR.forEach(([y0, y1], ri) => {
+    for (const [x0, x1] of colsByRow[ri]) {
+      const band = { x0, x1, y0, y1 };
+      const c = extractCell(workID, band, o);
+      if (!c) continue;
+      c.band = band;
+      c.key  = `${x0},${y0}`;
+      const old = prev.get(c.key);
+      c.name    = old ? old.name : '';
+      c.include = old ? old.include : true;
+      cells.push(c);
+    }
+  });
   renumber();
   drawSheet();
   renderCells();

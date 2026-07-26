@@ -154,6 +154,15 @@ const CUSTOMER_SPRITES = [
   'assets/images/shared/customer-surfer.png',
   'assets/images/shared/customer-professor.png',
   'assets/images/shared/customer-tourist.png',
+  'assets/images/shared/customer-11.png',
+  'assets/images/shared/customer-22.png',
+  'assets/images/shared/customer-33.png',
+  'assets/images/shared/customer-44.png',
+  'assets/images/shared/customer-55.png',
+  'assets/images/shared/customer-66.png',
+  'assets/images/shared/customer-7.png',
+  'assets/images/shared/customer-9.png',
+  'assets/images/shared/customer-viking.png',
 ];
 
 // Compute physics radii for every item set at startup, and give each item its
