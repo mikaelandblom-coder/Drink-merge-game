@@ -270,6 +270,15 @@ function rollNext() {
   state.queuedTier = Math.floor(Math.random() * DROP_MAX);
 }
 
+// Draw a fresh pair of upcoming tiers off the CURRENT Math.random. Split out of
+// resetState so test mode can re-roll after seeding without clearing the board
+// (TT.seed in test.js) — keep this the only place the starting pair is drawn,
+// so seeding before startGame and seeding after it consume the same two rolls.
+function rollFreshTiers() {
+  state.queuedTier = Math.floor(Math.random() * DROP_MAX);
+  rollNext();
+}
+
 function resetState() {
   for (const d of state.drinks) Composite.remove(engine.world, d);
   state.drinks = []; state.particles = []; state.coins = []; state.textPops = [];
@@ -278,8 +287,7 @@ function resetState() {
   state.customers = []; state.shotsFired = 0; state.nextCustomerAtShot = HH_FIRST_SHOT;
   state.runXp = 0;
   LAUNCH.x = W / 2;
-  state.queuedTier = Math.floor(Math.random() * DROP_MAX);
-  rollNext();
+  rollFreshTiers();
   BUGLOG.run();    // fresh bug-report ring for the new run (buglog.js)
   idleFrames = 0;  // ensure the fresh board draws even if we were idle
 }
