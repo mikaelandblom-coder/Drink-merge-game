@@ -64,10 +64,13 @@ tools/
                          components. Signal colours are deliberately NOT themed —
                          see the comment at the top of the file.
   tool-nav.js         — Tool switcher. A tool marks its mount point with
-                         `data-toolnav="<id>"` and gets pills for the others;
-                         adding a tool = one line in TOOLS. Hrefs are relative
-                         to the PROJECT ROOT because every tool sets
-                         <base href="../">.
+                         `data-toolnav="<id>"` and gets pills for the others,
+                         PLUS its browser-tab icon (same emoji, as an SVG data
+                         URI) so several open tools stay tellable apart. Adding
+                         a tool = one line in TOOLS. Hrefs are relative to the
+                         PROJECT ROOT because every tool sets <base href="../">.
+                         Data-URI favicons are fine here but NOT for the game —
+                         iOS Safari ignores them (see index.html's icon note).
   shot-receiver.py    — Local POST receiver for canvas screenshots from the
                          (often hidden) preview tab — see "Known issues".
 assets/

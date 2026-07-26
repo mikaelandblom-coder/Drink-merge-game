@@ -22,10 +22,31 @@ const TOOLS = [
     title: 'Open the game in a new tab', ext: true },
 ];
 
+// Stamp the tab icon from the SAME table that draws the pills, so a tool's
+// identity is defined in exactly one place and a new tool needs nothing extra.
+// An emoji-in-SVG data URI is fine for these desktop dev pages; the GAME still
+// needs real PNGs, because iOS Safari ignores SVG/data-URI favicons (see the
+// icon comment in index.html).
+function setToolFavicon(icon) {
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+              '<text x="50" y="54" font-size="80" text-anchor="middle" ' +
+              'dominant-baseline="central">' + icon + '</text></svg>';
+  let link = document.querySelector("link[rel~='icon']");
+  if (!link) {
+    link = document.createElement('link');
+    link.rel = 'icon';
+    document.head.appendChild(link);
+  }
+  link.type = 'image/svg+xml';
+  link.href = 'data:image/svg+xml,' + encodeURIComponent(svg);
+}
+
 (function mountToolNav() {
   const host = document.querySelector('[data-toolnav]');
   if (!host) return;
   const here = host.dataset.toolnav;
+  const me = TOOLS.find(t => t.id === here);
+  if (me) setToolFavicon(me.icon);
   host.classList.add('toolnav');
   host.innerHTML = TOOLS.map(t => {
     const cls = [t.id === here ? 'on' : '', t.ext ? 'ext' : ''].filter(Boolean).join(' ');
