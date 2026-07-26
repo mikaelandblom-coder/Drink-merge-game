@@ -4,14 +4,11 @@
      code the game does (config/sounds.js) and edits the SAME wiring the game
      reads (config/soundmap.js). No hand-copied synths, no drift. -->
 <base href="../">
+<link rel="stylesheet" href="tools/tool.css">
 <style>
+  /* Layout + this tool's own components; the rest comes from tool.css */
   :root { color-scheme: dark; }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; padding: 0 0 60px;
-    font: 15px/1.5 -apple-system, Segoe UI, Roboto, sans-serif;
-    background: #14121a; color: #e8e4f0;
-  }
+  body { padding: 0 0 60px; }
   .lab { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
 
   /* ---- toolbar ---- */
@@ -20,110 +17,88 @@
     display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
     padding: 14px 24px; margin-bottom: 22px;
     background: #191622ee; backdrop-filter: blur(8px);
-    border-bottom: 1px solid #2e2a3d;
+    border-bottom: 1px solid var(--line);
   }
-  .bar h1 { font-size: 17px; margin: 0; white-space: nowrap; }
+  .bar h1 { font-size: 15px; white-space: nowrap; }
   .bar .spacer { flex: 1; }
   .dirty {
     font-size: 12px; padding: 3px 9px; border-radius: 20px;
-    background: #4a3a12; color: #f0cf85; border: 1px solid #6d5520;
+    background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-ln);
   }
-  .dirty.clean { background: #1d3324; color: #86d3a0; border-color: #2c5137; }
+  .dirty.clean { background: #1d3324; color: var(--ok); border-color: #2c5137; }
 
   h2.section {
     margin: 34px 0 6px; font-size: 13px; letter-spacing: .06em;
-    text-transform: uppercase; color: #9b93b0;
+    text-transform: uppercase; color: var(--muted);
   }
-  .section-sub { color: #7d7590; font-size: 12.5px; margin: 0 0 14px; max-width: 78ch; }
+  .section-sub { color: var(--dim); font-size: 12.5px; margin: 0 0 14px; max-width: 78ch; }
 
-  button {
-    font: inherit; cursor: pointer; border: none; border-radius: 9px;
-    padding: 8px 13px; background: #322c45; color: #e8e4f0;
-    transition: transform .05s, background .12s;
-  }
-  button:hover { background: #3f3757; }
-  button:active { transform: scale(.94); }
-  button.accent { background: #6d4fd0; }
-  button.accent:hover { background: #7d5fe0; }
-  button.ghost { background: none; border: 1px solid #3d3654; color: #b6aecb; }
-  button.ghost:hover { background: #241f31; }
-  button.tiny { padding: 4px 9px; font-size: 12px; border-radius: 7px; }
-  button:disabled { opacity: .4; cursor: default; }
-
-  select {
-    background: #2a2536; color: #e8e4f0; border: 1px solid #443c5c;
-    border-radius: 7px; padding: 5px 7px; font: inherit; font-size: 13px;
-    max-width: 100%;
-  }
+  select { max-width: 100%; width: auto; }
   select.inherited { color: #8b83a2; font-style: italic; }
-  label { display: flex; align-items: center; gap: 7px; font-size: 13px; }
-  code {
-    background: #2a2636; padding: 1px 6px; border-radius: 5px;
-    font-size: 12px; color: #c3b6ea;
-  }
+  label { font-size: 13px; gap: 7px; }
 
   /* ---- matrix ---- */
-  .matrix-wrap { overflow-x: auto; border: 1px solid #2e2a3d; border-radius: 14px; }
+  .matrix-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; }
   table { border-collapse: collapse; width: 100%; font-size: 13px; }
   th, td { padding: 9px 11px; text-align: left; border-bottom: 1px solid #262233; }
   thead th {
-    background: #1e1b28; position: sticky; top: 62px; z-index: 5;
+    background: var(--panel); position: sticky; top: 62px; z-index: 5;
     font-size: 12px; color: #b6aecb; white-space: nowrap;
   }
-  thead th .hint { display: block; font-weight: 400; color: #7d7590; font-size: 11px; }
+  thead th .hint { display: block; font-weight: 400; }
   tbody tr:hover { background: #1b1826; }
   tbody tr.ctx { background: #211c33; }
-  tr.defaults td { background: #1a1824; }
-  tr.defaults .mapname { color: #f0cf85; }
+  tr.defaults td { background: var(--panel2); }
+  tr.defaults .mapname { color: var(--warn); }
   .mapname { font-weight: 600; white-space: nowrap; }
-  .mapname small { display: block; font-weight: 400; color: #7d7590; }
+  .mapname small { display: block; font-weight: 400; color: var(--dim); }
   .cell { display: flex; align-items: center; gap: 5px; }
 
   /* ---- library ---- */
   .kind-group { margin-bottom: 26px; }
   .kind-head { font-size: 14px; font-weight: 600; margin: 0 0 10px; }
-  .kind-head span { font-weight: 400; color: #7d7590; font-size: 12.5px; }
+  .kind-head span { font-weight: 400; color: var(--dim); font-size: 12.5px; }
   .voices { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); }
   .voice {
-    background: #1e1b28; border: 1px solid #2e2a3d; border-radius: 13px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 13px;
     padding: 14px 15px; display: flex; flex-direction: column; gap: 9px;
   }
   .voice.in-use { border-color: #4d3f7a; background: #211d2f; }
-  .voice h3 { font-size: 14.5px; margin: 0; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-  .voice .desc { color: #9b93b0; font-size: 12.5px; margin: 0; }
+  .voice h3 { font-size: 14.5px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .voice .desc { color: var(--muted); font-size: 12.5px; }
   .used { display: flex; gap: 5px; flex-wrap: wrap; }
-  .chip {
-    font-size: 11px; padding: 2px 8px; border-radius: 20px;
-    background: #2f2846; color: #bfb2ee; border: 1px solid #443c5c;
-  }
-  .chip.none { background: none; color: #6b647d; border-color: #322c45; }
-  .chip.def { background: #4a3a12; color: #f0cf85; border-color: #6d5520; }
-  .row { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+  .chip.none { background: none; color: #6b647d; border-color: var(--ctl); }
+  .chip.def { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-ln); }
+  .row { flex-wrap: wrap; align-items: center; gap: 7px; }
   .tier-btn {
     display: flex; flex-direction: column; align-items: center; gap: 2px;
-    min-width: 46px; padding: 5px; background: #2a2536; border-radius: 8px;
+    min-width: 46px; padding: 5px; background: var(--field); border-radius: 8px;
   }
   .tier-btn img { width: 26px; height: 26px; object-fit: contain; }
-  .tier-btn .pn { font-size: 10px; color: #9b93b0; max-width: 62px;
+  .tier-btn .pn { font-size: 10px; color: var(--muted); max-width: 62px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .divider { height: 1px; background: #2e2a3d; margin: 4px 0; }
+  .divider { height: 1px; background: var(--line); margin: 4px 0; }
 
   #filetext {
     width: 100%; min-height: 220px; font: 12px/1.5 Consolas, monospace;
-    background: #0f0d15; color: #cfc6e8; border: 1px solid #2e2a3d;
+    background: var(--sunken); color: #cfc6e8; border: 1px solid var(--line);
     border-radius: 10px; padding: 12px; margin-top: 10px;
   }
-  #status { font-size: 12.5px; color: #86d3a0; }
-  #status.err { color: #ff9c9c; }
+  #status { font-size: 12.5px; color: var(--ok); }
+  #status.err { color: var(--err); }
   .restored {
-    background: #2b2418; border: 1px solid #6d5520; color: #f0cf85;
+    background: #2b2418; border: 1px solid var(--warn-ln); color: var(--warn);
     padding: 10px 14px; border-radius: 10px; font-size: 13px;
     display: flex; gap: 12px; align-items: center; margin-bottom: 18px;
   }
+  /* An author `display` beats the UA's [hidden] rule, so the banner showed on
+     EVERY load until this existed. Needed on any element toggled via `hidden`. */
+  .restored[hidden] { display: none; }
 </style>
 
 <div class="bar">
-  <h1>🎛️ Sound Lab</h1>
+  <h1>Sound lab</h1>
+  <div data-toolnav="sound"></div>
   <span id="dirty" class="dirty clean">saved</span>
   <span class="spacer"></span>
   <label>Volume <input type="range" id="vol" min="0" max="1" step="0.01" value="0.8"></label>
@@ -174,6 +149,7 @@
   <textarea id="filetext" readonly spellcheck="false"></textarea>
 </div>
 
+<script src="tools/tool-nav.js"></script>
 <script src="config/constants.js"></script>
 <script src="config/hitboxes.js"></script>
 <script src="config/items.js"></script>

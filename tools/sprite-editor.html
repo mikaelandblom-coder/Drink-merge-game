@@ -13,42 +13,24 @@
      chain picks freely across everything in the folder. -->
 <base href="../">
 <title>Sprite Editor — Mixology Merge</title>
+<link rel="stylesheet" href="tools/tool.css">
 <style>
-  :root { --bar:#17100b; --brass:#c89b5a; --neon:#ff7ab8; --foam:#fff3e0; --line:#3d2d1a;
-          --warn:#ff9d5c; --ok:#7ec84f; }
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:var(--bar); color:var(--foam); font-family:Georgia,serif; height:100vh;
-         display:flex; overflow:hidden; }
+  /* Layout + this tool's own components; the rest comes from tool.css */
+  body { height:100vh; display:flex; overflow:hidden; }
   #side { width:300px; min-width:300px; border-right:1px solid var(--line); padding:14px;
           display:flex; flex-direction:column; gap:10px; overflow-y:auto; padding-bottom:34px; }
   #main { flex:1; display:flex; flex-direction:column; overflow:hidden; padding-bottom:24px; }
-  h1 { font-size:16px; font-style:italic; color:var(--brass); letter-spacing:.08em; }
-  h2 { font-size:11px; color:var(--brass); text-transform:uppercase; letter-spacing:.1em;
+  h2 { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.1em;
        padding:8px 12px 4px; }
-  .tabs { display:flex; gap:6px; }
-  .tabs button { flex:1; background:none; border:1px solid var(--line); color:var(--brass);
-                 font-family:inherit; padding:6px 0; border-radius:8px; cursor:pointer; font-size:12px; }
-  .tabs button.on { background:var(--brass); color:var(--bar); font-weight:bold; }
-  fieldset { border:1px solid var(--line); border-radius:10px; padding:10px; display:flex;
-             flex-direction:column; gap:8px; }
-  legend { font-size:11px; color:var(--brass); text-transform:uppercase; letter-spacing:.1em; padding:0 6px; }
-  label { font-size:12px; color:#c8a870; display:flex; align-items:center; gap:8px; justify-content:space-between; }
-  select,input[type=text],input[type=number],textarea {
-           background:#241a10; color:var(--foam); border:1px solid var(--line);
-           border-radius:6px; padding:5px 8px; font-family:inherit; font-size:12px; width:100%; }
+  .tabs button { font-size:12px; }
+  label { justify-content:space-between; }
   textarea { font-family:Consolas,monospace; font-size:11px; line-height:1.45; resize:vertical; }
-  input[type=range] { flex:1; accent-color:var(--brass); min-width:60px; }
-  .val { min-width:38px; text-align:right; font-size:12px; color:var(--foam); }
-  button.act { background:var(--brass); border:none; color:var(--bar); font-family:inherit;
-               font-weight:bold; font-size:13px; padding:8px; border-radius:8px; cursor:pointer; }
-  button.ghost { background:none; border:1px solid var(--line); color:var(--brass);
-                 font-family:inherit; font-size:12px; padding:6px; border-radius:8px; cursor:pointer; }
-  button.act:disabled, button.ghost:disabled { opacity:.35; cursor:default; }
-  .hint { font-size:11px; color:#8a6f52; line-height:1.5; }
-  .row { display:flex; gap:6px; }
+  input[type=range] { min-width:60px; }
+  .val { min-width:38px; }
+  button.act, button.ghost { padding:8px; }
   .row > * { flex:1; }
   #status { position:fixed; bottom:0; left:0; right:0; padding:5px 12px; font-size:11px;
-            color:#8a6f52; background:rgba(13,8,5,.95); border-top:1px solid var(--line); z-index:5; }
+            color:var(--dim); background:#14121af2; border-top:1px solid var(--line); z-index:5; }
   .pane { display:none; flex-direction:column; flex:1; overflow:hidden; }
   .pane.on { display:flex; }
   .panel { display:none; flex-direction:column; gap:10px; }
@@ -64,18 +46,22 @@
     background-size:14px 14px;
     background-position:0 0,0 7px,7px -7px,-7px 0; }
 
+  /* NO background here: this div carries class="checker", and a `background`
+     shorthand would reset the checkerboard's gradient (it silently did before,
+     so the loaded sheet sat on flat dark — the one place transparency most
+     needs to be visible). */
   #sheetWrap { flex:0 0 auto; height:46%; display:flex; align-items:center; justify-content:center;
-               background:#0d0805; border-bottom:1px solid var(--line); padding:10px; position:relative; }
+               border-bottom:1px solid var(--line); padding:10px; position:relative; }
   #sheetCv { max-width:100%; max-height:100%; border-radius:6px; }
   #cells { flex:1; overflow-y:auto; padding:6px 12px 12px; display:flex; flex-wrap:wrap;
            gap:10px; align-content:flex-start; }
-  .cell { width:132px; border:1px solid var(--line); border-radius:8px; padding:6px;
-          display:flex; flex-direction:column; gap:5px; background:#120c07; }
+  .cell { width:132px; border:1px solid var(--line); border-radius:10px; padding:6px;
+          display:flex; flex-direction:column; gap:5px; background:var(--panel); }
   .cell.off { opacity:.35; }
   .cell canvas { width:100%; height:100px; object-fit:contain; border-radius:5px; }
   .cell input[type=text] { font-size:11px; padding:3px 5px; }
-  .cell .meta { font-size:10px; color:#8a6f52; display:flex; justify-content:space-between; }
-  .cell .top { display:flex; align-items:center; gap:5px; font-size:10px; color:var(--brass); }
+  .cell .meta { font-size:10px; color:var(--dim); display:flex; justify-content:space-between; }
+  .cell .top { display:flex; align-items:center; gap:5px; font-size:10px; color:var(--muted); }
   .cell .top .n { flex:1; }
 
   #tierBody { flex:1; display:flex; overflow:hidden; }
@@ -83,46 +69,46 @@
          flex-direction:column; overflow:hidden; }
   #libList { flex:1; overflow-y:auto; padding:6px; display:flex; flex-wrap:wrap; gap:6px;
              align-content:flex-start; }
-  .libItem { width:70px; cursor:pointer; border:1px solid var(--line); border-radius:6px;
-             padding:3px; background:#120c07; }
-  .libItem:hover { border-color:var(--brass); }
+  .libItem { width:70px; cursor:pointer; border:1px solid var(--line); border-radius:8px;
+             padding:3px; background:var(--panel); }
+  .libItem:hover { border-color:var(--accent); }
   .libItem img { width:100%; height:52px; object-fit:contain; display:block; border-radius:4px; }
-  .libItem span { font-size:9px; color:#8a6f52; display:block; overflow:hidden;
+  .libItem span { font-size:9px; color:var(--dim); display:block; overflow:hidden;
                   text-overflow:ellipsis; white-space:nowrap; margin-top:2px; }
   .libItem.dir { display:flex; flex-direction:column; align-items:center;
                  justify-content:center; height:74px; }
-  .libItem.dir b { font-size:22px; line-height:1; color:var(--brass); }
-  .libItem.dir span { color:var(--foam); margin-top:4px; }
-  #crumbs { padding:4px 8px; font-size:11px; color:#8a6f52; border-bottom:1px solid var(--line);
+  .libItem.dir b { font-size:22px; line-height:1; color:var(--chip-fg); }
+  .libItem.dir span { color:var(--text); margin-top:4px; }
+  #crumbs { padding:4px 8px; font-size:11px; color:var(--dim); border-bottom:1px solid var(--line);
             display:flex; flex-wrap:wrap; gap:3px; align-items:center; min-height:24px; }
-  #crumbs a { color:var(--brass); cursor:pointer; text-decoration:none; }
+  #crumbs a { color:var(--chip-fg); cursor:pointer; text-decoration:none; }
   #crumbs a:hover { text-decoration:underline; }
   #chainSide { flex:1; display:flex; flex-direction:column; overflow:hidden; }
   #chain { flex:1; overflow-y:auto; padding:6px 12px; display:flex; flex-direction:column; gap:5px; }
-  .tier { display:flex; align-items:center; gap:7px; border:1px solid var(--line); border-radius:8px;
-          padding:5px 7px; background:#120c07; font-size:11px; }
-  .tier.drag { outline:2px dashed var(--brass); }
-  .tier .grip { cursor:grab; color:var(--brass); font-size:14px; padding:0 2px; }
-  .tier .idx { width:16px; color:var(--brass); text-align:center; }
+  .tier { display:flex; align-items:center; gap:7px; border:1px solid var(--line); border-radius:10px;
+          padding:5px 7px; background:var(--panel); font-size:11px; }
+  .tier.drag { outline:2px dashed var(--accent); }
+  .tier .grip { cursor:grab; color:var(--muted); font-size:14px; padding:0 2px; }
+  .tier .idx { width:16px; color:var(--muted); text-align:center; }
   .tier canvas { width:46px; height:46px; border-radius:5px; flex:none; }
   .tier .nm { flex:1.4; }
   .tier .num { width:52px; }
   .tier .vis { width:100px; }
   .tier .warn { color:var(--warn); font-size:14px; }
-  .tier .x { cursor:pointer; color:#8a6f52; padding:0 3px; }
+  .tier .x { cursor:pointer; color:var(--dim); padding:0 3px; }
   .tier .x:hover { color:var(--neon); }
-  #scaleWrap { flex:0 0 auto; height:150px; background:#0d0805; border-top:1px solid var(--line);
+  #scaleWrap { flex:0 0 auto; height:150px; background:var(--sunken); border-top:1px solid var(--line);
                border-bottom:1px solid var(--line); display:flex; align-items:center;
                justify-content:center; }
   #scaleCv { max-width:100%; max-height:100%; }
-  .readout { font-size:11px; color:var(--foam); background:#241a10; border-radius:6px; padding:6px 8px;
-             line-height:1.5; }
+  .readout { font-size:11px; line-height:1.5; }
 </style>
 </head>
 <body>
 
 <div id="side">
-  <h1>SPRITE EDITOR</h1>
+  <h1>Sprite editor</h1>
+  <div data-toolnav="sprite"></div>
   <div class="tabs">
     <button id="tabExtract" class="on">1 · Extract</button>
     <button id="tabTier">2 · Tier chain</button>
@@ -289,6 +275,7 @@
 
 <div id="status">Ready.</div>
 
+<script src="tools/tool-nav.js"></script>
 <script src="config/constants.js"></script>
 <script src="config/hitboxes.js"></script>
 <script src="config/items.js"></script>

@@ -1,0 +1,136 @@
+/* Shared look for every tool in tools/ (hitbox editor, sprite editor, sound
+   lab). Tokens + the primitives all three already used under different names,
+   so a tool's own <style> only needs its LAYOUT and its own components.
+
+   Signal colours are deliberately NOT themed: the hitbox editor's magenta
+   walls / red danger line / green free line / cyan test mode, and the sprite
+   editor's neutral-grey checkerboard, all carry meaning. The checkerboard in
+   particular must stay a neutral grey — it is the only honest way to judge a
+   sprite's alpha (see the Read-preview trap in CLAUDE.md). Repaint the chrome,
+   never the readouts. */
+
+:root {
+  --bg:      #14121a;   /* page */
+  --panel:   #1e1b28;   /* cards, raised surfaces */
+  --panel2:  #1a1824;   /* recessed strips, toolbars */
+  --sunken:  #0f0d15;   /* code / canvas backdrop */
+  --line:    #2e2a3d;   /* borders */
+  --line2:   #443c5c;   /* input borders */
+  --text:    #e8e4f0;
+  --muted:   #9b93b0;
+  --dim:     #7d7590;
+  --accent:  #6d4fd0;
+  --accent2: #7d5fe0;   /* accent hover */
+  --ctl:     #322c45;   /* buttons */
+  --ctl2:    #3f3757;   /* button hover */
+  --field:   #2a2536;   /* inputs */
+  --chip:    #2f2846;
+  --chip-fg: #bfb2ee;
+  --ok:      #86d3a0;
+  --warn:    #f0cf85;
+  --warn-bg: #4a3a12;
+  --warn-ln: #6d5520;
+  --err:     #ff9c9c;
+  --neon:    #ff7ab8;   /* selection / active outline (also drawn on canvas) */
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+h1 {
+  font-size: 15px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--muted); font-weight: 600;
+}
+h2 { font-size: 15px; }
+
+/* ---- buttons ---- */
+button {
+  font: inherit; font-size: 13px; cursor: pointer; border: none;
+  border-radius: 9px; padding: 8px 13px;
+  background: var(--ctl); color: var(--text);
+  transition: transform .05s, background .12s;
+}
+button:hover { background: var(--ctl2); }
+button:active { transform: scale(.94); }
+button:disabled { opacity: .4; cursor: default; transform: none; }
+button:disabled:hover { background: var(--ctl); }
+
+/* .act is the editors' name for the primary action, .accent the sound lab's */
+button.act, button.accent { background: var(--accent); color: #fff; font-weight: 600; }
+button.act:hover, button.accent:hover { background: var(--accent2); }
+button.ghost { background: none; border: 1px solid var(--line2); color: var(--muted); }
+button.ghost:hover { background: var(--field); color: var(--text); }
+button.tiny { padding: 4px 9px; font-size: 12px; border-radius: 7px; }
+button.on { outline: 2px solid var(--neon); }
+
+/* ---- tabs ---- */
+.tabs { display: flex; gap: 6px; }
+.tabs button {
+  flex: 1; background: none; border: 1px solid var(--line2);
+  color: var(--muted); padding: 7px 0; border-radius: 9px;
+}
+.tabs button:hover { background: var(--field); color: var(--text); }
+.tabs button.on {
+  background: var(--accent); border-color: var(--accent);
+  color: #fff; font-weight: 600; outline: none;
+}
+.tabs button:disabled { opacity: .35; }
+
+/* ---- form controls ---- */
+fieldset {
+  border: 1px solid var(--line); border-radius: 12px; padding: 11px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+legend {
+  font-size: 11px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .1em; padding: 0 6px;
+}
+label {
+  font-size: 12.5px; color: var(--muted);
+  display: flex; align-items: center; gap: 8px;
+}
+select, textarea,
+input[type=text], input[type=number], input[type=file] {
+  background: var(--field); color: var(--text);
+  border: 1px solid var(--line2); border-radius: 7px;
+  padding: 5px 8px; font: inherit; font-size: 12.5px;
+}
+select, textarea, input[type=text], input[type=number] { width: 100%; }
+input[type=range] { flex: 1; accent-color: var(--accent); }
+input[type=checkbox] { accent-color: var(--accent); }
+select:focus, textarea:focus, input:focus { outline: 1px solid var(--accent); }
+
+/* ---- small shared bits ---- */
+.val { min-width: 34px; text-align: right; font-size: 12px; color: var(--text); }
+.hint { font-size: 11.5px; color: var(--dim); line-height: 1.5; }
+.row { display: flex; gap: 6px; }
+.readout {
+  font-size: 12px; color: var(--text); background: var(--field);
+  border-radius: 7px; padding: 6px 8px;
+}
+.chip {
+  font-size: 11px; padding: 2px 8px; border-radius: 20px;
+  background: var(--chip); color: var(--chip-fg); border: 1px solid var(--line2);
+}
+code {
+  background: #2a2636; padding: 1px 6px; border-radius: 5px;
+  font-size: 12px; color: #c3b6ea;
+}
+
+/* ---- tool switcher (injected by tool-nav.js) ---- */
+.toolnav { display: flex; gap: 5px; flex-wrap: wrap; }
+.toolnav a {
+  display: inline-flex; align-items: center; gap: 5px; text-decoration: none;
+  font-size: 12px; padding: 5px 10px; border-radius: 20px; white-space: nowrap;
+  background: var(--ctl); color: var(--muted); border: 1px solid transparent;
+  transition: background .12s, color .12s;
+}
+.toolnav a:hover { background: var(--ctl2); color: var(--text); }
+.toolnav a.on { background: var(--accent); color: #fff; font-weight: 600; }
+.toolnav a.ext { background: none; border-color: var(--line); }
+.toolnav a.ext:hover { background: var(--field); }

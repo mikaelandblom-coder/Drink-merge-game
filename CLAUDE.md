@@ -56,6 +56,18 @@ tools/
                          assign one per map+event (see "Sound editing" below).
                          Loads config/sounds.js + config/soundmap.js from the
                          real project, so it plays exactly what the game plays.
+  tool.css            — Shared look for ALL tools: tokens (--bg/--panel/--accent
+                         /--line/--muted…) + the primitives they had each
+                         restyled separately (buttons, .tabs, fieldset/legend,
+                         inputs, .hint/.row/.val/.readout/.chip). A tool's own
+                         <style> should hold only its LAYOUT and its own
+                         components. Signal colours are deliberately NOT themed —
+                         see the comment at the top of the file.
+  tool-nav.js         — Tool switcher. A tool marks its mount point with
+                         `data-toolnav="<id>"` and gets pills for the others;
+                         adding a tool = one line in TOOLS. Hrefs are relative
+                         to the PROJECT ROOT because every tool sets
+                         <base href="../">.
   shot-receiver.py    — Local POST receiver for canvas screenshots from the
                          (often hidden) preview tab — see "Known issues".
 assets/
@@ -687,6 +699,17 @@ Currently 4 — increase when adding more tiers.
   `col_splits`/`row_splits`. Mage art is temporary; plan is to regenerate with
   transparent backgrounds (see memory/workflow-sprites).
 - **Windows console is cp1252**: no `→`/`—`/emoji in Python print output.
+- **`hidden` loses to any author `display` rule** — `[hidden]{display:none}` is a
+  UA rule of the same specificity as a class, so an author `.x{display:flex}`
+  wins and the element stays visible with `hidden` set. The sound lab's
+  "unsaved picks restored" banner showed on every load because of exactly this
+  (2026-07-26). Any element toggled via `hidden` needs an explicit
+  `.x[hidden]{display:none}`. Checking `el.hidden` does NOT catch it — assert on
+  `offsetHeight`/`getComputedStyle`, not the attribute.
+- **All three tools set `<base href="../">`** so they can load `config/*.js` from
+  the real project. Anything a tool references — its own stylesheet, scripts,
+  sibling tools — must therefore be written relative to the PROJECT ROOT
+  (`tools/tool.css`), not to `tools/`. A bare `tool.css` silently 404s.
 
 ---
 

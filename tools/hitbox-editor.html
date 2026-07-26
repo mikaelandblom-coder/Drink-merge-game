@@ -7,48 +7,28 @@
      http://localhost:5500/tools/hitbox-editor.html -->
 <base href="../">
 <title>Hitbox Editor — Mixology Merge</title>
+<link rel="stylesheet" href="tools/tool.css">
 <style>
-  :root { --bar:#17100b; --brass:#c89b5a; --neon:#ff7ab8; --foam:#fff3e0; --line:#3d2d1a; }
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:var(--bar); color:var(--foam); font-family:Georgia,serif; height:100vh;
-         display:flex; overflow:hidden; }
+  /* Layout + this tool's own bits; everything else comes from tool.css */
+  body { height:100vh; display:flex; overflow:hidden; }
   #side { width:280px; min-width:280px; border-right:1px solid var(--line); padding:14px;
           display:flex; flex-direction:column; gap:10px; overflow-y:auto; }
-  h1 { font-size:16px; font-style:italic; color:var(--brass); letter-spacing:.08em; }
-  .tabs { display:flex; gap:6px; }
-  .tabs button { flex:1; background:none; border:1px solid var(--line); color:var(--brass);
-                 font-family:inherit; padding:6px 0; border-radius:8px; cursor:pointer; }
-  .tabs button.on { background:var(--brass); color:var(--bar); font-weight:bold; }
-  .tabs button:disabled { opacity:.35; cursor:default; }
-  fieldset { border:1px solid var(--line); border-radius:10px; padding:10px; display:flex;
-             flex-direction:column; gap:8px; }
-  legend { font-size:11px; color:var(--brass); text-transform:uppercase; letter-spacing:.1em; padding:0 6px; }
-  label { font-size:12px; color:#c8a870; display:flex; align-items:center; gap:8px; justify-content:space-between; }
-  select,input[type=text] { background:#241a10; color:var(--foam); border:1px solid var(--line);
-           border-radius:6px; padding:5px 8px; font-family:inherit; font-size:12px; width:100%; }
-  input[type=range] { flex:1; accent-color:var(--brass); }
-  .val { min-width:34px; text-align:right; font-size:12px; color:var(--foam); }
-  button.act { background:var(--brass); border:none; color:var(--bar); font-family:inherit;
-               font-weight:bold; font-size:13px; padding:8px; border-radius:8px; cursor:pointer; }
-  button.ghost { background:none; border:1px solid var(--line); color:var(--brass);
-                 font-family:inherit; font-size:12px; padding:6px; border-radius:8px; cursor:pointer; }
-  button.on { outline:2px solid var(--neon); }
-  .hint { font-size:11px; color:#8a6f52; line-height:1.5; }
-  #stage { flex:1; display:flex; align-items:center; justify-content:center; background:#0d0805; }
+  label { justify-content:space-between; }
+  button.act, button.ghost { padding:8px; }
+  #stage { flex:1; display:flex; align-items:center; justify-content:center; background:var(--sunken); }
   canvas { border-radius:10px; box-shadow:0 0 0 2px var(--line), 0 18px 50px rgba(0,0,0,.6); }
   #status { position:fixed; bottom:0; left:280px; right:0; padding:5px 12px; font-size:11px;
-            color:#8a6f52; background:rgba(13,8,5,.9); border-top:1px solid var(--line); }
-  .row { display:flex; gap:6px; }
+            color:var(--dim); background:#14121aee; border-top:1px solid var(--line); }
   .row > * { flex:1; }
   #itemPanel, #mapPanel { display:none; }
   #itemPanel.show, #mapPanel.show { display:flex; flex-direction:column; gap:10px; }
-  .readout { font-size:12px; color:var(--foam); background:#241a10; border-radius:6px; padding:6px 8px; }
 </style>
 </head>
 <body>
 
 <div id="side">
-  <h1>HITBOX EDITOR</h1>
+  <h1>Hitbox editor</h1>
+  <div data-toolnav="hitbox"></div>
   <fieldset>
     <legend>Map</legend>
     <select id="mapPick"></select>
@@ -134,6 +114,7 @@
 <div id="stage"><canvas id="c"></canvas></div>
 <div id="status">Ready.</div>
 
+<script src="tools/tool-nav.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
 <script src="config/constants.js"></script>
 <script src="config/hitboxes.js"></script>
