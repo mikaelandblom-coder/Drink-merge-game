@@ -1,7 +1,7 @@
 // All canvas drawing. Depends on: ctx, W, H, ITEMS, persp, ACTIVE_MAP.
 
-const COIN_IMG = new Image(); COIN_IMG.src = 'assets/images/coin.png';
-const BAG_IMG  = new Image(); BAG_IMG.src  = 'assets/images/moneybag.png';
+const COIN_IMG = new Image(); COIN_IMG.src = 'assets/images/shared/coin.png';
+const BAG_IMG  = new Image(); BAG_IMG.src  = 'assets/images/shared/moneybag.png';
 
 // The map background lives in a DOM layer (#stage-bg) UNDER a transparent
 // canvas, not on the canvas itself: the compositor rasters the image once and
@@ -15,8 +15,8 @@ function loadMapAssets(map, bgSrc) {
     `url('${bgSrc || map.bg}')`;
   // Coin & bag art are shared by default; a map may override either with its own
   // (e.g. Melody Lane's note-coin + instrument-case bag). Falls back to shared.
-  COIN_IMG.src = map.coin || 'assets/images/coin.png';
-  BAG_IMG.src  = map.bag  || 'assets/images/moneybag.png';
+  COIN_IMG.src = map.coin || 'assets/images/shared/coin.png';
+  BAG_IMG.src  = map.bag  || 'assets/images/shared/moneybag.png';
 }
 
 function drawDangerLine(dangerWY) {
@@ -184,7 +184,7 @@ const CUSTOMER_IMGS = [
   'customer-granny',  'customer-girl',      'customer-sailor',
   'customer-student', 'customer-artist',    'customer-businessman',
   'customer-surfer',  'customer-professor', 'customer-tourist',
-].map(n => { const i = new Image(); i.src = 'assets/images/' + n + '.png'; return i; });
+].map(n => { const i = new Image(); i.src = 'assets/images/shared/' + n + '.png'; return i; });
 
 // Layout is proportional to the per-map HORIZON so customers always fit in the
 // strip behind the line regardless of map framing. Shared by drawCustomers and

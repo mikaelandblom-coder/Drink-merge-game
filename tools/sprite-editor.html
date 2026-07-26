@@ -1,0 +1,1205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<!-- Sprites are referenced relative to the project root, so this tool must be
+     served from the same server as the game:
+     http://localhost:5500/tools/sprite-editor.html
+
+     TWO INDEPENDENT MODULES, sharing only the folder of PNGs on disk:
+       1. EXTRACT     — one AI sheet -> individual transparent PNGs in assets/images/
+       2. TIER CHAIN  — pick which PNG is which tier, order + rescale -> config/items.js
+     Multiple sheets need no "combine" step: extract each one, then the tier
+     chain picks freely across everything in the folder. -->
+<base href="../">
+<title>Sprite Editor — Mixology Merge</title>
+<style>
+  :root { --bar:#17100b; --brass:#c89b5a; --neon:#ff7ab8; --foam:#fff3e0; --line:#3d2d1a;
+          --warn:#ff9d5c; --ok:#7ec84f; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bar); color:var(--foam); font-family:Georgia,serif; height:100vh;
+         display:flex; overflow:hidden; }
+  #side { width:300px; min-width:300px; border-right:1px solid var(--line); padding:14px;
+          display:flex; flex-direction:column; gap:10px; overflow-y:auto; padding-bottom:34px; }
+  #main { flex:1; display:flex; flex-direction:column; overflow:hidden; padding-bottom:24px; }
+  h1 { font-size:16px; font-style:italic; color:var(--brass); letter-spacing:.08em; }
+  h2 { font-size:11px; color:var(--brass); text-transform:uppercase; letter-spacing:.1em;
+       padding:8px 12px 4px; }
+  .tabs { display:flex; gap:6px; }
+  .tabs button { flex:1; background:none; border:1px solid var(--line); color:var(--brass);
+                 font-family:inherit; padding:6px 0; border-radius:8px; cursor:pointer; font-size:12px; }
+  .tabs button.on { background:var(--brass); color:var(--bar); font-weight:bold; }
+  fieldset { border:1px solid var(--line); border-radius:10px; padding:10px; display:flex;
+             flex-direction:column; gap:8px; }
+  legend { font-size:11px; color:var(--brass); text-transform:uppercase; letter-spacing:.1em; padding:0 6px; }
+  label { font-size:12px; color:#c8a870; display:flex; align-items:center; gap:8px; justify-content:space-between; }
+  select,input[type=text],input[type=number],textarea {
+           background:#241a10; color:var(--foam); border:1px solid var(--line);
+           border-radius:6px; padding:5px 8px; font-family:inherit; font-size:12px; width:100%; }
+  textarea { font-family:Consolas,monospace; font-size:11px; line-height:1.45; resize:vertical; }
+  input[type=range] { flex:1; accent-color:var(--brass); min-width:60px; }
+  .val { min-width:38px; text-align:right; font-size:12px; color:var(--foam); }
+  button.act { background:var(--brass); border:none; color:var(--bar); font-family:inherit;
+               font-weight:bold; font-size:13px; padding:8px; border-radius:8px; cursor:pointer; }
+  button.ghost { background:none; border:1px solid var(--line); color:var(--brass);
+                 font-family:inherit; font-size:12px; padding:6px; border-radius:8px; cursor:pointer; }
+  button.act:disabled, button.ghost:disabled { opacity:.35; cursor:default; }
+  .hint { font-size:11px; color:#8a6f52; line-height:1.5; }
+  .row { display:flex; gap:6px; }
+  .row > * { flex:1; }
+  #status { position:fixed; bottom:0; left:0; right:0; padding:5px 12px; font-size:11px;
+            color:#8a6f52; background:rgba(13,8,5,.95); border-top:1px solid var(--line); z-index:5; }
+  .pane { display:none; flex-direction:column; flex:1; overflow:hidden; }
+  .pane.on { display:flex; }
+  .panel { display:none; flex-direction:column; gap:10px; }
+  .panel.on { display:flex; }
+
+  /* transparency checkerboard — the ONLY honest way to look at a sprite */
+  .checker { background-color:#6b6b6b;
+    background-image:
+      linear-gradient(45deg,#4a4a4a 25%,transparent 25%),
+      linear-gradient(-45deg,#4a4a4a 25%,transparent 25%),
+      linear-gradient(45deg,transparent 75%,#4a4a4a 75%),
+      linear-gradient(-45deg,transparent 75%,#4a4a4a 75%);
+    background-size:14px 14px;
+    background-position:0 0,0 7px,7px -7px,-7px 0; }
+
+  #sheetWrap { flex:0 0 auto; height:46%; display:flex; align-items:center; justify-content:center;
+               background:#0d0805; border-bottom:1px solid var(--line); padding:10px; position:relative; }
+  #sheetCv { max-width:100%; max-height:100%; border-radius:6px; }
+  #cells { flex:1; overflow-y:auto; padding:6px 12px 12px; display:flex; flex-wrap:wrap;
+           gap:10px; align-content:flex-start; }
+  .cell { width:132px; border:1px solid var(--line); border-radius:8px; padding:6px;
+          display:flex; flex-direction:column; gap:5px; background:#120c07; }
+  .cell.off { opacity:.35; }
+  .cell canvas { width:100%; height:100px; object-fit:contain; border-radius:5px; }
+  .cell input[type=text] { font-size:11px; padding:3px 5px; }
+  .cell .meta { font-size:10px; color:#8a6f52; display:flex; justify-content:space-between; }
+  .cell .top { display:flex; align-items:center; gap:5px; font-size:10px; color:var(--brass); }
+  .cell .top .n { flex:1; }
+
+  #tierBody { flex:1; display:flex; overflow:hidden; }
+  #lib { width:250px; min-width:250px; border-right:1px solid var(--line); display:flex;
+         flex-direction:column; overflow:hidden; }
+  #libList { flex:1; overflow-y:auto; padding:6px; display:flex; flex-wrap:wrap; gap:6px;
+             align-content:flex-start; }
+  .libItem { width:70px; cursor:pointer; border:1px solid var(--line); border-radius:6px;
+             padding:3px; background:#120c07; }
+  .libItem:hover { border-color:var(--brass); }
+  .libItem img { width:100%; height:52px; object-fit:contain; display:block; border-radius:4px; }
+  .libItem span { font-size:9px; color:#8a6f52; display:block; overflow:hidden;
+                  text-overflow:ellipsis; white-space:nowrap; margin-top:2px; }
+  .libItem.dir { display:flex; flex-direction:column; align-items:center;
+                 justify-content:center; height:74px; }
+  .libItem.dir b { font-size:22px; line-height:1; color:var(--brass); }
+  .libItem.dir span { color:var(--foam); margin-top:4px; }
+  #crumbs { padding:4px 8px; font-size:11px; color:#8a6f52; border-bottom:1px solid var(--line);
+            display:flex; flex-wrap:wrap; gap:3px; align-items:center; min-height:24px; }
+  #crumbs a { color:var(--brass); cursor:pointer; text-decoration:none; }
+  #crumbs a:hover { text-decoration:underline; }
+  #chainSide { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+  #chain { flex:1; overflow-y:auto; padding:6px 12px; display:flex; flex-direction:column; gap:5px; }
+  .tier { display:flex; align-items:center; gap:7px; border:1px solid var(--line); border-radius:8px;
+          padding:5px 7px; background:#120c07; font-size:11px; }
+  .tier.drag { outline:2px dashed var(--brass); }
+  .tier .grip { cursor:grab; color:var(--brass); font-size:14px; padding:0 2px; }
+  .tier .idx { width:16px; color:var(--brass); text-align:center; }
+  .tier canvas { width:46px; height:46px; border-radius:5px; flex:none; }
+  .tier .nm { flex:1.4; }
+  .tier .num { width:52px; }
+  .tier .vis { width:100px; }
+  .tier .warn { color:var(--warn); font-size:14px; }
+  .tier .x { cursor:pointer; color:#8a6f52; padding:0 3px; }
+  .tier .x:hover { color:var(--neon); }
+  #scaleWrap { flex:0 0 auto; height:150px; background:#0d0805; border-top:1px solid var(--line);
+               border-bottom:1px solid var(--line); display:flex; align-items:center;
+               justify-content:center; }
+  #scaleCv { max-width:100%; max-height:100%; }
+  .readout { font-size:11px; color:var(--foam); background:#241a10; border-radius:6px; padding:6px 8px;
+             line-height:1.5; }
+</style>
+</head>
+<body>
+
+<div id="side">
+  <h1>SPRITE EDITOR</h1>
+  <div class="tabs">
+    <button id="tabExtract" class="on">1 · Extract</button>
+    <button id="tabTier">2 · Tier chain</button>
+  </div>
+
+  <!-- ══════════════ EXTRACT panel ══════════════ -->
+  <div id="pExtract" class="panel on">
+    <fieldset>
+      <legend>Sheet</legend>
+      <input type="file" id="sheetFile" accept="image/*">
+      <div class="readout" id="sheetInfo">No sheet loaded.</div>
+      <label>white background <input type="checkbox" id="keyWhite"></label>
+      <label id="rowWhiteT" style="display:none">threshold
+        <input type="range" id="whiteThresh" min="180" max="252" value="235">
+        <span class="val" id="vWhiteThresh">235</span></label>
+      <div class="hint">Only tick “white background” if the sheet really is
+        opaque white — a properly transparent sheet looks fine on the
+        checkerboard above and needs no keying.</div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Grid detection</legend>
+      <div class="readout" id="gridInfo">—</div>
+      <label title="How opaque a pixel must be to count as content rather than empty gutter. Raise it when faint glow bridges the gap between items.">gutter alpha
+        <input type="range" id="alphaThresh" min="8" max="128" value="32">
+        <span class="val" id="vAlphaThresh">32</span></label>
+      <label title="How many solid pixels a row/column needs before it counts as content. Guards against the faint 1px streaks generators leave across a whole sheet.">min px / line
+        <input type="range" id="minPx" min="1" max="40" value="4">
+        <span class="val" id="vMinPx">4</span></label>
+      <label title="Content strips closer together than this are treated as one item — stops a detached leaf or handle from being split into its own cell.">merge gap
+        <input type="range" id="mergeGap" min="0" max="80" value="14">
+        <span class="val" id="vMergeGap">14</span></label>
+      <label title="Content strips thinner than this are discarded as noise rather than becoming a cell.">min band
+        <input type="range" id="minSize" min="4" max="200" value="20">
+        <span class="val" id="vMinSize">20</span></label>
+      <div class="hint">Green boxes = detected cells. Too few boxes → glow is
+        bridging a gutter: raise “gutter alpha”. Too many → raise “merge gap”.</div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Per-item isolation</legend>
+      <label title="Keep only pixels connected to the item itself, instead of everything inside the cell rectangle. Leave this on.">flood-fill isolate <input type="checkbox" id="isolate" checked></label>
+      <label title="Ignore soft alpha under the item, so an AI-baked drop shadow is dropped. The game draws its own shadow.">strip baked shadow <input type="checkbox" id="stripShadow"></label>
+      <label title="Minimum size of a detached piece, as a % of the main blob, for it to count as part of the item rather than a stray speck.">keep parts ≥
+        <input type="range" id="minFrac" min="0" max="40" value="5">
+        <span class="val" id="vMinFrac">5%</span></label>
+      <label title="Pixels of soft edge grown back around the isolated item, so the sprite doesn't end in a hard cut.">edge feather
+        <input type="range" id="dilateR" min="0" max="14" value="5">
+        <span class="val" id="vDilateR">5</span></label>
+      <label title="Extra margin taken around each detected cell before isolating, so soft glow that falls below the gutter threshold isn't clipped off. Raise it if halos look cut; lower it if cells keep grabbing neighbours.">glow pad
+        <input type="range" id="glowPad" min="0" max="60" value="24">
+        <span class="val" id="vGlowPad">24</span></label>
+      <label title="Transparent padding left around the finished sprite after cropping to its content.">trim pad
+        <input type="range" id="trimPad" min="0" max="30" value="6">
+        <span class="val" id="vTrimPad">6</span></label>
+      <div class="hint">Isolate keeps only blobs connected to the item, so a
+        neighbour’s stem poking into the cell is dropped. “keep parts ≥” is the
+        floor for genuinely separate pieces (a violin bow ≈ 13%, stray specks
+        ≈ 1%). Strip shadow ignores soft alpha under the item — the game draws
+        its own shadow.</div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Save</legend>
+      <label>name prefix <input type="text" id="prefix" value="" style="width:140px"></label>
+      <button class="act" id="saveCells">Save PNGs to folder…</button>
+      <button class="ghost" id="dlCells">Download individually</button>
+      <div class="hint">Pick the map’s own folder — <b>assets/images/farm/</b>,
+        not assets/images/ — and the folder is reused for the rest of the
+        session. Sprites there need no <code>farm-</code> prefix any more;
+        the folder says which map they belong to, so name them
+        <code>seed</code>, <code>sprout</code>, … Untick a cell to skip it.</div>
+    </fieldset>
+  </div>
+
+  <!-- ══════════════ TIER panel ══════════════ -->
+  <div id="pTier" class="panel">
+    <fieldset>
+      <legend>Sprite folder</legend>
+      <button class="ghost" id="pickLib">Choose assets/images/…</button>
+      <label>filter <input type="text" id="libFilter" placeholder="seed" style="width:150px"></label>
+      <div class="hint">Pick <b>assets/images/</b> as the root, then click a
+        📁 to go into a map’s folder and <b>↰</b> or the breadcrumb to come
+        back up. Click a thumbnail to append it as the next tier — tiers
+        remember their folder, so one chain can mix a map’s items with
+        something from <b>shared/</b>.</div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Chain</legend>
+      <label>load existing <select id="chainPick"></select></label>
+      <label>const name <input type="text" id="constName" value="FARM_ITEMS" style="width:150px"></label>
+      <label>sprite path <input type="text" id="pathPrefix" value="assets/images/" style="width:150px"></label>
+      <div class="row">
+        <button class="ghost" id="ladderBtn"
+          title="Re-space r evenly from 15 to 71 across every tier. Overwrites manual r edits.">Reset r ladder</button>
+        <button class="ghost" id="autoVisBtn"
+          title="Recompute vis for every tier from its art's aspect, so each item covers the same on-screen area. Overwrites manual vis edits.">Auto-fit vis</button>
+      </div>
+      <button class="ghost" id="clearChain">Clear chain</button>
+      <div class="hint">
+        <b>r</b> — the tier’s size step. The game draws each sprite at height
+        <b>r·2.4·vis</b>, so the source PNG’s pixel size is irrelevant: never
+        pre-scale the art.<br>
+        <b>vis</b> — rescales one item visually. Physics is untouched.<br><br>
+        <b>Reset r ladder</b> re-spaces r evenly 15 → 71 across the chain.
+        It’s a starting point for a NEW chain — the shipped maps use
+        hand-tuned ladders, so pressing it on one of those <i>will</i> change
+        its tier sizes. Reordering does not do this: r belongs to the slot, so
+        a drag re-assigns the chain’s existing values smallest → largest and a
+        tuned ladder survives untouched.<br>
+        <b>Auto-fit vis</b> sets every vis so each item takes up the same
+        on-screen area as a typical sprite of its tier — the fix for wide art
+        that would otherwise render huge.<br>
+        Both buttons act on <b>all</b> tiers and overwrite anything you typed
+        or dragged by hand.<br><br>
+        ⚠ If an item already has a traced <b>capsule</b> hitbox, changing vis
+        means re-tracing it in the hitbox editor.</div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Output</legend>
+      <textarea id="out" rows="9" spellcheck="false"></textarea>
+      <button class="act" id="writeItems">Write into config/items.js…</button>
+      <div class="row">
+        <button class="ghost" id="copyItems">Copy</button>
+        <button class="ghost" id="dlItems">Download</button>
+      </div>
+      <div class="hint">Write replaces just this one <code>const … = [ … ]</code>
+        block (or appends a new chain + registers it), leaving the rest of
+        items.js alone. Then reload the game tab.</div>
+    </fieldset>
+  </div>
+</div>
+
+<div id="main">
+  <!-- EXTRACT pane -->
+  <div id="paneExtract" class="pane on">
+    <div id="sheetWrap" class="checker"><canvas id="sheetCv"></canvas></div>
+    <h2 id="cellsHead">Extracted items</h2>
+    <div id="cells"></div>
+  </div>
+
+  <!-- TIER pane -->
+  <div id="paneTier" class="pane">
+    <div id="scaleWrap"><canvas id="scaleCv"></canvas></div>
+    <div id="tierBody">
+      <div id="lib">
+        <h2>Sprite folder</h2>
+        <div id="crumbs"></div>
+        <div id="libList" class="hint" style="padding:12px">No folder chosen.</div>
+      </div>
+      <div id="chainSide">
+        <h2>Tier chain — drag to reorder</h2>
+        <div class="hint" style="padding:0 12px 6px">
+          tier # · sprite · name · <b>r</b> tier size · <b>vis</b> visual scale ·
+          ⚠ draws too small for its tier
+        </div>
+        <div id="chain"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="status">Ready.</div>
+
+<script src="config/constants.js"></script>
+<script src="config/hitboxes.js"></script>
+<script src="config/items.js"></script>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const status = m => { $('status').textContent = m; };
+const clamp = (v,a,b) => v<a?a:v>b?b:v;
+const LS = 'mm_sprite_tool_v1';
+
+// ══════════════════════════════════════════════════════════════════════════
+//  Tabs
+// ══════════════════════════════════════════════════════════════════════════
+function setTab(t) {
+  const ex = t === 'extract';
+  $('tabExtract').classList.toggle('on', ex);
+  $('tabTier').classList.toggle('on', !ex);
+  $('pExtract').classList.toggle('on', ex);
+  $('pTier').classList.toggle('on', !ex);
+  $('paneExtract').classList.toggle('on', ex);
+  $('paneTier').classList.toggle('on', !ex);
+  // canvases sized while their pane was display:none come out 1×1 — redraw on
+  // the way in, once the pane actually has a layout
+  if (ex) { if (workID) drawSheet(); } else drawScale();
+}
+$('tabExtract').onclick = () => setTab('extract');
+$('tabTier').onclick    = () => setTab('tier');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  MODULE 1 — EXTRACT
+//  Sheet -> ImageData -> content bands (transparent gutters) -> per-cell
+//  connected-component isolation -> individual transparent PNGs.
+//  This is a JS port of split_alpha_grid/drop_specks in process_assets.py,
+//  made live and adjustable. No scipy, no Python round-trip.
+// ══════════════════════════════════════════════════════════════════════════
+let rawID  = null;    // ImageData straight from the file
+let workID = null;    // after optional white-keying
+let cells  = [];      // {canvas,name,include,band,aspect,liq,glass,coverage}
+let bandsC = [], bandsR = [];
+
+// ── pixel helpers ─────────────────────────────────────────────────────────
+function imgToImageData(img) {
+  const c = document.createElement('canvas');
+  c.width = img.naturalWidth; c.height = img.naturalHeight;
+  const x = c.getContext('2d', { willReadFrequently:true });
+  x.drawImage(img, 0, 0);
+  return x.getImageData(0, 0, c.width, c.height);
+}
+
+// Turn an opaque white background transparent, with a soft ramp and an
+// un-matte (undo the white that bled into the semi-transparent edge).
+function keyWhiteBg(src, thresh) {
+  const out = new ImageData(new Uint8ClampedArray(src.data), src.width, src.height);
+  const d = out.data, SOFT = 30;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], g = d[i+1], b = d[i+2];
+    const m = Math.min(r, g, b);
+    let a;
+    if      (m >= thresh)        a = 0;
+    else if (m >= thresh - SOFT) a = Math.round(255 * (thresh - m) / SOFT);
+    else                         a = 255;
+    if (a === 0) { d[i+3] = 0; continue; }
+    if (a < 255) {                              // un-matte against white
+      const f = a / 255;
+      d[i]   = clamp((r - (1-f)*255) / f, 0, 255);
+      d[i+1] = clamp((g - (1-f)*255) / f, 0, 255);
+      d[i+2] = clamp((b - (1-f)*255) / f, 0, 255);
+    }
+    d[i+3] = Math.min(d[i+3], a);
+  }
+  return out;
+}
+
+// Content bands along one axis — the port of _alpha_bands(). A line only
+// counts as content if it has more than minPx solid pixels: generators leave
+// faint 1px alpha streaks across the whole sheet that would otherwise bridge
+// every gutter.
+function contentBands(id, axis, o) {
+  const w = id.width, h = id.height, d = id.data;
+  const len = axis === 0 ? w : h;
+  const prof = new Int32Array(len);
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    for (let x = 0; x < w; x++) {
+      if (d[(row + x) * 4 + 3] > o.alphaThresh) prof[axis === 0 ? x : y]++;
+    }
+  }
+  const bands = [];
+  let inb = false, s = 0;
+  for (let i = 0; i < len; i++) {
+    const v = prof[i] > o.minPx;
+    if (v && !inb) { inb = true; s = i; }
+    else if (!v && inb) { bands.push([s, i]); inb = false; }
+  }
+  if (inb) bands.push([s, len]);
+  const merged = [];
+  for (const b of bands) {
+    if (merged.length && b[0] - merged[merged.length-1][1] < o.mergeGap)
+      merged[merged.length-1][1] = b[1];
+    else merged.push(b.slice());
+  }
+  return merged.filter(b => b[1] - b[0] >= o.minSize);
+}
+
+// 4-connected component labelling over a local boolean mask.
+function labelComponents(m, w, h) {
+  const lab = new Int32Array(w * h), stack = new Int32Array(w * h), list = [];
+  let n = 0;
+  for (let i = 0; i < w * h; i++) {
+    if (!m[i] || lab[i]) continue;
+    n++; let sp = 0; stack[sp++] = i; lab[i] = n;
+    let area = 0, sx = 0, sy = 0;
+    while (sp) {
+      const p = stack[--sp], y = (p / w) | 0, x = p - y * w;
+      area++; sx += x; sy += y;
+      if (x > 0     && m[p-1] && !lab[p-1]) { lab[p-1] = n; stack[sp++] = p-1; }
+      if (x < w - 1 && m[p+1] && !lab[p+1]) { lab[p+1] = n; stack[sp++] = p+1; }
+      if (y > 0     && m[p-w] && !lab[p-w]) { lab[p-w] = n; stack[sp++] = p-w; }
+      if (y < h - 1 && m[p+w] && !lab[p+w]) { lab[p+w] = n; stack[sp++] = p+w; }
+    }
+    list.push({ id:n, area, cx:sx/area, cy:sy/area });
+  }
+  return { lab, list };
+}
+
+// Separable boolean dilation (prefix-sum window) — recovers the soft edge that
+// the core threshold cut off.
+function dilate(m, w, h, r) {
+  if (r <= 0) return m;
+  const tmp = new Uint8Array(w * h), out = new Uint8Array(w * h);
+  let pre = new Int32Array(Math.max(w, h) + 1);
+  for (let y = 0; y < h; y++) {
+    const o = y * w;
+    for (let x = 0; x < w; x++) pre[x+1] = pre[x] + m[o+x];
+    for (let x = 0; x < w; x++)
+      tmp[o+x] = pre[Math.min(w, x+r+1)] - pre[Math.max(0, x-r)] ? 1 : 0;
+  }
+  for (let x = 0; x < w; x++) {
+    for (let y = 0; y < h; y++) pre[y+1] = pre[y] + tmp[y*w + x];
+    for (let y = 0; y < h; y++)
+      out[y*w + x] = pre[Math.min(h, y+r+1)] - pre[Math.max(0, y-r)] ? 1 : 0;
+  }
+  return out;
+}
+
+// Cut one item out of the sheet.
+function extractCell(id, band, o) {
+  const W = id.width, H = id.height, d = id.data;
+  const px0 = Math.max(0, band.x0 - o.glowPad), py0 = Math.max(0, band.y0 - o.glowPad);
+  const px1 = Math.min(W, band.x1 + o.glowPad), py1 = Math.min(H, band.y1 + o.glowPad);
+  const lw = px1 - px0, lh = py1 - py0;
+  if (lw <= 0 || lh <= 0) return null;
+
+  // core mask: >128 when stripping baked shadows (soft shadow alpha falls out),
+  // otherwise the same gutter threshold used for band detection.
+  const coreT = o.stripShadow ? 128 : o.alphaThresh;
+  const core = new Uint8Array(lw * lh);
+  for (let y = 0; y < lh; y++) {
+    const so = ((py0 + y) * W + px0) * 4, lo = y * lw;
+    for (let x = 0; x < lw; x++) core[lo + x] = d[so + x*4 + 3] > coreT ? 1 : 0;
+  }
+
+  let keep = core, reject = null;
+  if (o.isolate) {
+    const { lab, list } = labelComponents(core, lw, lh);
+    if (!list.length) return null;
+    const bx0 = band.x0 - px0, by0 = band.y0 - py0;
+    const bx1 = band.x1 - px0, by1 = band.y1 - py0;
+    const inBand = c => c.cx >= bx0 && c.cx < bx1 && c.cy >= by0 && c.cy < by1;
+    // primary = biggest blob whose centroid sits in the cell's own band, so a
+    // neighbour's stem that leaked in through the glow pad can never win
+    let prim = null;
+    for (const c of list) if (inBand(c) && (!prim || c.area > prim.area)) prim = c;
+    if (!prim) for (const c of list) if (!prim || c.area > prim.area) prim = c;
+    const ids = new Set([prim.id]);
+    for (const c of list)
+      if (c !== prim && inBand(c) && c.area >= o.minFrac * prim.area) ids.add(c.id);
+    keep = new Uint8Array(lw * lh);
+    reject = new Uint8Array(lw * lh);
+    for (let i = 0; i < lw * lh; i++) {
+      if (!lab[i]) continue;
+      if (ids.has(lab[i])) keep[i] = 1; else reject[i] = 1;
+    }
+  }
+  // Feather back the soft edge the core threshold cut off — but never let it
+  // resurrect a blob we just rejected (a speck 3px from the item would
+  // otherwise reappear through the dilation).
+  const dil = dilate(keep, lw, lh, o.dilateR);
+  if (reject) for (let i = 0; i < lw * lh; i++) if (reject[i]) dil[i] = 0;
+
+  // bbox of what survived
+  let mnx = lw, mxx = -1, mny = lh, mxy = -1;
+  for (let y = 0; y < lh; y++) {
+    const lo = y * lw, so = ((py0 + y) * W + px0) * 4;
+    for (let x = 0; x < lw; x++)
+      if (dil[lo + x] && d[so + x*4 + 3] > 0) {
+        if (x < mnx) mnx = x; if (x > mxx) mxx = x;
+        if (y < mny) mny = y; if (y > mxy) mxy = y;
+      }
+  }
+  if (mxx < 0) return null;
+  const p = o.trimPad;
+  const cx0 = Math.max(0, mnx - p),      cy0 = Math.max(0, mny - p);
+  const cx1 = Math.min(lw, mxx + 1 + p), cy1 = Math.min(lh, mxy + 1 + p);
+  const cw = cx1 - cx0, ch = cy1 - cy0;
+
+  const out = new ImageData(cw, ch), od = out.data;
+  let sr = 0, sg = 0, sb = 0, cnt = 0, cov = 0;
+  for (let y = 0; y < ch; y++) {
+    const so = ((py0 + cy0 + y) * W + px0 + cx0) * 4;
+    const lo = (cy0 + y) * lw + cx0, oo = y * cw * 4;
+    for (let x = 0; x < cw; x++) {
+      const r = d[so + x*4], g = d[so + x*4 + 1], b = d[so + x*4 + 2];
+      const a = dil[lo + x] ? d[so + x*4 + 3] : 0;
+      od[oo + x*4] = r; od[oo + x*4 + 1] = g; od[oo + x*4 + 2] = b; od[oo + x*4 + 3] = a;
+      if (a > 200) { sr += r; sg += g; sb += b; cnt++; }
+      if (a > 0) cov++;
+    }
+  }
+  const cv = document.createElement('canvas');
+  cv.width = cw; cv.height = ch;
+  cv.getContext('2d').putImageData(out, 0, 0);
+  const liq = cnt ? rgbHex(sr/cnt, sg/cnt, sb/cnt) : '#888888';
+  return { canvas:cv, aspect:cw/ch, coverage:cov/(cw*ch), liq,
+           glass:mixHex(liq, '#ffffff', 0.72) };
+}
+
+const hex2 = v => clamp(Math.round(v), 0, 255).toString(16).padStart(2, '0');
+const rgbHex = (r, g, b) => '#' + hex2(r) + hex2(g) + hex2(b);
+function mixHex(a, b, t) {
+  const pa = [1,3,5].map(i => parseInt(a.substr(i,2),16));
+  const pb = [1,3,5].map(i => parseInt(b.substr(i,2),16));
+  return rgbHex(pa[0]+(pb[0]-pa[0])*t, pa[1]+(pb[1]-pa[1])*t, pa[2]+(pb[2]-pa[2])*t);
+}
+
+function opts() {
+  return {
+    alphaThresh:+$('alphaThresh').value, minPx:+$('minPx').value,
+    mergeGap:+$('mergeGap').value, minSize:+$('minSize').value,
+    isolate:$('isolate').checked, stripShadow:$('stripShadow').checked,
+    minFrac:+$('minFrac').value / 100, dilateR:+$('dilateR').value,
+    glowPad:+$('glowPad').value, trimPad:+$('trimPad').value,
+  };
+}
+
+function rebuild() {
+  if (!rawID) return;
+  const o = opts();
+  workID = $('keyWhite').checked ? keyWhiteBg(rawID, +$('whiteThresh').value) : rawID;
+
+  // alpha stats — the antidote to "the preview looks like it has a background"
+  let zero = 0, soft = 0;
+  const d = workID.data, n = workID.width * workID.height;
+  for (let i = 0, p = 3; i < n; i++, p += 4) {
+    if (d[p] === 0) zero++; else if (d[p] < 255) soft++;
+  }
+  $('sheetInfo').innerHTML =
+    `<b>${sheetName}</b><br>${workID.width}×${workID.height} · ` +
+    `<span style="color:${zero > n*0.15 ? 'var(--ok)' : 'var(--warn)'}">` +
+    `${(100*zero/n).toFixed(0)}% fully transparent</span> · ` +
+    `${(100*soft/n).toFixed(0)}% soft edge` +
+    (zero > n*0.15 ? '' : '<br>Looks opaque — is this a white-background sheet?');
+
+  bandsC = contentBands(workID, 0, o);
+  bandsR = contentBands(workID, 1, o);
+  $('gridInfo').textContent =
+    `${bandsC.length} cols × ${bandsR.length} rows → ${bandsC.length*bandsR.length} cells`;
+
+  const prev = new Map(cells.map(c => [c.key, c]));
+  cells = [];
+  for (const [y0, y1] of bandsR) for (const [x0, x1] of bandsC) {
+    const band = { x0, x1, y0, y1 };
+    const c = extractCell(workID, band, o);
+    if (!c) continue;
+    c.band = band;
+    c.key  = `${x0},${y0}`;
+    const old = prev.get(c.key);
+    c.name    = old ? old.name : '';
+    c.include = old ? old.include : true;
+    cells.push(c);
+  }
+  renumber();
+  drawSheet();
+  renderCells();
+  status(`${cells.length} items extracted.`);
+}
+
+// blank names follow the prefix; typed names are left alone
+function renumber() {
+  const pre = $('prefix').value;
+  cells.forEach((c, i) => { if (!c.typed) c.name = pre + (i + 1); });
+}
+
+function drawSheet() {
+  const cv = $('sheetCv'), wrap = $('sheetWrap');
+  const maxW = wrap.clientWidth - 20, maxH = wrap.clientHeight - 20;
+  if (maxW <= 0 || maxH <= 0) return;      // pane not laid out yet
+  const s = Math.min(maxW / workID.width, maxH / workID.height, 1);
+  cv.width  = Math.max(1, Math.round(workID.width  * s));
+  cv.height = Math.max(1, Math.round(workID.height * s));
+  const ctx = cv.getContext('2d');
+  const tmp = document.createElement('canvas');
+  tmp.width = workID.width; tmp.height = workID.height;
+  tmp.getContext('2d').putImageData(workID, 0, 0);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  ctx.drawImage(tmp, 0, 0, cv.width, cv.height);
+  ctx.lineWidth = 1.5;
+  cells.forEach((c, i) => {
+    ctx.strokeStyle = c.include ? '#7ec84f' : '#8a6f52';
+    ctx.strokeRect(c.band.x0*s, c.band.y0*s, (c.band.x1-c.band.x0)*s, (c.band.y1-c.band.y0)*s);
+    ctx.fillStyle = '#7ec84f'; ctx.font = '11px Georgia';
+    ctx.fillText(i + 1, c.band.x0*s + 3, c.band.y0*s + 12);
+  });
+}
+
+function renderCells() {
+  const host = $('cells');
+  host.innerHTML = '';
+  $('cellsHead').textContent = `Extracted items (${cells.filter(c=>c.include).length} to save)`;
+  cells.forEach((c, i) => {
+    const div = document.createElement('div');
+    div.className = 'cell checker' + (c.include ? '' : ' off');
+    div.style.backgroundBlendMode = 'normal';
+    const top = document.createElement('div');
+    top.className = 'top';
+    top.innerHTML = `<span class="n">#${i+1}</span>`;
+    const chk = document.createElement('input');
+    chk.type = 'checkbox'; chk.checked = c.include;
+    chk.onchange = () => { c.include = chk.checked; renderCells(); drawSheet(); };
+    top.appendChild(chk);
+    const cw = document.createElement('canvas');
+    cw.className = 'checker';
+    cw.width = c.canvas.width; cw.height = c.canvas.height;
+    cw.getContext('2d').drawImage(c.canvas, 0, 0);
+    const nm = document.createElement('input');
+    nm.type = 'text'; nm.value = c.name;
+    nm.oninput = () => { c.name = nm.value; c.typed = true; };
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.innerHTML = `<span>${c.canvas.width}×${c.canvas.height}</span>` +
+                     `<span>ar ${c.aspect.toFixed(2)}</span>`;
+    div.append(top, cw, nm, meta);
+    host.appendChild(div);
+  });
+}
+
+// ── sheet loading ─────────────────────────────────────────────────────────
+let sheetName = '';
+$('sheetFile').onchange = e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  sheetName = f.name;
+  const img = new Image();
+  img.onload = () => {
+    rawID = imgToImageData(img);
+    cells = [];
+    rebuild();
+  };
+  img.onerror = () => status('Could not decode that image.');
+  img.src = URL.createObjectURL(f);
+};
+
+// ── control wiring ────────────────────────────────────────────────────────
+const SLIDERS = ['whiteThresh','alphaThresh','minPx','mergeGap','minSize',
+                 'minFrac','dilateR','glowPad','trimPad'];
+SLIDERS.forEach(id => {
+  const el = $(id), out = $('v' + id[0].toUpperCase() + id.slice(1));
+  const show = () => { out.textContent = id === 'minFrac' ? el.value + '%' : el.value; };
+  el.oninput = () => { show(); rebuild(); saveSettings(); };
+  show();
+});
+['keyWhite','isolate','stripShadow'].forEach(id => {
+  $(id).onchange = () => {
+    $('rowWhiteT').style.display = $('keyWhite').checked ? 'flex' : 'none';
+    rebuild(); saveSettings();
+  };
+});
+$('prefix').oninput = () => { renumber(); renderCells(); saveSettings(); };
+window.addEventListener('resize', () => { if (workID) drawSheet(); });
+
+// ── saving PNGs ───────────────────────────────────────────────────────────
+let dirHandle = null;
+async function ensureDir() {
+  if (dirHandle) {
+    const p = await dirHandle.queryPermission({ mode:'readwrite' });
+    if (p === 'granted') return dirHandle;
+    if (await dirHandle.requestPermission({ mode:'readwrite' }) === 'granted') return dirHandle;
+  }
+  if (!window.showDirectoryPicker) { status('No File System API — use Download instead.'); return null; }
+  dirHandle = await window.showDirectoryPicker({ mode:'readwrite' });
+  return dirHandle;
+}
+const toBlob = cv => new Promise(r => cv.toBlob(r, 'image/png'));
+
+$('saveCells').onclick = async () => {
+  const list = cells.filter(c => c.include && c.name.trim());
+  if (!list.length) return status('Nothing to save (name your cells first).');
+  try {
+    const dir = await ensureDir();
+    if (!dir) return;
+    for (const c of list) {
+      const fn = c.name.replace(/\.png$/i, '') + '.png';
+      const fh = await dir.getFileHandle(fn, { create:true });
+      const w  = await fh.createWritable();
+      await w.write(await toBlob(c.canvas));
+      await w.close();
+    }
+    status(`Saved ${list.length} PNGs. Switch to “Tier chain” and choose the same folder.`);
+    if (libRoot) scanLib();
+  } catch (err) { if (err.name !== 'AbortError') status('Save failed: ' + err.message); }
+};
+
+$('dlCells').onclick = async () => {
+  for (const c of cells.filter(c => c.include && c.name.trim())) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(await toBlob(c.canvas));
+    a.download = c.name.replace(/\.png$/i, '') + '.png';
+    a.click();
+  }
+  status('Downloaded — move them into assets/images/.');
+};
+
+// ══════════════════════════════════════════════════════════════════════════
+//  MODULE 2 — TIER CHAIN
+//  Pick which file is which tier, order them, rescale, emit items.js.
+//  Deliberately knows nothing about module 1 beyond the folder of PNGs.
+// ══════════════════════════════════════════════════════════════════════════
+// assets/images/ is map-based (hawaii/, farm/, shared/, …), so the library is
+// a small file browser rather than one flat list. libPath is where we are
+// BELOW the picked root; a tier's `file` is stored relative to that root
+// ("farm/seed.png"), which is what lets one chain mix folders.
+let libRoot = null, libCur = null, libPath = [], libDirs = [], libFiles = [];
+let chain = [];   // {file,img,name,r,vis,bodyRatio,glass,liq,aspect}
+
+$('pickLib').onclick = async () => {
+  try {
+    libRoot = await window.showDirectoryPicker({ mode:'read' });
+    await libGoto([]);
+  } catch (err) { if (err.name !== 'AbortError') status('Could not open folder: ' + err.message); }
+};
+
+async function libGoto(pathArr) {
+  if (!libRoot) return;
+  try {
+    let h = libRoot;
+    for (const seg of pathArr) h = await h.getDirectoryHandle(seg);
+    libCur = h; libPath = pathArr;
+  } catch (err) { return status('Could not open that folder: ' + err.message); }
+  await scanLib();
+}
+
+async function scanLib() {
+  if (!libCur) return;
+  libDirs = []; libFiles = [];
+  for await (const [name, h] of libCur.entries()) {
+    if (h.kind === 'directory') libDirs.push(name);
+    else if (/\.png$/i.test(name)) libFiles.push(name);
+  }
+  libDirs.sort(); libFiles.sort();
+  renderLib();
+  status(`${libDirs.length} folders, ${libFiles.length} PNGs in ` +
+         ($('pathPrefix').value + libPath.join('/')));
+}
+
+const relPath = name => [...libPath, name].join('/');
+
+function renderCrumbs() {
+  const host = $('crumbs');
+  host.innerHTML = '';
+  if (!libRoot) { host.textContent = 'no folder chosen'; return; }
+  const add = (label, arr) => {
+    const a = document.createElement('a');
+    a.textContent = label;
+    a.onclick = () => libGoto(arr);
+    host.appendChild(a);
+  };
+  add($('pathPrefix').value.replace(/\/$/, ''), []);
+  libPath.forEach((seg, i) => {
+    host.appendChild(document.createTextNode(' / '));
+    add(seg, libPath.slice(0, i + 1));
+  });
+}
+
+function renderLib() {
+  renderCrumbs();
+  const host = $('libList');
+  const f = $('libFilter').value.trim().toLowerCase();
+  const dirs  = libDirs.filter(n => !f || n.toLowerCase().includes(f));
+  const files = libFiles.filter(n => !f || n.toLowerCase().includes(f));
+  host.innerHTML = '';
+  host.className = '';
+  host.style.padding = '6px';
+  if (!libRoot) {
+    host.className = 'hint'; host.style.padding = '12px';
+    host.textContent = 'No folder chosen.';
+    return;
+  }
+
+  if (libPath.length) {                       // ".." — go up one level
+    const up = document.createElement('div');
+    up.className = 'libItem dir';
+    up.innerHTML = '<b>↰</b><span>..</span>';
+    up.onclick = () => libGoto(libPath.slice(0, -1));
+    host.appendChild(up);
+  }
+  for (const name of dirs) {
+    const d = document.createElement('div');
+    d.className = 'libItem dir';
+    d.innerHTML = '<b>📁</b>';
+    const s = document.createElement('span');
+    s.textContent = name;
+    d.appendChild(s);
+    d.onclick = () => libGoto([...libPath, name]);
+    host.appendChild(d);
+  }
+  for (const name of files) {
+    const d = document.createElement('div');
+    d.className = 'libItem';
+    const img = document.createElement('img');
+    img.className = 'checker';
+    img.src = $('pathPrefix').value + relPath(name);
+    const s = document.createElement('span');
+    s.textContent = name.replace(/\.png$/i, '');
+    s.title = relPath(name);
+    d.append(img, s);
+    d.onclick = () => addTier(relPath(name));
+    host.appendChild(d);
+  }
+  if (!dirs.length && !files.length) {
+    host.className = 'hint'; host.style.padding = '12px';
+    host.textContent = f ? 'Nothing matches the filter.' : 'This folder has no PNGs.';
+  }
+}
+$('libFilter').oninput = renderLib;
+
+// Average opaque colour of a sprite -> the glass/liq fallback colours.
+function spriteColours(img) {
+  const c = document.createElement('canvas');
+  const s = Math.min(1, 64 / Math.max(img.naturalWidth, img.naturalHeight));
+  c.width = Math.max(1, Math.round(img.naturalWidth * s));
+  c.height = Math.max(1, Math.round(img.naturalHeight * s));
+  const x = c.getContext('2d', { willReadFrequently:true });
+  x.drawImage(img, 0, 0, c.width, c.height);
+  let d;
+  try { d = x.getImageData(0, 0, c.width, c.height).data; }
+  catch { return { liq:'#888888', glass:'#dddddd' }; }
+  let r = 0, g = 0, b = 0, n = 0;
+  for (let i = 0; i < d.length; i += 4) if (d[i+3] > 200) { r += d[i]; g += d[i+1]; b += d[i+2]; n++; }
+  const liq = n ? rgbHex(r/n, g/n, b/n) : '#888888';
+  return { liq, glass:mixHex(liq, '#ffffff', 0.72) };
+}
+
+// vis = area parity: the item covers the same on-screen footprint as a typical
+// upright sprite of its tier (aspect ~0.75). Do NOT use 1/aspect — that is
+// extent parity and shrinks wide items to slivers.
+const autoVis = aspect => +clamp(Math.sqrt(0.75 / aspect), 0.3, 1.6).toFixed(2);
+
+// r ladder used by every existing map: geometric 15 -> 71.
+function ladder(n) {
+  if (n === 1) return [15];
+  return Array.from({ length:n }, (_, i) => Math.round(15 * Math.pow(71/15, i/(n-1))));
+}
+
+function addTier(file, preset) {
+  const img = new Image();
+  // Every field starts at a usable value: the row renders immediately, before
+  // the sprite has loaded. aspect/vis/colours need the pixels, so they are
+  // filled in on load — but only for a hand-added item, never over a preset.
+  // `file` is relative to the sprite-path prefix, e.g. "farm/seed.png", so a
+  // chain can mix folders (a map's items plus something from shared/).
+  const base = file.split('/').pop().replace(/\.png$/i, '');
+  const t = Object.assign({
+    file, img, aspect:1, vis:1, autoFill:!preset,
+    name: base.replace(/[-_]/g, ' '),
+    r:15, bodyRatio:0.85, glass:'#dddddd', liq:'#888888',
+  }, preset || {});
+  img.onload = () => {
+    t.aspect = img.naturalWidth / img.naturalHeight;
+    if (t.autoFill) {
+      const c = spriteColours(img);
+      t.vis = autoVis(t.aspect); t.liq = c.liq; t.glass = c.glass;
+    }
+    renderChain();
+  };
+  img.onerror = () => status(`Could not load ${$('pathPrefix').value + file} — check the sprite path.`);
+  img.src = $('pathPrefix').value + file;
+  chain.push(t);
+  // Appending extends the ladder rather than regenerating it, so adding a
+  // tenth item to a loaded map can't retune the nine already tuned. 1.21 is
+  // the 15->71 ramp's step; "Reset r ladder" normalises it exactly.
+  if (!preset) {
+    const n = chain.length, last = n > 1 ? chain[n-2].r : 0;
+    chain[n-1].r = n === 1 ? 15 : Math.max(last + 1, Math.round(last * 1.21));
+  }
+  renderChain();
+}
+
+// The "Reset r ladder" button: a fresh geometric ramp for the whole chain.
+function relad() {
+  const L = ladder(chain.length);
+  chain.forEach((t, i) => t.r = L[i]);
+}
+
+// Reordering instead KEEPS the chain's existing r values and re-assigns them
+// smallest -> largest by slot. r belongs to the slot (tier 0 must stay the
+// smallest), but a hand-tuned ladder must survive a drag — the shipped maps
+// don't use the plain geometric ramp, so regenerating one here would silently
+// retune their tier sizes.
+function reslot() {
+  const rs = chain.map(t => t.r).sort((a, b) => a - b);
+  chain.forEach((t, i) => t.r = rs[i]);
+}
+
+function renderChain() {
+  const host = $('chain');
+  host.innerHTML = '';
+  chain.forEach((t, i) => {
+    const row = document.createElement('div');
+    row.className = 'tier';
+    row.draggable = true;
+    row.dataset.i = i;
+
+    const grip = document.createElement('span'); grip.className = 'grip'; grip.textContent = '⠿';
+    const idx  = document.createElement('span'); idx.className = 'idx'; idx.textContent = i;
+
+    const cv = document.createElement('canvas');
+    cv.className = 'checker'; cv.width = 46; cv.height = 46;
+    if (t.img.complete && t.img.naturalWidth) {
+      const c = cv.getContext('2d');
+      const s = Math.min(46 / t.img.naturalWidth, 46 / t.img.naturalHeight);
+      const w = t.img.naturalWidth * s, h = t.img.naturalHeight * s;
+      c.drawImage(t.img, (46-w)/2, (46-h)/2, w, h);
+    }
+
+    const nm = document.createElement('input');
+    nm.type = 'text'; nm.className = 'nm'; nm.value = t.name;
+    nm.oninput = () => { t.name = nm.value; emit(); };
+
+    const rr = document.createElement('input');
+    rr.type = 'number'; rr.className = 'num'; rr.value = t.r; rr.min = 4; rr.step = 1;
+    rr.title = 'tier radius r — drives drawn size AND physics';
+    rr.oninput = () => { t.r = +rr.value || 1; drawScale(); emit(); };
+
+    const vs = document.createElement('input');
+    vs.type = 'range'; vs.className = 'vis'; vs.min = 30; vs.max = 160; vs.value = Math.round(t.vis*100);
+    vs.title = 'vis — visual scale only, physics untouched';
+    const vv = document.createElement('span');
+    vv.className = 'val'; vv.textContent = t.vis.toFixed(2);
+    vs.oninput = () => { t.vis = +vs.value/100; vv.textContent = t.vis.toFixed(2); drawScale(); emit(); };
+
+    // mirrors the load-time guardrail in config/items.js
+    const parity = t.vis * t.vis * t.aspect / 0.75;
+    const warn = document.createElement('span');
+    warn.className = 'warn';
+    warn.textContent = parity < 0.45 ? '⚠' : '';
+    warn.title = parity < 0.45 ? `draws at ${(parity*100)|0}% of this tier's footprint — items.js will warn` : '';
+
+    const x = document.createElement('span');
+    x.className = 'x'; x.textContent = '✕';
+    x.onclick = () => { chain.splice(i, 1); renderChain(); drawScale(); emit(); };
+
+    row.append(grip, idx, cv, nm, rr, vs, vv, warn, x);
+    host.appendChild(row);
+  });
+  drawScale();
+  emit();
+  saveSettings();
+}
+
+// drag-to-reorder
+let dragI = null;
+$('chain').addEventListener('dragstart', e => {
+  const row = e.target.closest('.tier'); if (!row) return;
+  dragI = +row.dataset.i; row.classList.add('drag');
+});
+$('chain').addEventListener('dragend', e => {
+  const row = e.target.closest('.tier'); if (row) row.classList.remove('drag');
+});
+$('chain').addEventListener('dragover', e => e.preventDefault());
+$('chain').addEventListener('drop', e => {
+  e.preventDefault();
+  const row = e.target.closest('.tier');
+  if (row == null || dragI == null) return;
+  const to = +row.dataset.i;
+  const [m] = chain.splice(dragI, 1);
+  chain.splice(to, 0, m);
+  reslot();
+  dragI = null;
+  renderChain();
+});
+
+// Relative-size preview: exactly how the game will draw them (height r·2.4·vis).
+function drawScale() {
+  const cv = $('scaleCv'), wrap = $('scaleWrap');
+  const maxW = wrap.clientWidth - 16, maxH = wrap.clientHeight - 16;
+  if (maxW <= 0 || maxH <= 0) return;      // pane not laid out yet
+  cv.width = maxW; cv.height = maxH;
+  const ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  if (!chain.length) return;
+  const boxes = chain.map(t => {
+    const h = t.r * 2.4 * t.vis;
+    return { t, h, w: h * t.aspect };
+  });
+  const totalW = boxes.reduce((s, b) => s + b.w + 12, 0);
+  const maxHh  = Math.max(...boxes.map(b => b.h));
+  const s = Math.min(maxW / totalW, maxH / (maxHh + 10), 1);
+  let x = (maxW - totalW * s) / 2;
+  const base = cv.height - 6;
+  for (const b of boxes) {
+    const w = b.w * s, h = b.h * s;
+    if (b.t.img.complete && b.t.img.naturalWidth) ctx.drawImage(b.t.img, x, base - h, w, h);
+    x += w + 12 * s;
+  }
+}
+window.addEventListener('resize', () => { if ($('paneTier').classList.contains('on')) drawScale(); });
+
+$('ladderBtn').onclick  = () => { relad(); renderChain(); };
+$('autoVisBtn').onclick = () => { chain.forEach(t => t.vis = autoVis(t.aspect)); renderChain(); };
+$('clearChain').onclick = () => { chain = []; renderChain(); };
+$('pathPrefix').oninput = () => { renderLib(); saveSettings(); };
+$('constName').oninput  = () => { emit(); saveSettings(); };
+
+// ── code generation ───────────────────────────────────────────────────────
+function emit() {
+  if (!chain.length) { $('out').value = ''; return ''; }
+  const pre = $('pathPrefix').value;
+  const pad = (s, n) => s + ' '.repeat(Math.max(0, n - s.length));
+  const nw = Math.max(...chain.map(t => t.name.length)) + 2;
+  const sw = Math.max(...chain.map(t => (pre + t.file).length)) + 2;
+  // Keep the authored precision — bodyRatio:0.634 must not become 0.63 just
+  // by passing through this tool. vis is optional in items.js (default 1), so
+  // don't append a no-op to every line either.
+  const num = v => String(+(+v).toFixed(3));
+  const lines = chain.map(t =>
+    `  { name:${pad(`'${t.name}',`, nw + 1)} r:${String(t.r).padStart(2)}, ` +
+    `glass:'${t.glass}', liq:'${t.liq}', ` +
+    `sprite:${pad(`'${pre}${t.file}',`, sw + 1)} ` +
+    `bodyRatio:${num(t.bodyRatio)}` +
+    (num(t.vis) === '1' ? '' : `, vis:${num(t.vis)}`) + ' },');
+  const src = `const ${$('constName').value} = [\n${lines.join('\n')}\n];`;
+  $('out').value = src;
+  return src;
+}
+
+$('copyItems').onclick = async () => {
+  await navigator.clipboard.writeText(emit());
+  status('Copied the chain to the clipboard.');
+};
+$('dlItems').onclick = () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([emit()], { type:'text/javascript' }));
+  a.download = 'items-chain.js'; a.click();
+};
+
+// Surgical rewrite: replace ONLY this const block inside config/items.js, or
+// append a new chain and register it in the pre-load spread. Everything else
+// in the file (comments, other maps) is untouched.
+let itemsHandle = null;
+$('writeItems').onclick = async () => {
+  let src = emit();
+  if (!src) return status('Chain is empty.');
+  const NAME = $('constName').value.trim();
+  if (!/^[A-Z][A-Z0-9_]*$/.test(NAME)) return status('Const name should look like FARM_ITEMS.');
+  if (!window.showOpenFilePicker) return status('No File System API — use Copy instead.');
+  try {
+    // MUST be showOpenFilePicker, NEVER showSaveFilePicker. The save picker
+    // TRUNCATES the chosen file to zero bytes the moment it is dismissed, so
+    // by the time we read it there is nothing left to merge into — that is
+    // exactly how config/items.js got wiped on 2026-07-26. The open picker
+    // leaves the file alone; we ask for write permission separately.
+    // (tools/hitbox-editor.html can safely use the save picker because it
+    // never reads — it always writes a complete file from in-memory state.)
+    if (!itemsHandle) {
+      [itemsHandle] = await window.showOpenFilePicker({
+        types: [{ description:'JavaScript', accept:{ 'text/javascript':['.js'] } }],
+        multiple: false,
+      });
+    }
+    if (await itemsHandle.queryPermission({ mode:'readwrite' }) !== 'granted' &&
+        await itemsHandle.requestPermission({ mode:'readwrite' }) !== 'granted') {
+      itemsHandle = null;
+      return status('Permission to write that file was declined.');
+    }
+
+    let text = await (await itemsHandle.getFile()).text();
+    const original = text;
+    // Guard against a mis-picked file: never rewrite something that isn't
+    // items.js, or we'd replace its whole contents with one chain.
+    if (!/_ITEMS\s*=\s*\[/.test(text)) {
+      itemsHandle = null;
+      return status('That file does not look like config/items.js — nothing was written.');
+    }
+    // items.js is CRLF on this machine — match it, or the rewritten block
+    // shows up as a whole-file line-ending change in git.
+    const crlf = (text.match(/\r\n/g) || []).length > text.split('\n').length / 2;
+    if (crlf) src = src.replace(/\n/g, '\r\n');
+    const re = new RegExp(`const ${NAME} = \\[[\\s\\S]*?\\r?\\n\\];`);
+    let note;
+    if (re.test(text)) {
+      text = text.replace(re, src);
+      note = `Replaced ${NAME}`;
+    } else {
+      const anchor = '// Pre-load all sprites';
+      if (!text.includes(anchor)) return status('Could not find the insert point in items.js.');
+      text = text.replace(anchor, src + (crlf ? '\r\n\r\n' : '\n\n') + anchor);
+      if (!text.includes(`...${NAME}`))
+        text = text.replace('...RECEIPT_ITEMS]', `...${NAME}, ...RECEIPT_ITEMS]`);
+      note = `Added ${NAME} and registered it`;
+    }
+    // Last line of defence: a surgical edit swaps one block, so the result can
+    // never be much smaller than the original. If it is, something went wrong
+    // upstream — refuse rather than shrink the file on disk.
+    if (text.length < original.length * 0.6) {
+      itemsHandle = null;
+      return status(`Refused: the result (${text.length} bytes) is far smaller ` +
+                    `than the file read (${original.length}). Nothing was written.`);
+    }
+    const w = await itemsHandle.createWritable();
+    await w.write(text); await w.close();
+    authoredCache = null;          // the file changed — re-read it next time
+    status(`${note} in config/items.js. Reload the game tab to see it.`);
+  } catch (err) { if (err.name !== 'AbortError') status('Write failed: ' + err.message); }
+};
+
+// ── load an existing chain to tweak ───────────────────────────────────────
+// sprite path -> the bodyRatio literally written in config/items.js
+let authoredCache = null;
+
+// Current items.js text: prefer the picked file handle (works offline / from
+// disk), fall back to HTTP, null if neither is available.
+async function itemsSource() {
+  if (itemsHandle) {
+    try { return await (await itemsHandle.getFile()).text(); } catch { /* fall through */ }
+  }
+  try { return await (await fetch('config/items.js?ts=' + Date.now())).text(); }
+  catch { return null; }
+}
+
+async function authoredBodyRatios() {
+  if (authoredCache) return authoredCache;
+  const map = new Map();
+  const text = await itemsSource();
+  if (text) {
+    const re = /sprite:\s*'([^']+)'[^}]*?bodyRatio:\s*([0-9.]+)/g;
+    let m; while ((m = re.exec(text))) map.set(m[1], parseFloat(m[2]));
+  } else {
+    // Silently falling back to the live objects would emit the hitbox-editor
+    // override as if it were the authored value — say so instead of guessing.
+    status('Could not read config/items.js — bodyRatio may show the hitbox ' +
+           'override rather than the authored value. Serve the tool from ' +
+           'http://localhost:5500/tools/sprite-editor.html.');
+  }
+  return (authoredCache = map);
+}
+
+const CHAINS = {
+  HAWAII_ITEMS, SAIGON_ITEMS, KYOTO_ITEMS, MAGE_ITEMS, TEDDY_ITEMS,
+  MELODY_ITEMS, PARIS_ITEMS, FARM_ITEMS, RECEIPT_ITEMS,
+};
+{
+  const sel = $('chainPick');
+  sel.innerHTML = '<option value="">— new chain —</option>' +
+    Object.keys(CHAINS).map(k => `<option>${k}</option>`).join('');
+  sel.onchange = async () => {
+    const k = sel.value;
+    chain = [];
+    if (!k) { renderChain(); return; }
+    $('constName').value = k;
+    // config/items.js OVERWRITES bodyRatio from ITEM_HITBOXES at load time, so
+    // the live objects no longer hold what the file says. Read the authored
+    // values back out of the source — config/hitboxes.js stays the one owner
+    // of tuned bodyRatios, and writing this chain back can't launder them in.
+    const authored = await authoredBodyRatios();
+    const pre = $('pathPrefix').value;
+    for (const it of CHAINS[k]) {
+      // keep the sprite's folder ("farm/seed.png"), not just its basename
+      const file = it.sprite.startsWith(pre) ? it.sprite.slice(pre.length)
+                                             : it.sprite.split('/').pop();
+      addTier(file, {
+        name:it.name, r:it.r, vis:it.vis != null ? it.vis : 1,
+        bodyRatio: authored.get(it.sprite) != null ? authored.get(it.sprite) : it.bodyRatio,
+        glass:it.glass, liq:it.liq,
+      });
+    }
+    status(`Loaded ${k} — adjust r / vis / order, then write it back.`);
+  };
+}
+
+// ── settings persistence ──────────────────────────────────────────────────
+function saveSettings() {
+  const s = { prefix:$('prefix').value, constName:$('constName').value,
+              pathPrefix:$('pathPrefix').value };
+  SLIDERS.forEach(id => s[id] = $(id).value);
+  ['keyWhite','isolate','stripShadow'].forEach(id => s[id] = $(id).checked);
+  try { localStorage.setItem(LS, JSON.stringify(s)); } catch {}
+}
+(function loadSettings() {
+  let s; try { s = JSON.parse(localStorage.getItem(LS) || '{}'); } catch { return; }
+  for (const [k, v] of Object.entries(s)) {
+    const el = $(k); if (!el) continue;
+    if (el.type === 'checkbox') el.checked = v; else el.value = v;
+  }
+  SLIDERS.forEach(id => {
+    const out = $('v' + id[0].toUpperCase() + id.slice(1));
+    out.textContent = id === 'minFrac' ? $(id).value + '%' : $(id).value;
+  });
+  $('rowWhiteT').style.display = $('keyWhite').checked ? 'flex' : 'none';
+})();
+
+status('Load an AI sheet to start, or jump to “Tier chain” to retune an existing map.');
+</script>
+</body>
+</html>

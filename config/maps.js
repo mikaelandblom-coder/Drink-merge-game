@@ -65,8 +65,8 @@ const MAPS = [
     bgmVol:   0.35,
     itemsData: null,
     combos:   true,   // combos default on — a cascade rings out as a rising arpeggio
-    coin:     'assets/images/melody-coin.png',  // custom coin/bag; maps that omit these use the shared art
-    bag:      'assets/images/melody-bag.png',
+    coin:     'assets/images/melody/coin.png',  // custom coin/bag; maps that omit these use the shared art
+    bag:      'assets/images/melody/bag.png',
     // TEMP: Large-table framing disabled until the large background art exists —
     // omitting `sizes` hides the "Large table" checkbox and plays only the small
     // framing (bg above). Drop the art in assets/source/melody/bg_large.png and

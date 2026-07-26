@@ -42,6 +42,8 @@ index.html            — Shell: loads scripts in order (constants → hitboxes 
 process_assets.py     — Asset pipeline: source images → game-ready PNGs
 tools/
   hitbox-editor.html  — Visual hitbox editor (see "Hitbox editing" below)
+  sprite-editor.html  — Visual sprite prep: AI sheet -> individual PNGs, then
+                         PNGs -> an items.js tier chain (see "Sprite editing")
   sound-lab.html      — Standalone sound-audition sandbox (open in the same
                          server). Prototype/compare synth sounds here BEFORE
                          wiring them into audio.js — used to design the music
@@ -56,7 +58,18 @@ assets/
     _archive/         — Superseded source art, kept for reference
     shared/           — coins_and_bag.png (shared across all maps)
     tikibar/          — Per-map source images
-  images/             — Processed output used by the game (git-committed)
+  images/             — Processed output used by the game (git-committed).
+                        MAP-BASED layout (migrated 2026-07-26): one folder per
+                        map — hawaii/ saigon/ kyoto/ mage/ teddy/ melody/
+                        paris/ farm/ — with the redundant prefix stripped
+                        (assets/images/farm/seed.png, not farm-seed.png).
+                        shared/ holds art used by every map (coin, moneybag,
+                        receipt-*, customer-*) and KEEPS descriptive names,
+                        since it mixes several groups. Site chrome
+                        (favicon-32, icon-192, apple-touch-icon, bg-main-menu,
+                        xp-*) deliberately stays at the top level —
+                        apple-touch-icon is Mai's iPad home-screen icon and
+                        moving it risks breaking that for no gain.
 ```
 
 ---
@@ -122,6 +135,119 @@ a distinct `MAP_HITBOXES` key (`hitboxKey()` in maps.js): the default size keeps
 the plain map id (`kyoto`), the other size gets a suffix (`kyoto__small`). Until
 a size is traced it falls back to the map's base boundary — so trace + save each
 new size once. Item-tab targets are per-item and unaffected by size.
+
+---
+
+## Sprite editing
+
+Open **http://localhost:5500/tools/sprite-editor.html** (same server as the game).
+Two INDEPENDENT modules that share only the folder of PNGs on disk — so
+multiple AI sheets need no "combine" step: extract each one, then the tier
+chain picks freely across everything in the folder.
+
+**1 · Extract** — load one AI sheet → individual transparent PNGs.
+Everything renders on a **checkerboard** with an alpha readout (`% fully
+transparent`), which is the standing antidote to the Read-preview trap where a
+good transparent sheet looks like it has a painted backdrop. Cells come from
+the transparent gutters (a live JS port of `split_alpha_grid`), so grid drift
+is fine; the sliders (gutter alpha / min px / merge gap / min band) tune band
+detection when glow bridges a gutter. Each item is then isolated by
+**connected component flood-fill**, not by rigid grid lines — the fix for a
+neighbour's stem poking into the cell. "keep parts ≥" is the floor for
+genuinely separate pieces (a violin bow ≈ 13% of the item, stray specks ≈ 1%);
+rejected blobs are excluded from the feather pass so they can't reappear.
+"Strip baked shadow" raises the core threshold to 128 (the game draws its own
+`SHADOW_SPRITE`, so a baked one double-shadows). Save writes the PNGs straight
+into a folder you pick once.
+
+**2 · Tier chain** — pick **assets/images/** as the root and browse it as a
+folder tree (📁 to descend, ↰ or the breadcrumb to go back up), since the
+sprite folder is map-based. A tier stores its path RELATIVE to the root
+(`farm/seed.png`), so one chain can mix a map's items with something from
+`shared/`. Pick which PNG is which tier, drag to reorder, then write
+`config/items.js`. `r` belongs to the SLOT, not the item, so a drag re-assigns
+the chain's existing r values smallest→largest — a hand-tuned ladder survives a
+reorder. "Reset r ladder" regenerates a plain geometric 15→71 ramp instead, so
+it is for NEW chains: the shipped maps are hand-tuned and it will retune them.
+`vis` is the per-item rescale
+(visual only, physics untouched) and auto-fills to area parity
+`sqrt(0.75/aspect)`; a ⚠ appears when an item would draw under 45% of its
+tier's footprint, mirroring the load-time guardrail in items.js. `glass`/`liq`
+fallback colours are sampled from the art. "Load existing" pulls a shipped
+chain back in for retuning.
+
+Two things it deliberately does NOT own:
+- **bodyRatio** — `config/hitboxes.js` is the authority (the hitbox editor
+  writes it, and items.js overwrites the in-memory value from it at load). The
+  tool re-reads the AUTHORED literal out of items.js source when loading a
+  chain, so a write-back can never launder a hitbox override into items.js.
+  New items get a 0.85 placeholder to tune in the hitbox editor afterwards.
+- **process_assets.py** — still the path for the legacy chroma-key maps and
+  shared art. For transparent grids (the standard) the editor replaces it.
+
+**`showSaveFilePicker` TRUNCATES the file you pick, at pick time.** Any tool
+that needs to READ-MODIFY-WRITE an existing file must use
+`showOpenFilePicker` + `requestPermission({mode:'readwrite'})` instead — with
+the save picker the file is already zero bytes by the time you read it, so
+there is nothing to merge into. This wiped `config/items.js` on 2026-07-26
+(recovered from git + re-applying the path migration). The hitbox editor may
+keep using the save picker: it never reads, it always writes a complete file
+from in-memory state. The sprite editor also refuses to write a result much
+smaller than the file it read, as a backstop.
+
+Writing is surgical: it replaces only the one `const X_ITEMS = [ … ]` block, or
+appends a new chain and registers it in the pre-load spread; CRLF and authored
+numeric precision (`bodyRatio:0.634` stays 0.634) are preserved. Verified by
+round-tripping the shipped chains back to identical values, and by extracting
+`farm/items_combined.png` to within a few px of the hand-made sprites.
+
+---
+
+## Art prompts for merge-item grids
+
+**Paris is the bar** — its item art is the best in the game, so its prompt is the
+template for every new map. Goal for all future maps: colourful, inviting,
+appealing. The shipped Paris prompt, and the six slots that made it work:
+
+> A 3×3 sprite grid of 9 French pâtisserie items on a fully transparent
+> background, PNG with alpha. Cute, elegant pastel storybook style: soft rounded
+> plump shapes, gentle glossy highlights, pastel pink / cream / mint / lavender
+> palette, subtle warm outlines. NO drop shadows, NO background, generous empty
+> gaps between items so nothing touches. Row 1: a single sugar cube; a pink
+> macaron; a petit chou cream puff dusted with powdered sugar. Row 2: … Row 3: …
+> All items front-facing, consistent lighting from above, consistent style and
+> level of detail across all nine.
+
+1. **Grid + transparency** — proven wording, don't paraphrase.
+2. **Style sentence** — 2–4 adjectives + surface finish + outline treatment.
+3. **Pipeline constraints** — NO drop shadows, NO background, generous gaps.
+   Technical, not taste: a shadow bridging a gutter breaks the band detection in
+   `split_alpha_grid` / the sprite editor's extract tab.
+4. **Row-by-row enumeration, one concrete named item per cell** — specificity is
+   what stops the sheet drifting into mush. Row-major = TIER ORDER, which is also
+   how the sprite editor's tier chain reads the folder.
+5. **Escalating elaboration** across the rows, finale last.
+6. **Consistency clause** — front-facing, light from above, same level of detail.
+
+Three things Paris only got by luck or by a second generation — **bake these into
+prompt #1**:
+- **Plan the colour ladder in the prompt.** Paris pass 1 came back all red/brown/
+  pink because the subject list AND the style line named one palette family; it
+  took a reroll ("more varied colors … its almost all red brown and pink now") to
+  fix. Name a colour per item and spread nine hues around the wheel, with no two
+  ADJACENT tiers in the same family. This is gameplay, not decoration: at r15–r30
+  hue is what tells the player two drinks match. Farm's chain is the worked
+  example (brown→green→red→blue→orange→yellow→purple→orange→gold).
+- **"Compact, front-facing, centred, roughly as tall as it is wide."** Paris got
+  this free (pastries are round). Wide art needs `vis` rescaling and still reads
+  small; non-round art needs capsule hitboxes — the main reason Melody Lane is the
+  least-loved map.
+- **Attach a shipped Paris sprite as a style reference** — locks cross-map
+  consistency better than adjectives.
+
+Reroll policy: a PALETTE nudge is cheap and safe; a whole-FINISH restyle is not
+(it shrinks subjects and simplifies detail — see "AI restyle-regeneration" under
+Known issues). Generations are limited, so nail style + colour spread in pass 1.
 
 ---
 
@@ -341,6 +467,8 @@ The background stays white as normal; only the separator line changes.
 - White background from AI is fine
 - Place raw files in `assets/source/<mapname>/`
 - Run the script → `assets/images/` is updated
+- PIPELINE `names` carry their output folder (`'farm/seed'`, `'shared/coin'`);
+  `out_path()` creates the folder, so a new map needs no extra wiring
 
 ---
 

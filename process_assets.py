@@ -59,7 +59,7 @@ PIPELINE = {
         {
             'file':         'coins_and_bag.png',
             'type':         'pair',
-            'names':        ['coin', 'moneybag'],
+            'names':        ['shared/coin', 'shared/moneybag'],
             'white_thresh': 245,   # gold edges are close to white; be strict
         },
         # Happy Hour mode: customer cast (shared across all maps)
@@ -72,9 +72,9 @@ PIPELINE = {
                                          # (ledge/hat fragments, <=2.4%); characters are a
                                          # single blob at 97%+ so 0.05 is safe both ways
             'names':  [
-                'customer-granny',  'customer-girl',      'customer-sailor',
-                'customer-student', 'customer-artist',    'customer-businessman',
-                'customer-surfer',  'customer-professor', 'customer-tourist',
+                'shared/customer-granny',  'shared/customer-girl',      'shared/customer-sailor',
+                'shared/customer-student', 'shared/customer-artist',    'shared/customer-businessman',
+                'shared/customer-surfer',  'shared/customer-professor', 'shared/customer-tourist',
             ],
         },
         # Happy Hour mode: 5-tier receipt merge chain (shared across all maps)
@@ -84,8 +84,8 @@ PIPELINE = {
             'grid':   (1, 5),
             'chroma': 'alpha',
             'names':  [
-                'receipt-ball', 'receipt-slip', 'receipt-roll',
-                'receipt-stack', 'receipt-golden',
+                'shared/receipt-ball', 'shared/receipt-slip', 'shared/receipt-roll',
+                'shared/receipt-stack', 'shared/receipt-golden',
             ],
         },
         # XP bar (progress.js): plush stitched frame + level medallion, one
@@ -102,16 +102,16 @@ PIPELINE = {
     ],
 
     'tikibar': [
-        {'file': 'drink-espresso-shot.png',      'type': 'single', 'name': 'drink-espresso-shot'},
-        {'file': 'drink-mojito.png',              'type': 'single', 'name': 'drink-mojito'},
-        {'file': 'drink-strawberry-daiquiri.png', 'type': 'single', 'name': 'drink-strawberry-daiquiri'},
-        {'file': 'drink-blue-hawaiian.png',       'type': 'single', 'name': 'drink-blue-hawaiian'},
-        {'file': 'drink-mango-smoothie.png',      'type': 'single', 'name': 'drink-mango-smoothie'},
-        {'file': 'drink-berry-shake.png',         'type': 'single', 'name': 'drink-berry-shake'},
-        {'file': 'drink-tiki-mug-cocktail.png',   'type': 'single', 'name': 'drink-tiki-mug-cocktail'},
-        {'file': 'drink-beer.png',                'type': 'single', 'name': 'drink-beer',
+        {'file': 'drink-espresso-shot.png',      'type': 'single', 'name': 'hawaii/espresso-shot'},
+        {'file': 'drink-mojito.png',              'type': 'single', 'name': 'hawaii/mojito'},
+        {'file': 'drink-strawberry-daiquiri.png', 'type': 'single', 'name': 'hawaii/strawberry-daiquiri'},
+        {'file': 'drink-blue-hawaiian.png',       'type': 'single', 'name': 'hawaii/blue-hawaiian'},
+        {'file': 'drink-mango-smoothie.png',      'type': 'single', 'name': 'hawaii/mango-smoothie'},
+        {'file': 'drink-berry-shake.png',         'type': 'single', 'name': 'hawaii/berry-shake'},
+        {'file': 'drink-tiki-mug-cocktail.png',   'type': 'single', 'name': 'hawaii/tiki-mug-cocktail'},
+        {'file': 'drink-beer.png',                'type': 'single', 'name': 'hawaii/beer',
          'fill_holes': True, 'fill_holes_region': 'right'},
-        {'file': 'drink-fruit-punch-pitcher.png', 'type': 'single', 'name': 'drink-fruit-punch-pitcher',
+        {'file': 'drink-fruit-punch-pitcher.png', 'type': 'single', 'name': 'hawaii/fruit-punch-pitcher',
          'fill_holes': True, 'min_hole_px': 300},
     ],
 
@@ -124,9 +124,9 @@ PIPELINE = {
             'sep_tol':       40,               # looser tolerance; AI color varied slightly
             'sep_threshold': 0.01,             # some lines were faint (~1% coverage)
             'names':     [
-                'pho-star-anise', 'pho-lime', 'pho-chili',
-                'pho-thai-basil', 'pho-bean-sprouts', 'pho-hoisin',
-                'pho-bowl-small', 'pho-bowl-large', 'pho-pot',
+                'saigon/star-anise', 'saigon/lime', 'saigon/chili',
+                'saigon/thai-basil', 'saigon/bean-sprouts', 'saigon/hoisin',
+                'saigon/bowl-small', 'saigon/bowl-large', 'saigon/pot',
             ],
         },
     ],
@@ -139,9 +139,9 @@ PIPELINE = {
             'col_splits': [417, 835],
             'row_splits': [418, 835],
             'names':     [
-                'kyoto-ramune', 'kyoto-mochi', 'kyoto-dango',
-                'kyoto-taiyaki', 'kyoto-softserve', 'kyoto-takoyaki',
-                'kyoto-parfait', 'kyoto-unaju', 'kyoto-matcha-cake',
+                'kyoto/ramune', 'kyoto/mochi', 'kyoto/dango',
+                'kyoto/taiyaki', 'kyoto/softserve', 'kyoto/takoyaki',
+                'kyoto/parfait', 'kyoto/unaju', 'kyoto/matcha-cake',
             ],
         },
     ],
@@ -157,10 +157,10 @@ PIPELINE = {
             'grid':      (4, 3),
             'chroma':    'alpha',
             'names':     [
-                'mage-crystal', 'mage-potion', 'mage-ring',
-                'mage-rune',    'mage-orb',    'mage-tome',
-                'mage-wand',    'mage-portal', None,          # dup tome
-                None,           None,          'mage-ball',   # empty, dup portal
+                'mage/crystal', 'mage/potion', 'mage/ring',
+                'mage/rune',    'mage/orb',    'mage/tome',
+                'mage/wand',    'mage/portal', None,          # dup tome
+                None,           None,          'mage/ball',   # empty, dup portal
             ],
         },
     ],
@@ -172,9 +172,9 @@ PIPELINE = {
             'grid':   (3, 3),
             'chroma': 'alpha',        # real transparent background
             'names':  [
-                'teddy-button',   'teddy-yarn',    'teddy-pincushion',
-                'teddy-stuffing', 'teddy-chick',   'teddy-capybara',
-                'teddy-bunny',    'teddy-axolotl', 'teddy-bear',
+                'teddy/button',   'teddy/yarn',    'teddy/pincushion',
+                'teddy/stuffing', 'teddy/chick',   'teddy/capybara',
+                'teddy/bunny',    'teddy/axolotl', 'teddy/bear',
             ],
         },
     ],
@@ -195,9 +195,9 @@ PIPELINE = {
             'min_component_frac': 0.05,   # drop stray bits a cell grabbed from a neighbour
                                           # (trumpet's leftover); keeps real parts like the violin bow
             'names':  [
-                'melody-harmonica', 'melody-ocarina',  'melody-recorder',  'melody-ukulele',
-                'melody-trumpet',   'melody-violin',    'melody-accordion', 'melody-electric-guitar',
-                'melody-saxophone', 'melody-piano',     'melody-coin',      'melody-bag',
+                'melody/harmonica', 'melody/ocarina',  'melody/recorder',  'melody/ukulele',
+                'melody/trumpet',   'melody/violin',    'melody/accordion', 'melody/electric-guitar',
+                'melody/saxophone', 'melody/piano',     'melody/coin',      'melody/bag',
             ],
         },
         # TODO: larger framing (mat fills the frame). Backgrounds skip the
@@ -214,7 +214,7 @@ PIPELINE = {
             'grid':   (3, 3),
             'chroma': 'alpha',        # real transparent background
             'names':  [
-                'paris-sugarcube',  'paris-macaron',   'paris-petitchou',
+                'paris/sugarcube',  'paris/macaron',   'paris/petitchou',
                 None,               None,              None,
                 None,               None,              None,
             ],
@@ -228,8 +228,8 @@ PIPELINE = {
                                           # their neighbours (<=0.3%); items are one blob
             'names':  [
                 None,               None,              None,
-                'paris-croissant',  'paris-eclair',    'paris-berrytart',
-                'paris-parisbrest', 'paris-charlotte', 'paris-strawberrycake',
+                'paris/croissant',  'paris/eclair',    'paris/berrytart',
+                'paris/parisbrest', 'paris/charlotte', 'paris/strawberrycake',
             ],
         },
     ],
@@ -245,9 +245,9 @@ PIPELINE = {
             'grid':   (3, 3),
             'chroma': 'alpha',        # real transparent background
             'names':  [
-                'farm-seed',       'farm-sprout',      'farm-strawberry',
-                'farm-blueberry',  'farm-pepper',      'farm-cabbage',
-                'farm-watermelon', 'farm-cauliflower', 'farm-prizepumpkin',
+                'farm/seed',       'farm/sprout',      'farm/strawberry',
+                'farm/blueberry',  'farm/pepper',      'farm/cabbage',
+                'farm/watermelon', 'farm/cauliflower', 'farm/prizepumpkin',
             ],
         },
     ],
@@ -592,6 +592,15 @@ def _alpha_bands(mask: np.ndarray, axis: int,
     return [b for b in merged if b[1] - b[0] >= min_size]
 
 
+def out_path(name: str) -> Path:
+    """Output file for an item name, creating its map folder if needed.
+    Names carry their folder ('farm/seed', 'shared/coin'), mirroring the
+    map-based layout of assets/images/."""
+    p = OUTPUT_DIR / f"{name}.png"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
+
+
 def split_alpha_grid(img: Image.Image, rows: int, cols: int) -> list:
     """Split a sheet with a REAL transparent background: cells are found from
     the fully-transparent gutters between items — no separator lines, no
@@ -720,7 +729,7 @@ def handle_spritesheet(src: Path, cfg: dict):
             assert cell is not None, f"{src.name}: cell for '{name}' is empty"
             if speck:
                 cell = drop_specks(cell, speck)
-            cell.save(OUTPUT_DIR / f"{name}.png", "PNG")
+            cell.save(out_path(name), "PNG")
             print(f"    {name}.png")
         return
 
@@ -739,7 +748,7 @@ def handle_spritesheet(src: Path, cfg: dict):
     for cell, name in zip(cells, names):
         remove_white_bg(cell, thresh, fill_holes, min_hole, chroma=chroma,
                         round_aura=(name in round_set)).save(
-            OUTPUT_DIR / f"{name}.png", "PNG")
+            out_path(name), "PNG")
         print(f"    {name}.png")
 
 
@@ -747,7 +756,7 @@ def handle_pair(src: Path, cfg: dict):
     thresh     = cfg.get('white_thresh', WHITE_THRESH)
     left, right = split_pair(Image.open(src), thresh)
     for part, name in zip((left, right), cfg['names']):
-        remove_white_bg(part, thresh).save(OUTPUT_DIR / f"{name}.png", "PNG")
+        remove_white_bg(part, thresh).save(out_path(name), "PNG")
         print(f"    {name}.png")
 
 
@@ -757,7 +766,7 @@ def handle_single(src: Path, cfg: dict):
                     cfg.get('fill_holes', False),
                     cfg.get('min_hole_px', MIN_HOLE_PX),
                     cfg.get('fill_holes_region')).save(
-        OUTPUT_DIR / f"{cfg['name']}.png", "PNG")
+        out_path(cfg['name']), "PNG")
     print(f"    {cfg['name']}.png")
 
 
