@@ -134,9 +134,16 @@ const RECEIPT_ITEMS = [
   { name:'golden receipt',   r:42, glass:'#fff3c4', liq:'#ffc83d', sprite:'assets/images/shared/receipt-golden.png', bodyRatio:0.80, vis:0.83 },
 ];
 
-// Pre-load all sprites and compute physics radii for every item set at startup.
-// Collision-circle overrides from config/hitboxes.js (edited visually with
-// tools/hitbox-editor.html) are applied before physR is derived.
+// Compute physics radii for every item set at startup, and give each item its
+// Image OBJECT — but do NOT start the download here. Collision-circle overrides
+// from config/hitboxes.js (edited visually with tools/hitbox-editor.html) are
+// applied before physR is derived.
+//
+// BANDWIDTH: this loop used to set `img.src` too, so opening the game fetched
+// all nine tier chains (13.4MB) when a player only ever needs the one map they
+// pick (~1MB). The sprite fetch now happens in loadItemSprites() below, called
+// per map by startGame(). The geometry below stays global — it costs nothing,
+// and every map's physR/cap must exist for the menu and the tools.
 [...HAWAII_ITEMS, ...SAIGON_ITEMS, ...KYOTO_ITEMS, ...MAGE_ITEMS, ...TEDDY_ITEMS, ...MELODY_ITEMS, ...PARIS_ITEMS, ...FARM_ITEMS, ...RECEIPT_ITEMS].forEach(item => {
   const hb = (typeof ITEM_HITBOXES !== 'undefined') && ITEM_HITBOXES[item.sprite];
   if (hb && hb.bodyRatio) item.bodyRatio = hb.bodyRatio;
@@ -163,7 +170,6 @@ const RECEIPT_ITEMS = [
       (Math.sqrt(0.75 / aspect)).toFixed(2) + ' (see CLAUDE.md, and scale its' +
       ' capsule hitbox by the same factor)');
   };
-  item.img.src = item.sprite;
   const natH = item.r * 2.4;                 // sprites are sized by height
   if (hb && hb.shape === 'capsule') {
     // Elongated (stadium) hitbox for non-circular art: a rounded rectangle whose
@@ -181,3 +187,20 @@ const RECEIPT_ITEMS = [
     item.physR = natH * item.bodyRatio / 2 * 0.88;
   }
 });
+
+// Start the actual sprite downloads for ONE item set. Call it for the chain a
+// screen is about to draw: startGame() does this for the active map (plus
+// RECEIPT_ITEMS in Happy Hour), and the tools call it for whatever they display.
+// Idempotent — re-calling for an already-requested set is free, so it is safe to
+// call on every startGame and on every tool redraw.
+//
+// Anything drawing an item must tolerate a not-yet-loaded sprite. It already
+// does: the draw paths all gate on `img.complete && img.naturalWidth` (an Image
+// with no src reports complete=true, naturalWidth=0) and fall back to the
+// glass/liq colours, so a sprite simply pops in when it arrives.
+function loadItemSprites(items) {
+  if (!items) return;
+  for (const item of items) {
+    if (item.img && !item.img.getAttribute('src')) item.img.src = item.sprite;
+  }
+}

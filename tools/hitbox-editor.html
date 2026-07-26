@@ -213,6 +213,10 @@ function boundaryKey() { return curMap.sizes ? hitboxKey(curMap, curSize) : curM
 function selectMap(i) {
   curMap = pickerSets[i];
   mapPick.value = i;
+  // items.js no longer fetches every map's sprites up front (bandwidth — see the
+  // note there), so the editor asks for the set it is about to draw. Idempotent,
+  // and the per-item 'load' listeners below re-fit the grid as they arrive.
+  loadItemSprites(curMap.itemsData);
   // Map-less set (the receipts): item hitboxes only — no background/boundary,
   // so the Background tab is disabled and the item tab takes over.
   const mapless = !curMap.bg;

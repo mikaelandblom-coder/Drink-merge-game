@@ -664,6 +664,10 @@ function startGame(map, opts = {}) {
   coolMode = false;  // was: localStorage.getItem('mm_cool') === '1'
   ACTIVE_MAP = map;
   ITEMS = ACTIVE_MAP.itemsData;
+  // Fetch only THIS map's sprite chain (see the bandwidth note in items.js) —
+  // the receipt chain and the customer cast are Happy-Hour-only, so they wait
+  // for a run that actually needs them.
+  loadItemSprites(ITEMS);
   // Pick the backdrop for the requested size (map.sizes), else default art.
   const chosenSize = opts.size || map.defaultSize;
   const bgSrc = (map.sizes && chosenSize && map.sizes[chosenSize]) || map.bg;
@@ -671,6 +675,7 @@ function startGame(map, opts = {}) {
   // Happy Hour (orders mode) is per-run from the menu and forces combos off —
   // the receipt chain is its own scoring layer, so the two don't stack.
   HAPPY_HOUR = !!opts.happyHour;
+  if (HAPPY_HOUR) { loadItemSprites(RECEIPT_ITEMS); loadCustomerSprites(); }
   // Combo multipliers: per-run override from the menu, else the map's default.
   COMBOS_ENABLED = HAPPY_HOUR ? false
     : (opts.combos !== undefined) ? !!opts.combos : !!map.combos;

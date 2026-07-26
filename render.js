@@ -1,7 +1,11 @@
 // All canvas drawing. Depends on: ctx, W, H, ITEMS, persp, ACTIVE_MAP.
 
-const COIN_IMG = new Image(); COIN_IMG.src = 'assets/images/shared/coin.png';
-const BAG_IMG  = new Image(); BAG_IMG.src  = 'assets/images/shared/moneybag.png';
+// No src here on purpose: loadMapAssets() sets it per map (a map may override
+// either with its own art), so fetching the shared pair at parse time cost
+// 1.3MB on the MENU screen — where neither is drawn — and was then immediately
+// re-pointed anyway. See the bandwidth note in config/items.js.
+const COIN_IMG = new Image();
+const BAG_IMG  = new Image();
 
 // The map background lives in a DOM layer (#stage-bg) UNDER a transparent
 // canvas, not on the canvas itself: the compositor rasters the image once and
@@ -178,13 +182,22 @@ function burst(x, y, color, r, particles) {
 }
 
 // ---------- Happy Hour: customers behind the horizon ----------
-// One shared cast for every map (like the default coin/bag art). Sprites are
-// preloaded once here; game.js picks a random art index per customer.
+// One shared cast for every map (like the default coin/bag art); game.js picks a
+// random art index per customer. The Image objects exist from the start so the
+// array length is a stable art-index range, but the 1.6MB of art is only fetched
+// when a Happy Hour run actually starts — loadCustomerSprites(), called from
+// startGame(). Every other mode never touches it.
 const CUSTOMER_IMGS = [
   'customer-granny',  'customer-girl',      'customer-sailor',
   'customer-student', 'customer-artist',    'customer-businessman',
   'customer-surfer',  'customer-professor', 'customer-tourist',
-].map(n => { const i = new Image(); i.src = 'assets/images/shared/' + n + '.png'; return i; });
+].map(n => { const i = new Image(); i.dataset.src = 'assets/images/shared/' + n + '.png'; return i; });
+
+function loadCustomerSprites() {
+  for (const img of CUSTOMER_IMGS) {
+    if (!img.getAttribute('src')) img.src = img.dataset.src;
+  }
+}
 
 // Layout is proportional to the per-map HORIZON so customers always fit in the
 // strip behind the line regardless of map framing. Shared by drawCustomers and

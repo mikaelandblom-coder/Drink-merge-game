@@ -73,7 +73,12 @@ if (/[?&]test\b/.test(location.search)) {
     const bgUrl = (getComputedStyle(document.getElementById('stage-bg'))
       .backgroundImage.match(/url\("?([^")]+)"?\)/) || [])[1];
     if (bgUrl) { const b = new Image(); b.src = bgUrl; imgs.push(b); }
-    return Promise.allSettled(imgs.map(i => i.decode ? i.decode() : null))
+    // Sprites are fetched per run now (see loadItemSprites in config/items.js),
+    // so outside Happy Hour the receipt/customer art legitimately has no src.
+    // decode() would reject on those — drop them instead of banking on
+    // allSettled swallowing it, so a REAL decode failure still stands out.
+    return Promise.allSettled(imgs.filter(i => i.getAttribute('src'))
+        .map(i => i.decode ? i.decode() : null))
       .then(() => 'ready: ' + ACTIVE_MAP.id +
         (HAPPY_HOUR ? ' (happy hour)' : '') +
         (COMBOS_ENABLED ? ' (combos)' : ''));
