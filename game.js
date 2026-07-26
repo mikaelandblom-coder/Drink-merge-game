@@ -185,7 +185,9 @@ const COMBO_WINDOW = 1400;  // ms; merges within this of each other chain a comb
 const HH_QUEUE_MAX     = 3;     // customers visible at once
 const HH_FIRST_SHOT    = 8;     // first customer arrives after this many shots
 const HH_SHOTS_BETWEEN = 6;     // further arrivals every N shots (if the queue has room)
-const HH_CAST          = 9;     // size of the customer art set (render.js CUSTOMER_IMGS)
+// Cast size is DERIVED from config/items.js CUSTOMER_SPRITES (via render.js
+// CUSTOMER_IMGS) — adding a face there is the whole change. It used to be a
+// hardcoded 9 here, which silently ignored any face past the ninth.
 const HH_LEAVE_MS      = 420;   // served customer's walk-out animation
 const HH_CASHOUT_COINS = 25;    // golden receipt's bonus payout when it forms (10 points per coin)
 
@@ -318,9 +320,13 @@ function spawnCustomer() {
   const used  = new Set(state.customers.map(c => c.slot));
   const slot  = [0, 1, 2].find(s => !used.has(s));
   if (slot === undefined) return;
+  // No two customers in the queue share a face. Only enforceable while the cast
+  // outnumbers the queue — a smaller cast would spin here forever, so a short
+  // one just allows repeats.
+  const cast  = CUSTOMER_IMGS.length;
   const faces = new Set(state.customers.map(c => c.art));
   let art;
-  do { art = Math.floor(Math.random() * HH_CAST); } while (faces.has(art));
+  do { art = Math.floor(Math.random() * cast); } while (cast > HH_QUEUE_MAX && faces.has(art));
   state.customers.push({
     slot, art,
     // Unweighted sample over the map's ENTIRE tier chain — high-tier orders

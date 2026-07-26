@@ -184,14 +184,15 @@ function burst(x, y, color, r, particles) {
 // ---------- Happy Hour: customers behind the horizon ----------
 // One shared cast for every map (like the default coin/bag art); game.js picks a
 // random art index per customer. The Image objects exist from the start so the
-// array length is a stable art-index range, but the 1.6MB of art is only fetched
-// when a Happy Hour run actually starts — loadCustomerSprites(), called from
+// array length is a stable art-index range, but the art is only fetched when a
+// Happy Hour run actually starts — loadCustomerSprites(), called from
 // startGame(). Every other mode never touches it.
-const CUSTOMER_IMGS = [
-  'customer-granny',  'customer-girl',      'customer-sailor',
-  'customer-student', 'customer-artist',    'customer-businessman',
-  'customer-surfer',  'customer-professor', 'customer-tourist',
-].map(n => { const i = new Image(); i.dataset.src = 'assets/images/shared/' + n + '.png'; return i; });
+//
+// The cast itself lives in config/items.js (CUSTOMER_SPRITES), next to the
+// receipt chain and maintained by tools/sprite-editor.html: adding a face is a
+// data edit, not a code edit, and nothing here needs to know how many there are.
+const CUSTOMER_IMGS = CUSTOMER_SPRITES.map(
+  src => { const i = new Image(); i.dataset.src = src; return i; });
 
 function loadCustomerSprites() {
   for (const img of CUSTOMER_IMGS) {

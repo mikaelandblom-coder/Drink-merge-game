@@ -35,6 +35,10 @@
   .pane.on { display:flex; }
   .panel { display:none; flex-direction:column; gap:10px; }
   .panel.on { display:flex; }
+  /* `hidden` is a UA rule of class specificity, so any author display rule beats
+     it — tool.css gives .row display:flex, and #tierBtns would stay visible with
+     hidden set. See CLAUDE.md "hidden loses to any author display rule". */
+  [hidden] { display:none !important; }
 
   /* transparency checkerboard — the ONLY honest way to look at a sprite */
   .checker { background-color:#6b6b6b;
@@ -190,26 +194,38 @@
       <legend>Sprite folder</legend>
       <button class="ghost" id="pickLib">Choose assets/images/…</button>
       <label>filter <input type="text" id="libFilter" placeholder="seed" style="width:150px"></label>
-      <div class="hint">Pick <b>assets/images/</b> as the root, then click a
-        📁 to go into a map’s folder and <b>↰</b> or the breadcrumb to come
-        back up. Click a thumbnail to append it as the next tier — tiers
-        remember their folder, so one chain can mix a map’s items with
-        something from <b>shared/</b>.</div>
+      <div class="hint">Pick <b>assets/images/</b> as the root — once, for the
+        whole session. Picking a set below jumps to its folder; <b>↰</b> or the
+        breadcrumb comes back up, 📁 goes into another map. Click a thumbnail to
+        append it — entries remember their folder, so one set can mix a map’s
+        items with something from <b>shared/</b>.</div>
     </fieldset>
 
     <fieldset>
-      <legend>Chain</legend>
-      <label>load existing <select id="chainPick"></select></label>
-      <label>const name <input type="text" id="constName" value="FARM_ITEMS" style="width:150px"></label>
-      <label>sprite path <input type="text" id="pathPrefix" value="assets/images/" style="width:150px"></label>
-      <div class="row">
+      <legend>Set</legend>
+      <label>edit <select id="chainPick"></select></label>
+      <div id="newNameRow" hidden><label>const name
+        <input type="text" id="constName" value="NEWMAP_ITEMS" style="width:150px"></label></div>
+      <div class="hint" id="setHint">Pick a map to retune its tier chain, or start
+        a new one. Choosing a map jumps the sprite folder to that map’s art.</div>
+      <div class="row" id="tierBtns">
         <button class="ghost" id="ladderBtn"
           title="Re-space r evenly from 15 to 71 across every tier. Overwrites manual r edits.">Reset r ladder</button>
         <button class="ghost" id="autoVisBtn"
           title="Recompute vis for every tier from its art's aspect, so each item covers the same on-screen area. Overwrites manual vis edits.">Auto-fit vis</button>
       </div>
       <button class="ghost" id="clearChain">Clear chain</button>
-      <div class="hint">
+      <div class="hint" id="castHint" hidden>
+        The <b>Happy Hour customer cast</b> — the faces that queue behind the
+        horizon. Pure art: no <b>r</b>, <b>vis</b> or hitbox, since a customer is
+        never a physics body. Click art in the sprite folder to add a face, drag
+        to reorder, ✕ to drop one.<br><br>
+        Order is cosmetic — the game picks a face at random per arrival — but the
+        cast <b>size</b> is not: more faces = more variety, and it is derived from
+        this list, so adding one here is the entire change.<br><br>
+        New faces come from the <b>Extract</b> tab: run a customer sheet through
+        it, save the PNGs into <b>shared/</b>, then add them here.</div>
+      <div class="hint" id="tierHint">
         <b>r</b> — the tier’s size step. The game draws each sprite at height
         <b>r·2.4·vis</b>, so the source PNG’s pixel size is irrelevant: never
         pre-scale the art.<br>
@@ -262,8 +278,8 @@
         <div id="libList" class="hint" style="padding:12px">No folder chosen.</div>
       </div>
       <div id="chainSide">
-        <h2>Tier chain — drag to reorder</h2>
-        <div class="hint" style="padding:0 12px 6px">
+        <h2 id="chainHead">Tier chain — drag to reorder</h2>
+        <div class="hint" id="chainCols" style="padding:0 12px 6px">
           tier # · sprite · name · <b>r</b> tier size · <b>vis</b> visual scale ·
           ⚠ draws too small for its tier
         </div>
@@ -279,6 +295,7 @@
 <script src="config/constants.js"></script>
 <script src="config/hitboxes.js"></script>
 <script src="config/items.js"></script>
+<script src="config/maps.js"></script>
 <script>
 'use strict';
 const $ = id => document.getElementById(id);
@@ -707,7 +724,22 @@ $('dlCells').onclick = async () => {
 // a small file browser rather than one flat list. libPath is where we are
 // BELOW the picked root; a tier's `file` is stored relative to that root
 // ("farm/seed.png"), which is what lets one chain mix folders.
+// Where the game serves item art from. Was a text input, but it is a constant of
+// the project (config/items.js sprite: paths all start with it) and typing it
+// wrong only ever produced broken output — the set picker now supplies the rest
+// of the path.
+const SPRITE_ROOT = 'assets/images/';
+
 let libRoot = null, libCur = null, libPath = [], libDirs = [], libFiles = [];
+// Thumbnails are read through the DIRECTORY HANDLE (blob URLs), never fetched
+// from `sprite path` + name. The URL guess is only right when the picked root
+// really is the served assets/images/, so picking a MAP folder by mistake used
+// to 404 every thumbnail — and with alt="" a broken <img> paints nothing, so
+// the whole library silently became bare checkerboard tiles with no error
+// anywhere. The handle always has the bytes; `sprite path` now only shapes the
+// emitted sprite: strings (see rootMismatch()).
+let libHandles = new Map();   // file name (current folder) -> FileSystemFileHandle
+let libBlobs = [];            // object URLs currently handed to thumbnails
 let chain = [];   // {file,img,name,r,vis,bodyRatio,glass,liq,aspect}
 
 $('pickLib').onclick = async () => {
@@ -729,15 +761,54 @@ async function libGoto(pathArr) {
 
 async function scanLib() {
   if (!libCur) return;
-  libDirs = []; libFiles = [];
+  libDirs = []; libFiles = []; libHandles = new Map();
   for await (const [name, h] of libCur.entries()) {
     if (h.kind === 'directory') libDirs.push(name);
-    else if (/\.png$/i.test(name)) libFiles.push(name);
+    else if (/\.png$/i.test(name)) { libFiles.push(name); libHandles.set(name, h); }
   }
   libDirs.sort(); libFiles.sort();
   renderLib();
+  const bad = rootMismatch();
   status(`${libDirs.length} folders, ${libFiles.length} PNGs in ` +
-         ($('pathPrefix').value + libPath.join('/')));
+         (SPRITE_ROOT + libPath.join('/')) + (bad ? ' — ⚠ ' + bad : ''));
+}
+
+// The picked root must BE the folder that `sprite path` names, or every emitted
+// sprite: path is wrong (picking assets/images/farm/ emits "assets/images/seed.png"
+// instead of "assets/images/farm/seed.png"). Thumbnails no longer reveal this —
+// they read the handle — so say it out loud instead.
+function rootMismatch() {
+  if (!libRoot) return '';
+  const tail = SPRITE_ROOT.replace(/\/+$/, '').split('/').pop();
+  if (!tail || libRoot.name === tail) return '';
+  return `you picked “${libRoot.name}/” but sprite path ends in “${tail}/” — ` +
+         `pick ${tail}/ as the root (then click into ${libRoot.name}/), or the ` +
+         `emitted sprite: paths will be wrong`;
+}
+
+// Thumbnail source: the folder handle's bytes, falling back to the served URL
+// (which is all that's available if a handle read is refused).
+async function thumbSrc(name) {
+  const h = libHandles.get(name);
+  if (h) {
+    try {
+      const u = URL.createObjectURL(await h.getFile());
+      libBlobs.push(u);
+      return u;
+    } catch {}
+  }
+  return SPRITE_ROOT + relPath(name);
+}
+
+// Free thumbnails from the previous listing, but never one a chain tier is
+// still pointing at.
+function freeThumbs() {
+  const keep = new Set(chain.map(t => t.img.getAttribute('src')));
+  libBlobs = libBlobs.filter(u => {
+    if (keep.has(u)) return true;
+    URL.revokeObjectURL(u);
+    return false;
+  });
 }
 
 const relPath = name => [...libPath, name].join('/');
@@ -752,15 +823,23 @@ function renderCrumbs() {
     a.onclick = () => libGoto(arr);
     host.appendChild(a);
   };
-  add($('pathPrefix').value.replace(/\/$/, ''), []);
+  add(SPRITE_ROOT.replace(/\/$/, ''), []);
   libPath.forEach((seg, i) => {
     host.appendChild(document.createTextNode(' / '));
     add(seg, libPath.slice(0, i + 1));
   });
+  const bad = rootMismatch();
+  if (bad) {
+    const w = document.createElement('span');
+    w.style.cssText = 'color:var(--warn);flex:1 0 100%;font-size:10px';
+    w.textContent = '⚠ ' + bad;
+    host.appendChild(w);
+  }
 }
 
 function renderLib() {
   renderCrumbs();
+  freeThumbs();
   const host = $('libList');
   const f = $('libFilter').value.trim().toLowerCase();
   const dirs  = libDirs.filter(n => !f || n.toLowerCase().includes(f));
@@ -796,12 +875,18 @@ function renderLib() {
     d.className = 'libItem';
     const img = document.createElement('img');
     img.className = 'checker';
-    img.src = $('pathPrefix').value + relPath(name);
+    img.alt = name;                       // a failed thumbnail must SAY so
+    thumbSrc(name).then(u => { img.src = u; });
     const s = document.createElement('span');
     s.textContent = name.replace(/\.png$/i, '');
     s.title = relPath(name);
     d.append(img, s);
-    d.onclick = () => addTier(relPath(name));
+    // Reuse the thumbnail's already-decoded blob URL for the tier, so clicking
+    // costs no second read.
+    // In cast mode the preset keeps r/vis at their defaults, so every face
+    // previews at the same height (a customer has no tier size).
+    d.onclick = () => addTier(relPath(name), castMode ? { cast:true } : null,
+                              img.getAttribute('src'));
     host.appendChild(d);
   }
   if (!dirs.length && !files.length) {
@@ -839,7 +924,10 @@ function ladder(n) {
   return Array.from({ length:n }, (_, i) => Math.round(15 * Math.pow(71/15, i/(n-1))));
 }
 
-function addTier(file, preset) {
+// `src` is the library thumbnail's already-resolved source (a blob URL from the
+// folder handle). Only the "load existing" path leaves it out and falls back to
+// the served URL, where the sprite: path in items.js is authoritative anyway.
+function addTier(file, preset, src) {
   const img = new Image();
   // Every field starts at a usable value: the row renders immediately, before
   // the sprite has loaded. aspect/vis/colours need the pixels, so they are
@@ -860,8 +948,8 @@ function addTier(file, preset) {
     }
     renderChain();
   };
-  img.onerror = () => status(`Could not load ${$('pathPrefix').value + file} — check the sprite path.`);
-  img.src = $('pathPrefix').value + file;
+  img.onerror = () => status(`Could not load ${SPRITE_ROOT + file} — check the sprite path.`);
+  img.src = src || (SPRITE_ROOT + file);
   chain.push(t);
   // Appending extends the ladder rather than regenerating it, so adding a
   // tenth item to a loaded map can't retune the nine already tuned. 1.21 is
@@ -913,6 +1001,20 @@ function renderChain() {
     const nm = document.createElement('input');
     nm.type = 'text'; nm.className = 'nm'; nm.value = t.name;
     nm.oninput = () => { t.name = nm.value; emit(); };
+
+    // Cast mode: art only. The face's NAME comes from the filename (the emitted
+    // list is paths, nothing else), so show the path rather than an editable
+    // name, and drop r / vis / the too-small warning entirely.
+    if (castMode) {
+      const p = document.createElement('span');
+      p.className = 'nm'; p.style.color = 'var(--dim)'; p.textContent = t.file;
+      const x2 = document.createElement('span');
+      x2.className = 'x'; x2.textContent = '✕';
+      x2.onclick = () => { chain.splice(i, 1); renderChain(); };
+      row.append(grip, idx, cv, p, x2);
+      host.appendChild(row);
+      return;
+    }
 
     const rr = document.createElement('input');
     rr.type = 'number'; rr.className = 'num'; rr.value = t.r; rr.min = 4; rr.step = 1;
@@ -996,13 +1098,18 @@ window.addEventListener('resize', () => { if ($('paneTier').classList.contains('
 $('ladderBtn').onclick  = () => { relad(); renderChain(); };
 $('autoVisBtn').onclick = () => { chain.forEach(t => t.vis = autoVis(t.aspect)); renderChain(); };
 $('clearChain').onclick = () => { chain = []; renderChain(); };
-$('pathPrefix').oninput = () => { renderLib(); saveSettings(); };
-$('constName').oninput  = () => { emit(); saveSettings(); };
+$('constName').oninput = () => { emit(); saveSettings(); };
 
 // ── code generation ───────────────────────────────────────────────────────
 function emit() {
   if (!chain.length) { $('out').value = ''; return ''; }
-  const pre = $('pathPrefix').value;
+  if (castMode) {
+    const src = `const CUSTOMER_SPRITES = [\n` +
+      chain.map(t => `  '${SPRITE_ROOT}${t.file}',`).join('\n') + `\n];`;
+    $('out').value = src;
+    return src;
+  }
+  const pre = SPRITE_ROOT;
   const pad = (s, n) => s + ' '.repeat(Math.max(0, n - s.length));
   const nw = Math.max(...chain.map(t => t.name.length)) + 2;
   const sw = Math.max(...chain.map(t => (pre + t.file).length)) + 2;
@@ -1037,9 +1144,14 @@ $('dlItems').onclick = () => {
 let itemsHandle = null;
 $('writeItems').onclick = async () => {
   let src = emit();
-  if (!src) return status('Chain is empty.');
-  const NAME = $('constName').value.trim();
+  if (!src) return status(castMode ? 'The cast is empty.' : 'Chain is empty.');
+  const NAME = castMode ? 'CUSTOMER_SPRITES' : $('constName').value.trim();
   if (!/^[A-Z][A-Z0-9_]*$/.test(NAME)) return status('Const name should look like FARM_ITEMS.');
+  // A cast of 3 or fewer would make spawnCustomer's "no repeated face in the
+  // queue" rule unsatisfiable; game.js allows repeats below that, but it is
+  // almost certainly a mistake here.
+  if (castMode && chain.length <= 3)
+    status(`Warning: ${chain.length} faces means repeats in the queue (max 3 at once).`);
   if (!window.showOpenFilePicker) return status('No File System API — use Copy instead.');
   try {
     // MUST be showOpenFilePicker, NEVER showSaveFilePicker. The save picker
@@ -1078,6 +1190,10 @@ $('writeItems').onclick = async () => {
     if (re.test(text)) {
       text = text.replace(re, src);
       note = `Replaced ${NAME}`;
+    } else if (castMode) {
+      // The append path below registers a new chain in the physR pre-load
+      // spread, which a plain sprite list must never join.
+      return status('Could not find CUSTOMER_SPRITES in items.js — nothing was written.');
     } else {
       const anchor = '// Pre-load all sprites';
       if (!text.includes(anchor)) return status('Could not find the insert point in items.js.');
@@ -1136,39 +1252,95 @@ const CHAINS = {
   HAWAII_ITEMS, SAIGON_ITEMS, KYOTO_ITEMS, MAGE_ITEMS, TEDDY_ITEMS,
   MELODY_ITEMS, PARIS_ITEMS, FARM_ITEMS, RECEIPT_ITEMS,
 };
+// Which const holds a given map's chain, by IDENTITY rather than by guessing a
+// name off the map id — MAPS[n].itemsData IS one of the arrays above.
+const constOf = arr => Object.keys(CHAINS).find(k => CHAINS[k] === arr);
+
+// The picker mirrors the hitbox editor's: one row per map (same labels, same
+// order), then the two map-less shared sets, then "new chain". Raw const names
+// and the sprite-path prefix are no longer typed by hand — a map knows both.
+const SETS = [
+  ...MAPS.filter(m => constOf(m.itemsData))
+         .map(m => ({ kind:'chain', id:m.id, name:constOf(m.itemsData),
+                      label:`${m.label} — ${m.sublabel}`, items:m.itemsData })),
+  { kind:'chain', id:'__receipts', name:'RECEIPT_ITEMS',
+    label:'Happy Hour — Receipts', items:RECEIPT_ITEMS },
+  { kind:'cast',  id:'__customers', name:'CUSTOMER_SPRITES',
+    label:'Happy Hour — Customers' },
+  { kind:'new',   id:'__new', name:'', label:'— new chain —' },
+];
+
+// Cast mode edits CUSTOMER_SPRITES: a plain sprite list, no r/vis/colours. It
+// reuses `chain` (and so the library, drag-reorder and thumbnails) but every
+// tier-only control is hidden and emit() writes a different shape.
+let castMode = false;
+let currentSet = SETS[0];
+
 {
   const sel = $('chainPick');
-  sel.innerHTML = '<option value="">— new chain —</option>' +
-    Object.keys(CHAINS).map(k => `<option>${k}</option>`).join('');
+  SETS.forEach((s, i) => sel.add(new Option(s.label, i)));
+
   sel.onchange = async () => {
-    const k = sel.value;
+    currentSet = SETS[+sel.value];
+    castMode = currentSet.kind === 'cast';
     chain = [];
-    if (!k) { renderChain(); return; }
-    $('constName').value = k;
+
+    $('newNameRow').hidden = currentSet.kind !== 'new';
+    $('tierBtns').hidden   = castMode;    // r ladder / auto-vis are meaningless
+    $('tierHint').hidden   = castMode;
+    $('castHint').hidden   = !castMode;
+    $('chainHead').textContent = castMode ? 'Customer cast — drag to reorder'
+                                          : 'Tier chain — drag to reorder';
+    $('chainCols').hidden  = castMode;
+    if (currentSet.name) $('constName').value = currentSet.name;
+
+    if (castMode) {
+      // Sprite-only set: no bodyRatio to recover, no tier fields to fill.
+      for (const sp of CUSTOMER_SPRITES) addTier(stripRoot(sp), { cast:true });
+      await jumpToFolder(CUSTOMER_SPRITES[0]);
+      status(`Customer cast — ${CUSTOMER_SPRITES.length} faces. Add more for variety, then write it back.`);
+      return;
+    }
+    if (currentSet.kind === 'new') {
+      renderChain();
+      status('New chain — name the const, then click sprites in the folder to add tiers.');
+      return;
+    }
+
     // config/items.js OVERWRITES bodyRatio from ITEM_HITBOXES at load time, so
     // the live objects no longer hold what the file says. Read the authored
     // values back out of the source — config/hitboxes.js stays the one owner
     // of tuned bodyRatios, and writing this chain back can't launder them in.
     const authored = await authoredBodyRatios();
-    const pre = $('pathPrefix').value;
-    for (const it of CHAINS[k]) {
-      // keep the sprite's folder ("farm/seed.png"), not just its basename
-      const file = it.sprite.startsWith(pre) ? it.sprite.slice(pre.length)
-                                             : it.sprite.split('/').pop();
-      addTier(file, {
+    for (const it of currentSet.items) {
+      addTier(stripRoot(it.sprite), {
         name:it.name, r:it.r, vis:it.vis != null ? it.vis : 1,
         bodyRatio: authored.get(it.sprite) != null ? authored.get(it.sprite) : it.bodyRatio,
         glass:it.glass, liq:it.liq,
       });
     }
-    status(`Loaded ${k} — adjust r / vis / order, then write it back.`);
+    await jumpToFolder(currentSet.items[0] && currentSet.items[0].sprite);
+    status(`Loaded ${currentSet.label} (${currentSet.name}) — adjust r / vis / order, then write it back.`);
   };
+}
+
+// "assets/images/farm/seed.png" -> "farm/seed.png" (a tier's path is relative
+// to the sprite root; keep the folder, not just the basename).
+const stripRoot = sprite => sprite.startsWith(SPRITE_ROOT)
+  ? sprite.slice(SPRITE_ROOT.length) : sprite.split('/').pop();
+
+// Selecting a set jumps the library into that set's folder, the way the hitbox
+// editor's map picker loads that map's art. No-op until a root is picked.
+async function jumpToFolder(sprite) {
+  if (!libRoot || !sprite) return;
+  const parts = stripRoot(sprite).split('/');
+  parts.pop();
+  if (parts.length && parts.join('/') !== libPath.join('/')) await libGoto(parts);
 }
 
 // ── settings persistence ──────────────────────────────────────────────────
 function saveSettings() {
-  const s = { prefix:$('prefix').value, constName:$('constName').value,
-              pathPrefix:$('pathPrefix').value };
+  const s = { prefix:$('prefix').value, constName:$('constName').value };
   SLIDERS.forEach(id => s[id] = $(id).value);
   ['keyWhite','isolate','stripShadow'].forEach(id => s[id] = $(id).checked);
   try { localStorage.setItem(LS, JSON.stringify(s)); } catch {}
@@ -1186,7 +1358,13 @@ function saveSettings() {
   $('rowWhiteT').style.display = $('keyWhite').checked ? 'flex' : 'none';
 })();
 
-status('Load an AI sheet to start, or jump to “Tier chain” to retune an existing map.');
+status('Load an AI sheet to start, or jump to “Tier chain” to retune a map or the customer cast.');
+
+// Open on the first map's chain rather than an empty list under a map's name —
+// the picker must never claim to be showing something it isn't. Runs after
+// loadSettings so the restored const name can't outlive its set, and last so
+// its own status line survives.
+$('chainPick').onchange();
 </script>
 </body>
 </html>

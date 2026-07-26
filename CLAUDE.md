@@ -14,6 +14,8 @@ config/hitboxes.js    — MAP_HITBOXES (spline knots + generated cornerWalls) an
                          ITEM_HITBOXES (bodyRatio overrides). DO NOT hand-edit —
                          maintained by tools/hitbox-editor.html.
 config/items.js       — ITEMS array: all drink tiers (sprite, radius, colors, physR)
+                         + RECEIPT_ITEMS and CUSTOMER_SPRITES (the Happy Hour
+                         cast — a plain sprite list; its length IS the cast size)
 config/maps.js        — MAPS array + ACTIVE_MAP (bg, bgm, bgmVol, items ref,
                          optional sizes/combos); hitboxKey() + applies
                          MAP_HITBOXES overrides at the bottom
@@ -197,11 +199,27 @@ rejected blobs are excluded from the feather pass so they can't reappear.
 `SHADOW_SPRITE`, so a baked one double-shadows). Save writes the PNGs straight
 into a folder you pick once.
 
-**2 · Tier chain** — pick **assets/images/** as the root and browse it as a
-folder tree (📁 to descend, ↰ or the breadcrumb to go back up), since the
-sprite folder is map-based. A tier stores its path RELATIVE to the root
-(`farm/seed.png`), so one chain can mix a map's items with something from
-`shared/`. Pick which PNG is which tier, drag to reorder, then write
+**2 · Tier chain** — a **set picker** mirroring the hitbox editor's map
+dropdown: one row per map (same labels, same order, built from `MAPS` by
+matching `itemsData` BY IDENTITY against the `*_ITEMS` consts, so no map-id →
+const-name guessing), then the two map-less shared sets — **Happy Hour —
+Receipts** and **Happy Hour — Customers** — then "— new chain —", the only entry
+that asks for a const name. Picking a set loads it AND jumps the sprite folder to
+that set's art. The old raw `load existing` / `const name` / `sprite path` inputs
+are gone: a map knows all three. The sprite root is now the constant
+`SPRITE_ROOT` (`assets/images/`).
+
+Pick **assets/images/** as the root once and browse it as a folder tree (📁 to
+descend, ↰ or the breadcrumb to go back up), since the sprite folder is
+map-based. A tier stores its path RELATIVE to the root (`farm/seed.png`), so one
+chain can mix a map's items with something from `shared/`. Thumbnails are read
+through the DIRECTORY HANDLE (blob URLs), never fetched from `SPRITE_ROOT` +
+name — picking a map folder as the root used to 404 every one of them, and an
+`<img>` that fails inside a `.checker` tile paints NOTHING, so the library went
+silently blank-checkerboard. A root whose name isn't `images` is now called out
+in the breadcrumb + status bar, because it would still corrupt the emitted
+`sprite:` paths.
+Pick which PNG is which tier, drag to reorder, then write
 `config/items.js`. `r` belongs to the SLOT, not the item, so a drag re-assigns
 the chain's existing r values smallest→largest — a hand-tuned ladder survives a
 reorder. "Reset r ladder" regenerates a plain geometric 15→71 ramp instead, so
@@ -210,8 +228,23 @@ it is for NEW chains: the shipped maps are hand-tuned and it will retune them.
 (visual only, physics untouched) and auto-fills to area parity
 `sqrt(0.75/aspect)`; a ⚠ appears when an item would draw under 45% of its
 tier's footprint, mirroring the load-time guardrail in items.js. `glass`/`liq`
-fallback colours are sampled from the art. "Load existing" pulls a shipped
-chain back in for retuning.
+fallback colours are sampled from the art.
+
+**Cast mode — Happy Hour customers.** Picking **Happy Hour — Customers** edits
+`CUSTOMER_SPRITES` (config/items.js): a plain sprite list, not a tier chain, so
+every tier-only control (r, vis, the r-ladder / auto-vis buttons, the ⚠) is
+hidden and rows show the sprite path instead of an editable name. Add faces by
+clicking art in `shared/`, drag to reorder, Write. **The cast SIZE is what
+matters** — the game picks a face at random per arrival, so more faces = more
+variety, and nothing else needs editing (see "Happy Hour" below). New faces come
+from the Extract tab: run a customer sheet through it, save into
+`assets/images/shared/`, then add them here. Writing requires the existing
+`const CUSTOMER_SPRITES` block — the "append a new chain" fallback would
+register a sprite list in the physR pre-load spread, so cast mode refuses it.
+
+Note: a write-back normalises `bodyRatio:0.80` to `0.8` (the emitter drops
+trailing zeros). Values round-trip exactly; the diff is cosmetic but touches
+lines you didn't edit.
 
 Two things it deliberately does NOT own:
 - **bodyRatio** — `config/hitboxes.js` is the authority (the hitbox editor
@@ -363,6 +396,13 @@ in localStorage and passed into `startGame(map, {size, combos, happyHour})`:
   proportional to the per-map HORIZON and shared with the tap hit-test.
   Arrivals key off SHOT COUNT (not wall time) so the idle-frame optimizer can
   never skip drawing a walk-in.
+  The **cast** is `CUSTOMER_SPRITES` in config/items.js (shared art, edited in
+  the sprite editor's cast mode). Adding a face there is the WHOLE change: its
+  size is derived via `CUSTOMER_IMGS.length`, never written down twice. It used
+  to be a hardcoded `HH_CAST = 9` in game.js beside a hardcoded array in
+  render.js, so a tenth face would have been silently unreachable. No two queued
+  customers share a face — only enforceable while the cast outnumbers the queue,
+  so a cast of ≤3 allows repeats rather than spinning forever.
 
 **Cool mode (30 fps cap) — built but SHELVED.** The welcome-screen checkbox is
 commented out in index.html (with its wiring in welcome.js), and startGame pins

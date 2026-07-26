@@ -134,6 +134,28 @@ const RECEIPT_ITEMS = [
   { name:'golden receipt',   r:42, glass:'#fff3c4', liq:'#ffc83d', sprite:'assets/images/shared/receipt-golden.png', bodyRatio:0.80, vis:0.83 },
 ];
 
+// Happy Hour mode: the customer cast, shared by every map. A customer is art
+// plus a speech bubble and has no physics of its own, so this is a plain sprite
+// list rather than a tier chain — no r/bodyRatio/colours to tune.
+//
+// ADDING A FACE HERE IS THE WHOLE CHANGE. render.js builds the Image objects
+// from this list and game.js samples an index into it per arrival, both from
+// CUSTOMER_IMGS.length — the cast size is derived, never written down twice.
+// (It used to be a hardcoded 9 in game.js AND a hardcoded array in render.js,
+// so a tenth face meant editing two files in step or customers silently never
+// appeared.) Maintained by tools/sprite-editor.html.
+const CUSTOMER_SPRITES = [
+  'assets/images/shared/customer-granny.png',
+  'assets/images/shared/customer-girl.png',
+  'assets/images/shared/customer-sailor.png',
+  'assets/images/shared/customer-student.png',
+  'assets/images/shared/customer-artist.png',
+  'assets/images/shared/customer-businessman.png',
+  'assets/images/shared/customer-surfer.png',
+  'assets/images/shared/customer-professor.png',
+  'assets/images/shared/customer-tourist.png',
+];
+
 // Compute physics radii for every item set at startup, and give each item its
 // Image OBJECT — but do NOT start the download here. Collision-circle overrides
 // from config/hitboxes.js (edited visually with tools/hitbox-editor.html) are
