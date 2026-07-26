@@ -815,6 +815,20 @@ Two traps that script now handles, both of which cost real time:
   `col_splits`/`row_splits`. Mage art is temporary; plan is to regenerate with
   transparent backgrounds (see memory/workflow-sprites).
 - **Windows console is cp1252**: no `→`/`—`/emoji in Python print output.
+- **PowerShell 5.1 eats double quotes in native-command arguments.** It re-joins
+  args into one command-line string for `git`/`python`/etc. without escaping an
+  embedded `"`, so the quote closes PowerShell's own wrapper early. Measured:
+  `'he said "already small" here'` arrives as TWO args, `[he said already]` and
+  `[small here]`. Two failure modes, and the second is the dangerous one:
+  *loud* (the extra arg is rejected — a `git commit -m` becomes a bad pathspec),
+  or *SILENT* (the quotes simply vanish and the command succeeds). Commit
+  `9a3248a` lost every `"` in its message that way, unnoticed until checked.
+  So: pass anything multi-line or quote-bearing through a FILE —
+  `git commit -F msg.txt` — or use the Bash tool with a heredoc. Both are immune.
+  Paths with spaces are NOT affected (single-quoted or via a variable, they
+  arrive intact) — don't over-correct for those. PowerShell 7 fixes the
+  underlying bug (`$PSNativeCommandArgumentPassing`), but installing it changes
+  nothing here: the harness invokes `powershell.exe` 5.1, not `pwsh`.
 - **`hidden` loses to any author `display` rule** — `[hidden]{display:none}` is a
   UA rule of the same specificity as a class, so an author `.x{display:flex}`
   wins and the element stays visible with `hidden` set. The sound lab's
