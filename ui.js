@@ -123,6 +123,13 @@ function wireHUD(state) {
   };
   document.getElementById('bug-beep1').onclick = () => { audioTestBeep('direct');  refreshDiag(); };
   document.getElementById('bug-beep2').onclick = () => { audioTestBeep('element'); refreshDiag(); };
+  // Manual rebuild of the SFX route, for when sound is silent after coming
+  // back to a run — no reload, so the run survives. Beeps to confirm.
+  document.getElementById('bug-fixsound').onclick = () => {
+    repairAudio();
+    setTimeout(() => { if (!muted) coinTick(); }, 120);  // audible "it's back"
+    refreshDiag();
+  };
   document.getElementById('bug-copy').onclick = async () => {
     try {
       await navigator.clipboard.writeText(bugCode.value);

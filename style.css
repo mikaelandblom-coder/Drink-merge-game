@@ -276,7 +276,9 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
 }
 .confirm-title { font-size: 22px; font-style: italic; color: var(--brass); }
 .confirm-sub   { font-size: 14px; opacity: .7; }
-.confirm-btns  { display: flex; gap: 10px; margin-top: 6px; }
+/* wrap: the bug panel's sound row carries three buttons, which overflow a
+   narrow stage on one line. */
+.confirm-btns  { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 6px; }
 .confirm-btns button {
   background: var(--brass); border: none; color: var(--bar-deep);
   font-family: inherit; font-size: 15px; font-weight: bold;

@@ -564,7 +564,27 @@ Currently 4 — increase when adding more tiers.
   restarts both the context and the carrier element (iOS pauses media
   elements on background). The 🐞 bug panel has a built-in sound check:
   Beep 1 = raw `ctx.destination` path (silent on affected devices — expected),
-  Beep 2 = element path, plus a diag line (`state/rate/clock/out/...`).
+  Beep 2 = element path, plus a diag line (`state/rate/clock/out/track/...`).
+- **iOS SFX die after backgrounding mid-run (fixed 2026-07-26)**: backgrounding
+  the page ENDS the MediaStream track feeding the SFX carrier above, and it
+  never recovers — the `<audio>` still reports `paused:false` while its stream
+  is dead, so the old `if (sfxEl.paused) play()` guard was a no-op and neither
+  `resume()` nor `play()` helped. Music recovered from a double-tap only
+  because `bgmEl` is a plain file-backed element. ONLY a fresh
+  `createMediaStreamDestination()` + `<audio>` restores SFX (a page reload
+  used to be the sole cure, costing the run). Now: `markAudioInterrupted()`
+  (game.js visibilitychange) / `onstatechange` / `pageshow[persisted]` set
+  `sfxStale`, and the next TAP calls `rebuildSfxRoute()` — rebuilds happen in
+  a gesture because a new element may need one to play. A context that comes
+  back reporting `running` with a stalled render clock is caught by
+  `checkAudioHealth()` (samples `currentTime` 400ms later) and flagged for
+  `hardResetAudio()`, which closes and recreates the whole context on the next
+  tap (safe: every synth grabs `ac()`/`sfxBus` at call time). Manual escape
+  hatches, both calling `repairAudio()`: toggling the HUD sound button back ON,
+  and the bug panel's **Fix sound** button — neither loses the run.
+  Verified by measuring the carrier stream with a second AudioContext:
+  healthy 0.24 peak → track stopped 0 → old resume+play still 0 → after one
+  tap 0.24 again.
 - **No Node.js installed**: use `python -m http.server 5500` to serve locally.
   Install Node.js to use `npx serve .` and enable the Claude Code preview panel.
 - **Screenshot/rAF time-outs: the preview tab is often HIDDEN** (root cause,

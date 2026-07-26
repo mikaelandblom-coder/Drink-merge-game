@@ -650,6 +650,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     running = false;
     pauseMusicForHide();
+    markAudioInterrupted();  // iOS kills the SFX carrier while backgrounded
   } else if (onGameScreen && !running) {
     resumeMusicAfterHide();
     resumeCtx();  // SFX context can come back 'interrupted' from a lock/app switch

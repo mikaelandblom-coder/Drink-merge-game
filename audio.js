@@ -23,18 +23,59 @@ function setSoundProfile(mapId) {
 // inaudible, MediaStream-routed beep audible). So on iOS the bus feeds a
 // MediaStreamDestination piped into an <audio> element — same channel as the
 // music. Everywhere else it connects straight to ctx.destination.
-let sfxBus = null, sfxEl = null;
+let sfxBus = null, sfxEl = null, sfxDest = null;
 let SFX_VIA_ELEMENT = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS reports as Mac
 
+// Recovery state for the "came back to the tab and SFX are gone" bug (Mai's
+// iPad, 2026-07-26). Backgrounding the page KILLS the MediaStream carrier
+// above: iOS ends the stream track, and neither resume() nor play() ever
+// revives it — the element keeps reporting paused:false while the stream
+// behind it is dead, so nothing even looks wrong. The ONLY cure is a fresh
+// MediaStreamDestination + <audio> (which is why a page reload used to be the
+// only fix, costing her the run). So: mark the route stale whenever we lose
+// the foreground or the context stops running, and rebuild it on the next
+// user gesture. Separately, a context can come back reporting 'running' with
+// a STALLED render clock — that one needs the whole context recreated
+// (needHardReset), also done inside a gesture because iOS prefers it.
+let sfxStale = false, needHardReset = false, healthTimer = 0;
+
 function routeSfx() {
   if (!SFX_VIA_ELEMENT) { sfxBus.connect(actx.destination); return; }
-  const dest = actx.createMediaStreamDestination();
-  sfxBus.connect(dest);
+  sfxDest = actx.createMediaStreamDestination();
+  sfxBus.connect(sfxDest);
   sfxEl = document.createElement('audio');
   sfxEl.setAttribute('playsinline', '');
-  sfxEl.srcObject = dest.stream;
+  sfxEl.srcObject = sfxDest.stream;
   sfxEl.play().catch(() => {});   // ac() runs inside a tap gesture
+}
+
+function teardownSfxRoute() {
+  if (sfxBus) { try { sfxBus.disconnect(); } catch {} }
+  if (sfxEl)  { try { sfxEl.pause(); } catch {} sfxEl.srcObject = null; }
+  if (sfxDest) { try { sfxDest.stream.getTracks().forEach(t => t.stop()); } catch {} }
+  sfxEl = null; sfxDest = null;
+}
+
+// Swap in a brand-new carrier without touching the AudioContext. Cheap (one
+// node + one element) and inaudible: nothing is playing at wake-up time.
+function rebuildSfxRoute() {
+  if (!actx) return;
+  teardownSfxRoute();
+  routeSfx();
+}
+
+// Last resort: throw the whole context away and build a fresh one. Safe
+// because every synth grabs ac()/sfxBus at call time — nothing caches nodes
+// across calls except the bug panel's diag pair, cleared here too.
+function hardResetAudio() {
+  needHardReset = false; sfxStale = false;
+  const old = actx;
+  teardownSfxRoute();
+  actx = null; sfxBus = null; diagEl = null; diagDest = null;
+  if (old) { try { old.close(); } catch {} }
+  ac();
+  if (actx.state !== 'running') actx.resume().catch(() => {});
 }
 
 function ac() {
@@ -43,26 +84,65 @@ function ac() {
     // iOS Safari parks the context in 'interrupted'/'suspended' after a screen
     // lock, app switch or Siri; the bgm <audio> element recovers on its own,
     // but synth SFX stay silent until the context is explicitly resumed.
-    actx.onstatechange = () => { if (!document.hidden) resumeCtx(); };
+    actx.onstatechange = () => {
+      if (actx && actx.state !== 'running') sfxStale = true;
+      if (!document.hidden) resumeCtx();
+    };
     sfxBus = actx.createGain();
     routeSfx();
   }
   return actx;
 }
 
-function resumeCtx() {
-  if (actx && actx.state !== 'running') actx.resume().catch(() => {});
+// `gesture` = we are inside a user tap, so it is safe to rebuild the carrier
+// (a new <audio> may need a gesture to play) or recreate the context.
+function resumeCtx(gesture) {
+  if (!actx) return;
+  if (gesture && needHardReset) { hardResetAudio(); return; }
+  if (actx.state !== 'running') actx.resume().catch(() => {});
+  // Only the iOS element route rots this way; on the direct route a rebuild
+  // would just churn (and briefly cut whatever is playing) for nothing.
+  if (gesture && sfxStale) { sfxStale = false; if (SFX_VIA_ELEMENT) rebuildSfxRoute(); }
   // iOS pauses media elements on background — the SFX carrier included.
   if (sfxEl && sfxEl.paused) sfxEl.play().catch(() => {});
+  checkAudioHealth();
+}
+
+// Sample the render clock a moment later: a context that isn't advancing it is
+// producing silence no matter what state it reports. Flag it for the hard
+// reset the next tap will perform.
+function checkAudioHealth() {
+  if (!actx || healthTimer) return;
+  const t0 = actx.currentTime;
+  healthTimer = setTimeout(() => {
+    healthTimer = 0;
+    if (!actx || document.hidden) return;
+    if (actx.state !== 'running' || actx.currentTime === t0) needHardReset = true;
+  }, 400);
+}
+
+// Called from game.js when the page goes to the background: assume iOS has
+// killed the carrier, so the next tap rebuilds it.
+function markAudioInterrupted() {
+  sfxStale = true;
 }
 
 function initAudio() {
   // Called on every pointerdown (ui.js) — creates the AudioContext on the
-  // first gesture and re-resumes it inside a gesture thereafter (iOS
-  // sometimes only honours resume() from within a user gesture).
+  // first gesture, and inside a gesture thereafter resumes it and repairs the
+  // iOS SFX route if a background/interruption killed it.
   ac();
-  resumeCtx();
+  resumeCtx(true);
 }
+
+// Restored from the back/forward cache (iOS does this via the app switcher):
+// the context and its carrier are usually dead, and no visibilitychange may
+// have fired. Treat it exactly like a background return.
+window.addEventListener('pageshow', e => {
+  if (!e.persisted) return;
+  sfxStale = true;
+  resumeCtx();
+});
 
 function pop(tier) {
   if (muted) return;
@@ -734,6 +814,20 @@ function toggleMusic(btn) {
 function toggleMute(btn) {
   muted = !muted;
   setToggleBtn(btn, !muted);
+  // Give SFX the same off/on escape hatch the music button has: turning sound
+  // back on force-rebuilds the iOS route, so a stuck-silent context can be
+  // fixed mid-run with two taps instead of a run-destroying page reload.
+  if (!muted) repairAudio();
+}
+
+// Unconditional repair, for the manual escape hatches (sound button, bug
+// panel). Always runs inside a tap, so both rebuild paths are allowed.
+function repairAudio() {
+  if (!actx) { initAudio(); return; }
+  if (needHardReset) { hardResetAudio(); return; }
+  if (actx.state !== 'running') actx.resume().catch(() => {});
+  if (SFX_VIA_ELEMENT) { sfxStale = false; rebuildSfxRoute(); }
+  checkAudioHealth();
 }
 
 // HUD toggle buttons show their state via icon swap (.off class), not text.
@@ -754,15 +848,17 @@ function setToggleBtn(btn, on) {
 let diagEl = null, diagDest = null;
 
 function audioTestBeep(via) {
-  const a = ac(); resumeCtx();
+  const a = ac(); resumeCtx(true);
   let dest = a.destination;
   if (via === 'element') {
-    if (!diagDest) {
-      diagDest = a.createMediaStreamDestination();
-      diagEl = document.createElement('audio');
-      diagEl.setAttribute('playsinline', '');
-      diagEl.srcObject = diagDest.stream;
-    }
+    // Built fresh every beep: a carrier cached across a background is dead for
+    // the same reason the real SFX route is, which would report a false
+    // "element path broken too".
+    if (diagEl) { try { diagEl.pause(); } catch {} diagEl.srcObject = null; }
+    diagDest = a.createMediaStreamDestination();
+    diagEl = document.createElement('audio');
+    diagEl.setAttribute('playsinline', '');
+    diagEl.srcObject = diagDest.stream;
     diagEl.play().catch(() => {});   // inside the tap gesture — autoplay-safe
     dest = diagDest;
   }
@@ -781,10 +877,15 @@ function audioDiag(cb) {
   if (!a) { cb('no AudioContext yet - tap the table once, then reopen'); return; }
   const t0 = a.currentTime;
   setTimeout(() => {
+    const tr = sfxEl && sfxEl.srcObject && sfxEl.srcObject.getAudioTracks()[0];
     cb('state:' + a.state +
        ' rate:' + a.sampleRate +
        ' clock:' + (a.currentTime > t0 ? 'ok' : 'STALLED') +
        ' out:' + (SFX_VIA_ELEMENT ? 'element' + (sfxEl && !sfxEl.paused ? '(playing)' : '(PAUSED)') : 'direct') +
+       // track tells apart "carrier looks fine" from the silent-killer case:
+       // element playing, stream ended (see rebuildSfxRoute).
+       ' track:' + (tr ? tr.readyState + (tr.muted ? '/muted' : '') : 'none') +
+       ' stale:' + sfxStale + ' reset:' + needHardReset +
        ' sfxMuted:' + muted + ' musicOn:' + musicOn);
   }, 300);
 }
