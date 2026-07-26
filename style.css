@@ -477,6 +477,24 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
 }
 @media (prefers-reduced-motion: reduce) { .xp-medal.pulse { animation: none; } }
 
+/* Dev tools row on the welcome screen. Stays hidden until welcome.js unhides
+   it (localhost or ?dev=1) — deliberately the quietest thing on the menu, since
+   it sits below Backup & transfer and is never for the player. */
+#devtools-box {
+  width: 100%; display: flex; flex-direction: column; align-items: center;
+  gap: 7px; margin-top: 4px;
+}
+#devtools-box[hidden] { display: none; }
+.devtools-label {
+  font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #6d5637;
+}
+.devtools-links { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.devtools-links a {
+  text-decoration: none; font-size: 12px; padding: 6px 14px; border-radius: 999px;
+  border: 1px solid #3d2d1a; color: #9a7a52;
+}
+.devtools-links a:hover { color: var(--brass); border-color: #5a4630; }
+
 /* Backup & transfer panel on the welcome screen */
 #backup-box { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 #backup-toggle {

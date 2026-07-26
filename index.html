@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Mixology Merge</title>
 <!-- PNG icons: iOS Safari ignores SVG/data-URI favicons, so a real apple-touch-icon is required -->
-<link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png?v=77">
-<link rel="icon" type="image/png" sizes="192x192" href="assets/images/icon-192.png?v=77">
-<link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=77">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png?v=78">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/images/icon-192.png?v=78">
+<link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=78">
 <meta name="apple-mobile-web-app-title" content="Mixology Merge">
-<link rel="stylesheet" href="style.css?v=77">
+<link rel="stylesheet" href="style.css?v=78">
 </head>
 <body>
 
@@ -48,6 +48,17 @@
           <button id="backup-import">Import code</button>
         </div>
         <div id="backup-status"></div>
+      </div>
+    </div>
+    <!-- Dev tools. Rendered ONLY on localhost or with ?dev=1 (see welcome.js) —
+         tools/ ships with the repo, so an ungated link would show up on the
+         deployed site for Mai, where the editors are noise at best. -->
+    <div id="devtools-box" hidden>
+      <span class="devtools-label">Dev tools</span>
+      <div class="devtools-links">
+        <a href="tools/sound-lab.html" target="_blank" rel="noopener">🎛️ Sound</a>
+        <a href="tools/hitbox-editor.html" target="_blank" rel="noopener">🎯 Hitboxes</a>
+        <a href="tools/sprite-editor.html" target="_blank" rel="noopener">🖼️ Sprites</a>
       </div>
     </div>
   </div>
@@ -143,23 +154,23 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
-<script src="config/constants.js?v=77"></script>
-<script src="config/hitboxes.js?v=77"></script>
-<script src="config/items.js?v=77"></script>
-<script src="config/maps.js?v=77"></script>
+<script src="config/constants.js?v=78"></script>
+<script src="config/hitboxes.js?v=78"></script>
+<script src="config/items.js?v=78"></script>
+<script src="config/maps.js?v=78"></script>
 <!-- Sound library + the map/event -> sound wiring (both shared with
      tools/sound-lab.html, so auditions there are what the game plays) -->
-<script src="config/sounds.js?v=77"></script>
-<script src="config/soundmap.js?v=77"></script>
-<script src="scores.js?v=77"></script>
-<script src="buglog.js?v=77"></script>
-<script src="progress.js?v=77"></script>
-<script src="audio.js?v=77"></script>
-<script src="render.js?v=77"></script>
-<script src="ui.js?v=77"></script>
-<script src="welcome.js?v=77"></script>
-<script src="game.js?v=77"></script>
+<script src="config/sounds.js?v=78"></script>
+<script src="config/soundmap.js?v=78"></script>
+<script src="scores.js?v=78"></script>
+<script src="buglog.js?v=78"></script>
+<script src="progress.js?v=78"></script>
+<script src="audio.js?v=78"></script>
+<script src="render.js?v=78"></script>
+<script src="ui.js?v=78"></script>
+<script src="welcome.js?v=78"></script>
+<script src="game.js?v=78"></script>
 <!-- Dev-only test harness: inert unless the URL has ?test (see test.js) -->
-<script src="test.js?v=77"></script>
+<script src="test.js?v=78"></script>
 </body>
 </html>

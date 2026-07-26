@@ -244,6 +244,19 @@ function wireBackup() {
 }
 wireBackup();
 
+// Dev tools row: only where Mikael is actually developing. The tools live in
+// the repo, so they deploy alongside the game — this gate, not their absence,
+// is what keeps them off Mai's menu. `?dev=1` is the escape hatch for reaching
+// them from a phone/tablet pointed at the dev server (or deliberately on the
+// live site); it shows a link row and nothing more, so it is safe to leave in.
+(function showDevTools() {
+  const h = location.hostname;
+  const local = h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h === '';
+  if (!local && !/[?&]dev=1(&|$)/.test(location.search)) return;
+  const box = document.getElementById('devtools-box');
+  if (box) box.hidden = false;
+})();
+
 // Async safety-net recovery (IndexedDB mirror) or an import can change levels
 // after first paint — refresh the visible menu when that happens.
 Progress.onChange = () => {

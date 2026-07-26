@@ -432,6 +432,14 @@ python -m http.server 5500
 
 Then open http://localhost:5500 in a browser.
 
+A **Dev tools** row sits at the bottom of the welcome screen (below Backup &
+transfer) linking to the three editors. `tools/` deploys with the game, so that
+row — not the tools' absence — is what keeps them off Mai's menu: welcome.js
+renders it only when the hostname is localhost/127.0.0.1/[::1]/file, or when the
+URL carries `?dev=1` (the escape hatch for reaching the tools from a phone or
+iPad pointed at the dev server). It only ever shows links, so `?dev=1` is safe
+to leave in place.
+
 ### Test mode (?test=1) — USE THIS to verify gameplay changes
 
 **http://localhost:5500/?test=1** loads `test.js`, which installs `window.TT`
