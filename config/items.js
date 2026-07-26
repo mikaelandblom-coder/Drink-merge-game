@@ -63,7 +63,8 @@ const TEDDY_ITEMS = [
 ];
 
 // Melody Lane (music shop). Instruments small -> large; the merge SOUND climbs a
-// pentatonic scale by tier (see popMusical in audio.js), independent of the
+// pentatonic scale by tier (see the `merge-pluck` voice in config/sounds.js),
+// independent of the
 // instrument's real-world pitch. bodyRatio values are first-pass guesses —
 // retrace each in tools/hitbox-editor.html once the art exists.
 // `vis` (visual scale, default 1) shrinks the DRAWN sprite only (not the physics

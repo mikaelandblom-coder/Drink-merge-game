@@ -696,7 +696,7 @@ function startGame(map, opts = {}) {
   applyMapWalls(ACTIVE_MAP);
   initXpBar();   // after HORIZON is set — the vertical bar's top tracks it
   loadMapAssets(ACTIVE_MAP, bgSrc);
-  setSoundProfile(ACTIVE_MAP.id);
+  setMapSounds(ACTIVE_MAP.id);
   initMusic(document.getElementById('bgm'), ACTIVE_MAP.bgmVol, ACTIVE_MAP.bgm);
   resetState();
   idleFrames = 0;

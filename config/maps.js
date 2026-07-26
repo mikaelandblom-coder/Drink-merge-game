@@ -97,9 +97,8 @@ const MAPS = [
                                                  // folk loop). Missing file just 404s — no crash.
     bgmVol:   0.35,
     itemsData: null,
-    // Sounds: the `garden` profile (sprout-bloop merge + dirt-thud collision +
-    // wooden coin tick) is selected by setSoundProfile('farm') in audio.js — no
-    // map field needed, same as the other maps' profiles.
+    // Sounds (sprout-bloop merge + dirt-thud collision + wooden coin tick) are
+    // wired up in config/soundmap.js, not here — edit them in the sound lab.
     // TEMP: only the LARGE framing art exists yet. Omitting `sizes` hides the
     // "Large table" checkbox and plays `bg` above. defaultSize is intended
     // 'large', and since the default size keeps the plain map-id key ('farm'),

@@ -1,989 +1,573 @@
 <meta charset="utf-8">
-<title>Sound Lab — Paris & game-over audition</title>
+<title>Sound Lab — library &amp; wiring board</title>
+<!-- Everything below loads from the project root, so this tool plays the SAME
+     code the game does (config/sounds.js) and edits the SAME wiring the game
+     reads (config/soundmap.js). No hand-copied synths, no drift. -->
+<base href="../">
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
   body {
-    margin: 0; padding: 28px;
+    margin: 0; padding: 0 0 60px;
     font: 15px/1.5 -apple-system, Segoe UI, Roboto, sans-serif;
     background: #14121a; color: #e8e4f0;
   }
-  h1 { font-size: 20px; margin: 0 0 4px; }
-  .sub { color: #9b93b0; margin: 0 0 24px; font-size: 13px; }
-  .lab {
-    max-width: 720px; margin: 0 auto;
+  .lab { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---- toolbar ---- */
+  .bar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 14px 24px; margin-bottom: 22px;
+    background: #191622ee; backdrop-filter: blur(8px);
+    border-bottom: 1px solid #2e2a3d;
   }
-  .card {
-    background: #1e1b28; border: 1px solid #2e2a3d; border-radius: 14px;
-    padding: 18px 20px; margin-bottom: 18px;
+  .bar h1 { font-size: 17px; margin: 0; white-space: nowrap; }
+  .bar .spacer { flex: 1; }
+  .dirty {
+    font-size: 12px; padding: 3px 9px; border-radius: 20px;
+    background: #4a3a12; color: #f0cf85; border: 1px solid #6d5520;
   }
-  .card h2 { font-size: 16px; margin: 0 0 2px; }
-  .card .desc { color: #9b93b0; font-size: 12.5px; margin: 0 0 14px; }
-  .tiers { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
+  .dirty.clean { background: #1d3324; color: #86d3a0; border-color: #2c5137; }
+
+  h2.section {
+    margin: 34px 0 6px; font-size: 13px; letter-spacing: .06em;
+    text-transform: uppercase; color: #9b93b0;
+  }
+  .section-sub { color: #7d7590; font-size: 12.5px; margin: 0 0 14px; max-width: 78ch; }
+
   button {
     font: inherit; cursor: pointer; border: none; border-radius: 9px;
-    padding: 9px 13px; background: #322c45; color: #e8e4f0;
+    padding: 8px 13px; background: #322c45; color: #e8e4f0;
     transition: transform .05s, background .12s;
   }
   button:hover { background: #3f3757; }
   button:active { transform: scale(.94); }
+  button.accent { background: #6d4fd0; }
+  button.accent:hover { background: #7d5fe0; }
+  button.ghost { background: none; border: 1px solid #3d3654; color: #b6aecb; }
+  button.ghost:hover { background: #241f31; }
+  button.tiny { padding: 4px 9px; font-size: 12px; border-radius: 7px; }
+  button:disabled { opacity: .4; cursor: default; }
+
+  select {
+    background: #2a2536; color: #e8e4f0; border: 1px solid #443c5c;
+    border-radius: 7px; padding: 5px 7px; font: inherit; font-size: 13px;
+    max-width: 100%;
+  }
+  select.inherited { color: #8b83a2; font-style: italic; }
+  label { display: flex; align-items: center; gap: 7px; font-size: 13px; }
+  code {
+    background: #2a2636; padding: 1px 6px; border-radius: 5px;
+    font-size: 12px; color: #c3b6ea;
+  }
+
+  /* ---- matrix ---- */
+  .matrix-wrap { overflow-x: auto; border: 1px solid #2e2a3d; border-radius: 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { padding: 9px 11px; text-align: left; border-bottom: 1px solid #262233; }
+  thead th {
+    background: #1e1b28; position: sticky; top: 62px; z-index: 5;
+    font-size: 12px; color: #b6aecb; white-space: nowrap;
+  }
+  thead th .hint { display: block; font-weight: 400; color: #7d7590; font-size: 11px; }
+  tbody tr:hover { background: #1b1826; }
+  tbody tr.ctx { background: #211c33; }
+  tr.defaults td { background: #1a1824; }
+  tr.defaults .mapname { color: #f0cf85; }
+  .mapname { font-weight: 600; white-space: nowrap; }
+  .mapname small { display: block; font-weight: 400; color: #7d7590; }
+  .cell { display: flex; align-items: center; gap: 5px; }
+
+  /* ---- library ---- */
+  .kind-group { margin-bottom: 26px; }
+  .kind-head { font-size: 14px; font-weight: 600; margin: 0 0 10px; }
+  .kind-head span { font-weight: 400; color: #7d7590; font-size: 12.5px; }
+  .voices { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); }
+  .voice {
+    background: #1e1b28; border: 1px solid #2e2a3d; border-radius: 13px;
+    padding: 14px 15px; display: flex; flex-direction: column; gap: 9px;
+  }
+  .voice.in-use { border-color: #4d3f7a; background: #211d2f; }
+  .voice h3 { font-size: 14.5px; margin: 0; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .voice .desc { color: #9b93b0; font-size: 12.5px; margin: 0; }
+  .used { display: flex; gap: 5px; flex-wrap: wrap; }
+  .chip {
+    font-size: 11px; padding: 2px 8px; border-radius: 20px;
+    background: #2f2846; color: #bfb2ee; border: 1px solid #443c5c;
+  }
+  .chip.none { background: none; color: #6b647d; border-color: #322c45; }
+  .chip.def { background: #4a3a12; color: #f0cf85; border-color: #6d5520; }
+  .row { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
   .tier-btn {
     display: flex; flex-direction: column; align-items: center; gap: 2px;
-    min-width: 52px; padding: 8px 6px;
+    min-width: 46px; padding: 5px; background: #2a2536; border-radius: 8px;
   }
-  .tier-btn .n { font-size: 11px; color: #9b93b0; }
-  .tier-btn .note { font-weight: 600; }
-  .row { display: flex; gap: 9px; flex-wrap: wrap; }
-  .accent { background: #6d4fd0; }
-  .accent:hover { background: #7d5fe0; }
-  .global {
-    display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
-    margin-bottom: 22px; padding: 14px 18px; background: #1a1824;
-    border-radius: 12px; border: 1px solid #2e2a3d;
+  .tier-btn img { width: 26px; height: 26px; object-fit: contain; }
+  .tier-btn .pn { font-size: 10px; color: #9b93b0; max-width: 62px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .divider { height: 1px; background: #2e2a3d; margin: 4px 0; }
+
+  #filetext {
+    width: 100%; min-height: 220px; font: 12px/1.5 Consolas, monospace;
+    background: #0f0d15; color: #cfc6e8; border: 1px solid #2e2a3d;
+    border-radius: 10px; padding: 12px; margin-top: 10px;
   }
-  label { display: flex; align-items: center; gap: 7px; font-size: 13px; }
-  select, input[type=range] { accent-color: #6d4fd0; }
-  select { background: #322c45; color: #e8e4f0; border: 1px solid #443c5c;
-    border-radius: 7px; padding: 5px 8px; font: inherit; }
-  code { background: #2a2636; padding: 1px 6px; border-radius: 5px; font-size: 12.5px; }
-  .note-small { color: #7d7590; font-size: 12px; margin-top: 6px; }
-  .section {
-    margin: 34px 0 14px; padding-bottom: 6px; border-bottom: 1px solid #2e2a3d;
-    font-size: 13px; letter-spacing: .05em; text-transform: uppercase; color: #9b93b0;
+  #status { font-size: 12.5px; color: #86d3a0; }
+  #status.err { color: #ff9c9c; }
+  .restored {
+    background: #2b2418; border: 1px solid #6d5520; color: #f0cf85;
+    padding: 10px 14px; border-radius: 10px; font-size: 13px;
+    display: flex; gap: 12px; align-items: center; margin-bottom: 18px;
   }
-  .tier-btn .pn { font-weight: 600; font-size: 12px; }
 </style>
 
-<div class="lab">
-  <h1>🎵 Sound Lab</h1>
-  <p class="sub">Audition synth sounds here before wiring them into <code>audio.js</code>.
-  On deck: the <strong>Farm — Sprout Valley</strong> garden sound profile and the
-  <strong>Paris</strong> café profile, plus a shared <strong>game-over</strong> sound. The Melody
-  Lane material that already shipped is kept at the bottom for reference.</p>
-
-  <div class="section">🥐 Paris — Le Petit Café · merge pop candidates</div>
-
-  <div class="card" data-ppop="china">
-    <h2>A · Porcelain &amp; silver spoon — ✅ WINNER, shipped as <code>popCafe</code></h2>
-    <p class="desc">Dainty china "ting" — a teaspoon tapped on a teacup, with a faint upward
-    curl. Brighter and lighter than Kyoto's ceramic profile; pitch rises with tier.</p>
-    <div class="tiers"></div>
-    <div class="row"><button class="accent" data-act="run">▶ Play full chain (cascade)</button></div>
-  </div>
-
-  <div class="card" data-ppop="pastry">
-    <h2>B · Pâtisserie poof</h2>
-    <p class="desc">Soft cream-puff squish with a powdered-sugar sparkle on top. The squishiest
-    option — the items are pastries, so the merge sounds like pastry.</p>
-    <div class="tiers"></div>
-    <div class="row"><button class="accent" data-act="run">▶ Play full chain (cascade)</button></div>
-  </div>
-
-  <div class="card" data-ppop="musette">
-    <h2>C · Musette accordion</h2>
-    <p class="desc">A short wet-tuned accordion note per merge — instant Paris. Tiers climb an
-    F-major scale, so a combo cascade plays a little melody (same trick as Melody Lane).</p>
-    <div class="tiers"></div>
-    <div class="row"><button class="accent" data-act="run">▶ Play full chain (cascade)</button></div>
-  </div>
-
-  <div class="card" style="border-color:#4a3f6b">
-    <h2>☕ Collision &amp; coins (Paris)</h2>
-    <p class="desc">Collision: <strong>saucer tick</strong> (delicate china tap) vs
-    <strong>pastry bump</strong> (soft dusted thud). Coins: the shipping default blip vs a
-    little <strong>service bell</strong> "ding" with a slight pitch wobble per coin so showers
-    don't drill. Coins land ~110ms apart, real game tempo.
-    ✅ WINNERS: pastry bump (<code>clinkCafe</code>) + service bell (<code>coinTickCafe</code>).</p>
-    <div class="row" style="margin-bottom:12px">
-      <button data-pclink="saucer:4">Saucer · soft</button>
-      <button data-pclink="saucer:10">Saucer · medium</button>
-      <button data-pclink="saucer:18">Saucer · hard</button>
-    </div>
-    <div class="row" style="margin-bottom:12px">
-      <button data-pclink="pastry:4">Pastry · soft</button>
-      <button data-pclink="pastry:10">Pastry · medium</button>
-      <button data-pclink="pastry:18">Pastry · hard</button>
-    </div>
-    <div class="row">
-      <button data-pcoin="default:6">Default blip ×6</button>
-      <button data-pcoin="bell:2">Service bell ×2</button>
-      <button class="accent" data-pcoin="bell:6">Service bell ×6</button>
-      <button class="accent" data-pcoin="bell:12">Service bell ×12</button>
-    </div>
-  </div>
-
-  <div class="section">🌱 Farm — Sprout Valley · merge pop candidates</div>
-
-  <div class="card" data-fpop="bloop">
-    <h2>A · Sprout bloop</h2>
-    <p class="desc">A cute rounded "bloop" that bends upward like something popping out of the soil —
-    the water-droplet / plant-grow sound. Cheeriest, most video-gamey. Pitch climbs a major
-    pentatonic so a cascade stays sweet.</p>
-    <div class="tiers"></div>
-    <div class="row"><button class="accent" data-act="run">▶ Play full chain (cascade)</button></div>
-  </div>
-
-  <div class="card" data-fpop="marimba">
-    <h2>B · Woody marimba</h2>
-    <p class="desc">Round triangle tone + marimba's 4th-harmonic "knock" — warm, woody, cozy. The
-    Stardew-porch option. Tiers climb the scale, so a combo cascade plays a little melody.</p>
-    <div class="tiers"></div>
-    <div class="row"><button class="accent" data-act="run">▶ Play full chain (cascade)</button></div>
-  </div>
-
-  <div class="card" data-fpop="ocarina">
-    <h2>C · Ocarina bloom</h2>
-    <p class="desc">A short breathy pennywhistle / ocarina note with a soft attack — folk and
-    pastoral, the most "melodic instrument" of the three. Cascades sound like a little tune.</p>
-    <div class="tiers"></div>
-    <div class="row"><button class="accent" data-act="run">▶ Play full chain (cascade)</button></div>
-  </div>
-
-  <div class="card" style="border-color:#3f6b4a">
-    <h2>🌿 Collision &amp; coins (Farm)</h2>
-    <p class="desc">Collision: <strong>soft dirt thud</strong> (earthy, crumbly — produce settling in
-    the bed) vs a <strong>wooden knock</strong> (hitting the raised-bed frame). Coins:
-    <strong>wooden xylophone tick</strong> vs a bright <strong>sparkle chime</strong>. Coins land
-    ~110ms apart, real game tempo.</p>
-    <div class="row" style="margin-bottom:12px">
-      <button data-fclink="dirt:4">Dirt · soft</button>
-      <button data-fclink="dirt:10">Dirt · medium</button>
-      <button data-fclink="dirt:18">Dirt · hard</button>
-    </div>
-    <div class="row" style="margin-bottom:12px">
-      <button data-fclink="wood:4">Wood · soft</button>
-      <button data-fclink="wood:10">Wood · medium</button>
-      <button data-fclink="wood:18">Wood · hard</button>
-    </div>
-    <div class="row">
-      <button data-fcoin="wood:6">Wooden tick ×6</button>
-      <button class="accent" data-fcoin="wood:12">Wooden tick ×12</button>
-      <button data-fcoin="chime:6">Sparkle chime ×6</button>
-      <button class="accent" data-fcoin="chime:12">Sparkle chime ×12</button>
-    </div>
-  </div>
-
-  <div class="section">🔚 Game over — shared by all maps</div>
-
-  <div class="card" style="border-color:#6b3f4a">
-    <h2>Game-over sound</h2>
-    <p class="desc">Today NOTHING plays when a run ends — the only game-over-screen sound is the
-    new-best <code>fanfare()</code>. The winner gets called from <code>showGameOver()</code> in
-    ui.js. Tone target: "the café is closing", not "you failed" — it plays at the end of EVERY
-    run, including great ones.
-    ✅ WINNER: "Gently down", shipped as <code>gameOver()</code> — called from
-    <code>showGameOver()</code> on every run EXCEPT a new best, where the fanfare plays
-    instead (they'd clash together).</p>
-    <div class="row" style="margin-bottom:12px">
-      <button class="accent" data-go="down">A · Gently down ✅</button>
-      <button data-go="lastcall">B · Last-call bell</button>
-      <button data-go="slide">C · Slide &amp; plop (playful)</button>
-      <button data-go="resolve">D · Bittersweet resolve</button>
-    </div>
-    <label><input type="checkbox" id="go-fanfare"> follow with the shipped new-best fanfare (clash check)</label>
-  </div>
-
-  <div class="section">🎸 Melody Lane — shipped reference</div>
-
-  <div class="global">
-    <label>Scale
-      <select id="scale">
-        <option value="pent-maj">Major pentatonic (safe)</option>
-        <option value="major">Major (prettier, riskier)</option>
-        <option value="pent-min">Minor pentatonic (moodier)</option>
-      </select>
-    </label>
-    <label>Root
-      <select id="root">
-        <option value="220.00">A3</option>
-        <option value="261.63" selected>C4</option>
-        <option value="329.63">E4</option>
-      </select>
-    </label>
-    <label>Direction
-      <select id="dir">
-        <option value="up" selected>Ascending (triumphant)</option>
-        <option value="down">Descending (realistic)</option>
-      </select>
-    </label>
-  </div>
-
-  <div class="card" data-timbre="musicbox">
-    <h2>A · Music box / celesta</h2>
-    <p class="desc">Sine fundamental + bright inharmonic bell partials. Toy-like, twinkly, clearly "musical."</p>
-    <div class="tiers"></div>
-    <div class="row">
-      <button class="accent" data-act="cascade">▶ Play cascade (combo)</button>
-      <button data-act="chord">Play random multi-merge</button>
-    </div>
-  </div>
-
-  <div class="card" data-timbre="pluck">
-    <h2>B · Plucked string (ukulele / harp)</h2>
-    <p class="desc">Sawtooth through a decaying lowpass with a tiny noise pluck. Warm, organic, folk-instrument feel.</p>
-    <div class="tiers"></div>
-    <div class="row">
-      <button class="accent" data-act="cascade">▶ Play cascade (combo)</button>
-      <button data-act="chord">Play random multi-merge</button>
-    </div>
-  </div>
-
-  <div class="card" data-timbre="marimba">
-    <h2>C · Marimba / vibraphone</h2>
-    <p class="desc">Triangle fundamental + strong 4th harmonic (marimba's signature). Round, woody, mellow.</p>
-    <div class="tiers"></div>
-    <div class="row">
-      <button class="accent" data-act="cascade">▶ Play cascade (combo)</button>
-      <button data-act="chord">Play random multi-merge</button>
-    </div>
-  </div>
-
-  <div class="card" style="border-color:#4a3f6b">
-    <h2>🪙 Coin &amp; collision (Melody Lane)</h2>
-    <p class="desc">The coin shower plays an ascending pentatonic run (one octave above the merges) instead of a
-    repeated blip — a small merge is a short rise, a big combo payout is a long harp cascade. Collisions get a
-    soft hollow-body knock instead of a metallic tink. Coins land ~110ms apart, matching the real game tempo.</p>
-    <label style="margin-bottom:12px">Long-run behavior
-      <select id="coinmode">
-        <option value="shepard">Shepard — endless rise (illusion)</option>
-        <option value="zigzag">Zigzag — climb &amp; turn around</option>
-        <option value="hold">Hold — climb then repeat top note</option>
-      </select>
-    </label>
-    <div class="row" style="margin-bottom:12px">
-      <button data-coins="2">2 coins (small merge)</button>
-      <button data-coins="6">6 coins</button>
-      <button class="accent" data-coins="12">12 coins (combo)</button>
-      <button class="accent" data-coins="20">20 coins (big combo)</button>
-    </div>
-    <div class="row">
-      <button data-knock="4">Soft collision</button>
-      <button data-knock="10">Medium collision</button>
-      <button data-knock="18">Hard collision</button>
-    </div>
-  </div>
-
-  <div class="card" style="border-color:#6b5a3f">
-    <h2>🏆 Personal best (high-score flourish)</h2>
-    <p class="desc">Plays on the game-over screen when a run beats that variant's best (the game's
-    <code>fanfare()</code>, map-agnostic). The <strong>brass fanfare won</strong> and ships today;
-    the others are kept as also-rans. "Shipped" mirrors audio.js exactly — use it (or the
-    checkbox in the game-over card above) to check the new game-over sound against it.</p>
-    <div class="row">
-      <button class="accent" data-pb="shipped">▶ Shipped (brass fanfare)</button>
-      <button data-pb="bells">Old rising bells</button>
-      <button data-pb="harp">Harp run + chord</button>
-      <button data-pb="musicbox">Music-box sparkle</button>
-    </div>
-  </div>
-
-  <p class="note-small">Tip: hit "Play cascade" on each card to compare how a 9-chain combo sounds — that's the
-  sound you'll hear most in a good run. Then try a couple of single tiers to judge the timbre up close.</p>
+<div class="bar">
+  <h1>🎛️ Sound Lab</h1>
+  <span id="dirty" class="dirty clean">saved</span>
+  <span class="spacer"></span>
+  <label>Volume <input type="range" id="vol" min="0" max="1" step="0.01" value="0.8"></label>
+  <button class="ghost" id="revert">Revert</button>
+  <button class="accent" id="save">Save config/soundmap.js</button>
 </div>
 
+<div class="lab">
+  <div id="restored" class="restored" hidden>
+    <span>Unsaved picks from your last session were restored.</span>
+    <button class="tiny ghost" id="discard-draft">Discard them</button>
+  </div>
+
+  <h2 class="section">Wiring board — which sound each map plays</h2>
+  <p class="section-sub">Every map × every event. Pick a sound from the dropdown to hear it
+  immediately; <strong>▶</strong> replays it the way the game fires it (a merge plays the map's whole
+  chain as a combo cascade, a collision plays soft → hard, coins play a full payout shower).
+  <em>Default</em> means the map inherits the top row, so changing the top row moves every map that
+  hasn't opted out. Then hit <strong>Save</strong> and bump the <code>?v=</code> in index.html.</p>
+
+  <div class="matrix-wrap">
+    <table id="matrix"><thead></thead><tbody></tbody></table>
+  </div>
+
+  <h2 class="section">Sound library — audition &amp; assign</h2>
+  <p class="section-sub">Every voice in <code>config/sounds.js</code>, grouped by the event it can be
+  wired to. Auditions use the tier chain of the map picked below, so a merge sound is judged with the
+  right number of tiers and the real item names. When Mai says "the farm merge sound is annoying":
+  set the map here, play the alternatives, hit <strong>Use for…</strong> on the winner, Save.</p>
+
+  <div class="row" style="margin-bottom:18px">
+    <label>Audition in the context of
+      <select id="ctxmap"></select>
+    </label>
+    <span id="ctxinfo" style="color:#7d7590;font-size:12.5px"></span>
+  </div>
+
+  <div id="library"></div>
+
+  <h2 class="section">File text</h2>
+  <p class="section-sub">What <strong>Save</strong> writes. If the browser blocks the file picker
+  (Firefox has no File System Access API), copy this and paste it over
+  <code>config/soundmap.js</code> by hand.</p>
+  <div class="row">
+    <button class="ghost" id="copy">Copy to clipboard</button>
+    <span id="status"></span>
+  </div>
+  <textarea id="filetext" readonly spellcheck="false"></textarea>
+</div>
+
+<script src="config/constants.js"></script>
+<script src="config/hitboxes.js"></script>
+<script src="config/items.js"></script>
+<script src="config/maps.js"></script>
+<script src="config/sounds.js"></script>
+<script src="config/soundmap.js"></script>
 <script>
-let actx;
-const ac = () => (actx ||= new (window.AudioContext || window.webkitAudioContext)());
-
-const SCALES = {
-  'pent-maj': [0, 2, 4, 7, 9, 12, 14, 16, 19, 21],
-  'major':    [0, 2, 4, 5, 7, 9, 11, 12, 14, 16],
-  'pent-min': [0, 3, 5, 7, 10, 12, 15, 17, 19, 22],
-};
-const NAMES_SHARP = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-const TIERS = 9;
-
-function semis(tier) {
-  const scale = SCALES[document.getElementById('scale').value];
-  const dir = document.getElementById('dir').value;
-  const idx = dir === 'up' ? tier : (TIERS - 1 - tier);
-  return scale[idx];
+// ---------- audio out ----------
+// Voices render into `bus`, never into destination directly — same contract the
+// game uses (see the iOS routing notes in audio.js), so nothing auditioned here
+// can accidentally depend on a path the game doesn't have.
+let actx = null, bus = null;
+function ac() {
+  if (!actx) {
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+    bus = actx.createGain();
+    bus.gain.value = parseFloat(document.getElementById('vol').value);
+    bus.connect(actx.destination);
+  }
+  if (actx.state !== 'running') actx.resume().catch(() => {});
+  return actx;
 }
-function freq(tier) {
-  const root = parseFloat(document.getElementById('root').value);
-  return root * Math.pow(2, semis(tier) / 12);
+document.getElementById('vol').oninput = e => { if (bus) bus.gain.value = +e.target.value; };
+
+// ---------- state ----------
+const DRAFT_KEY = 'mm_soundlab_draft_v1';
+const SHIPPED = JSON.stringify(SOUND_MAP);
+let work = JSON.parse(SHIPPED);            // the edited copy
+let ctxMapId = MAPS[0].id;
+
+(function restoreDraft() {
+  const raw = localStorage.getItem(DRAFT_KEY);
+  if (!raw || raw === SHIPPED) return;
+  try {
+    work = JSON.parse(raw);
+    document.getElementById('restored').hidden = false;
+  } catch { localStorage.removeItem(DRAFT_KEY); }
+})();
+
+const mapById = id => MAPS.find(m => m.id === id);
+const itemsOf = id => (mapById(id) && mapById(id).itemsData) || [];
+
+// Resolve against the EDITED map, not the shipped one, so the board previews
+// what you're about to save.
+function resolveId(mapId, ev) {
+  const per = work[mapId];
+  const id = (per && per[ev]) || work.default[ev];
+  return SOUND_LIB[id] ? id : work.default[ev];
 }
-function noteName(tier) {
-  const root = parseFloat(document.getElementById('root').value);
-  // midi of root
-  const rootMidi = Math.round(69 + 12 * Math.log2(root / 440));
-  const m = rootMidi + semis(tier);
-  return NAMES_SHARP[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1);
+const voicesOfKind = kind =>
+  Object.entries(SOUND_LIB).filter(([, v]) => v.kind === kind);
+
+function isDirty() { return JSON.stringify(work) !== SHIPPED; }
+function markChanged() {
+  const el = document.getElementById('dirty');
+  const d = isDirty();
+  // Only keep a draft while it differs from the file — so "Revert" (and a save)
+  // really do leave nothing behind to restore next time.
+  if (d) localStorage.setItem(DRAFT_KEY, JSON.stringify(work));
+  else localStorage.removeItem(DRAFT_KEY);
+  el.textContent = d ? 'unsaved changes' : 'saved';
+  el.classList.toggle('clean', !d);
+  renderFileText();
+  refreshUsage();
 }
 
-// ---- timbres. Each: play(f, tGain, when) ----
-function musicbox(f, vol, t) {
+function assign(mapId, ev, voiceId) {
+  if (!work[mapId]) work[mapId] = {};
+  if (mapId !== 'default' && !voiceId) delete work[mapId][ev];   // back to inheriting
+  else work[mapId][ev] = voiceId || work.default[ev];
+  markChanged();
+}
+
+// ---------- playback ----------
+// One place that knows how each KIND of event is auditioned, so the matrix and
+// the library previews always demo a sound the same way.
+function playVoice(voiceId, mapId, opts) {
+  const v = SOUND_LIB[voiceId];
+  if (!v) return;
   const a = ac();
-  const parts = [[1, 1, 0.7], [4.1, 0.28, 0.5], [6.7, 0.12, 0.35]];
-  parts.forEach(([mult, amp, dec]) => {
-    const o = a.createOscillator(), g = a.createGain();
-    o.type = 'sine'; o.frequency.setValueAtTime(f * mult, t);
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(vol * amp, t + 0.005);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
-    o.connect(g).connect(a.destination); o.start(t); o.stop(t + dec + 0.05);
+  v.play(a, bus, Object.assign({ when: a.currentTime + 0.02, tier: 0, tiers: 9, impact: 10, index: 0 }, opts));
+}
+
+function demo(voiceId, mapId) {
+  const v = SOUND_LIB[voiceId];
+  if (!v) return;
+  const a = ac(), t0 = a.currentTime + 0.02;
+  const n = Math.max(1, itemsOf(mapId).length || 9);
+  if (v.kind === 'merge') {                        // the combo cascade
+    for (let i = 0; i < n; i++) v.play(a, bus, { when: t0 + i * 0.13, tier: i, tiers: n });
+  } else if (v.kind === 'collide') {               // soft -> medium -> hard
+    [4, 10, 18].forEach((imp, i) => v.play(a, bus, { when: t0 + i * 0.34, impact: imp }));
+  } else if (v.kind === 'coin') {                  // a payout shower at game tempo
+    for (let i = 0; i < 8; i++) v.play(a, bus, { when: t0 + i * 0.11, index: i });
+  } else {
+    v.play(a, bus, { when: t0 });
+  }
+}
+
+// ---------- matrix ----------
+function buildMatrix() {
+  const thead = document.querySelector('#matrix thead');
+  const tbody = document.querySelector('#matrix tbody');
+  thead.innerHTML = '<tr><th>Map</th>' + SOUND_EVENTS.map(e =>
+    `<th>${e.label}<span class="hint">${e.hint}</span></th>`).join('') + '</tr>';
+
+  const rows = [{ id: 'default', label: 'All maps', sublabel: 'default — inherited unless overridden' }]
+    .concat(MAPS.map(m => ({ id: m.id, label: m.label, sublabel: m.sublabel })));
+
+  tbody.innerHTML = '';
+  for (const row of rows) {
+    const tr = document.createElement('tr');
+    if (row.id === 'default') tr.className = 'defaults';
+    tr.dataset.map = row.id;
+    const th = document.createElement('td');
+    th.className = 'mapname';
+    th.innerHTML = `${row.label}<small>${row.sublabel || ''}</small>`;
+    tr.appendChild(th);
+
+    for (const ev of SOUND_EVENTS) {
+      const td = document.createElement('td');
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+
+      const sel = document.createElement('select');
+      if (row.id !== 'default') sel.appendChild(new Option('— default —', ''));
+      for (const [id, v] of voicesOfKind(ev.key)) sel.appendChild(new Option(v.label, id));
+      const own = row.id === 'default' ? work.default[ev.key] : (work[row.id] || {})[ev.key];
+      sel.value = own || '';
+      sel.classList.toggle('inherited', !own);
+      sel.title = SOUND_LIB[resolveId(row.id, ev.key)].desc;
+      sel.onchange = () => {
+        assign(row.id, ev.key, sel.value);
+        sel.classList.toggle('inherited', !sel.value);
+        sel.title = SOUND_LIB[resolveId(row.id, ev.key)].desc;
+        demo(resolveId(row.id, ev.key), row.id === 'default' ? ctxMapId : row.id);
+        if (row.id === 'default') syncMatrixInherited(ev.key);
+      };
+
+      const play = document.createElement('button');
+      play.className = 'tiny'; play.textContent = '▶'; play.title = 'Play as the game fires it';
+      play.onclick = () => demo(resolveId(row.id, ev.key), row.id === 'default' ? ctxMapId : row.id);
+
+      cell.append(sel, play);
+      td.appendChild(cell);
+      tr.appendChild(td);
+    }
+    tr.onclick = e => { if (row.id !== 'default' && !e.target.closest('button')) setCtxMap(row.id); };
+    tbody.appendChild(tr);
+  }
+}
+
+// A change to the default row moves every map still inheriting it — reflect
+// that in their tooltips immediately.
+function syncMatrixInherited(evKey) {
+  const i = SOUND_EVENTS.findIndex(e => e.key === evKey);
+  document.querySelectorAll('#matrix tbody tr').forEach(tr => {
+    const sel = tr.children[i + 1].querySelector('select');
+    if (!sel.value) sel.title = SOUND_LIB[resolveId(tr.dataset.map, evKey)].desc;
   });
 }
-function pluck(f, vol, t, tier = 0) {
-  const a = ac();
-  // higher tiers open the filter more (bigger merges feel brighter) and ring longer
-  const bright = 1 + tier * 0.12;
-  const sustain = 0.5 + tier * 0.03;
-  const o = a.createOscillator(), g = a.createGain();
-  const lp = a.createBiquadFilter(); lp.type = 'lowpass';
-  lp.frequency.setValueAtTime(f * 6 * bright, t);
-  lp.frequency.exponentialRampToValueAtTime(f * 1.5, t + 0.25);
-  o.type = 'sawtooth'; o.frequency.setValueAtTime(f, t);
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(vol, t + 0.004);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + sustain);
-  o.connect(lp).connect(g).connect(a.destination); o.start(t); o.stop(t + sustain + 0.05);
-  // warm body — pure fundamental under the bright saw so single merges aren't thin
-  const ob = a.createOscillator(), gb = a.createGain();
-  ob.type = 'sine'; ob.frequency.setValueAtTime(f, t);
-  gb.gain.setValueAtTime(0.0001, t);
-  gb.gain.exponentialRampToValueAtTime(vol * 0.45, t + 0.01);
-  gb.gain.exponentialRampToValueAtTime(0.0001, t + sustain * 0.9);
-  ob.connect(gb).connect(a.destination); ob.start(t); ob.stop(t + sustain);
-  // tiny pluck noise
-  const len = Math.floor(a.sampleRate * 0.012);
-  const buf = a.createBuffer(1, len, a.sampleRate);
-  const ch = buf.getChannelData(0);
-  for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / len);
-  const src = a.createBufferSource(); src.buffer = buf;
-  const ng = a.createGain(); ng.gain.setValueAtTime(vol * 0.5, t);
-  src.connect(ng).connect(a.destination); src.start(t);
-}
-function marimba(f, vol, t) {
-  const a = ac();
-  const o = a.createOscillator(), g = a.createGain();
-  o.type = 'triangle'; o.frequency.setValueAtTime(f, t);
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(vol, t + 0.006);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
-  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.46);
-  // strong 4th harmonic — marimba signature
-  const o2 = a.createOscillator(), g2 = a.createGain();
-  o2.type = 'sine'; o2.frequency.setValueAtTime(f * 4, t);
-  g2.gain.setValueAtTime(0.0001, t);
-  g2.gain.exponentialRampToValueAtTime(vol * 0.35, t + 0.006);
-  g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
-  o2.connect(g2).connect(a.destination); o2.start(t); o2.stop(t + 0.16);
-}
-const TIMBRES = { musicbox, pluck, marimba };
 
-function playTier(timbre, tier, when) {
-  TIMBRES[timbre](freq(tier), 0.32, when ?? ac().currentTime, tier);
+// ---------- library ----------
+function buildLibrary() {
+  const wrap = document.getElementById('library');
+  wrap.innerHTML = '';
+  for (const ev of SOUND_EVENTS) {
+    const list = voicesOfKind(ev.key);
+    const group = document.createElement('div');
+    group.className = 'kind-group';
+    group.innerHTML = `<p class="kind-head">${ev.label} <span>— ${ev.hint} · ${list.length} sound${list.length > 1 ? 's' : ''}</span></p>`;
+    const grid = document.createElement('div');
+    grid.className = 'voices';
+    for (const [id, v] of list) grid.appendChild(voiceCard(id, v, ev));
+    group.appendChild(grid);
+    wrap.appendChild(group);
+  }
+  refreshUsage();
 }
 
-// ---- build UI ----
-document.querySelectorAll('.card[data-timbre]').forEach(card => {
-  const timbre = card.dataset.timbre;
-  const tiers = card.querySelector('.tiers');
-  function rebuild() {
-    tiers.innerHTML = '';
-    for (let i = 0; i < TIERS; i++) {
+function voiceCard(id, v, ev) {
+  const card = document.createElement('div');
+  card.className = 'voice';
+  card.dataset.voice = id;
+  card.innerHTML = `<h3>${v.label} <code>${id}</code></h3>
+                    <p class="desc">${v.desc}</p>
+                    <div class="used"></div><div class="divider"></div>`;
+
+  const controls = document.createElement('div');
+  controls.className = 'row';
+
+  if (v.kind === 'merge') {
+    const tiers = document.createElement('div');
+    tiers.className = 'row';
+    tiers.dataset.tiers = '1';
+    controls.appendChild(tiers);
+    const cascade = document.createElement('button');
+    cascade.className = 'accent'; cascade.textContent = '▶ Cascade';
+    cascade.onclick = () => demo(id, ctxMapId);
+    controls.appendChild(cascade);
+  } else if (v.kind === 'collide') {
+    [['Soft', 4], ['Medium', 10], ['Hard', 18]].forEach(([lbl, imp]) => {
+      const b = document.createElement('button');
+      b.className = 'tiny'; b.textContent = lbl;
+      b.onclick = () => playVoice(id, ctxMapId, { impact: imp });
+      controls.appendChild(b);
+    });
+  } else if (v.kind === 'coin') {
+    [['×2 (small merge)', 2], ['×8', 8], ['×20 (big combo)', 20]].forEach(([lbl, n]) => {
+      const b = document.createElement('button');
+      b.className = 'tiny'; b.textContent = lbl;
+      b.onclick = () => {
+        const a = ac(), t0 = a.currentTime + 0.02;
+        for (let i = 0; i < n; i++) v.play(a, bus, { when: t0 + i * 0.11, index: i });
+      };
+      controls.appendChild(b);
+    });
+  } else {
+    const b = document.createElement('button');
+    b.className = 'accent'; b.textContent = '▶ Play';
+    b.onclick = () => demo(id, ctxMapId);
+    controls.appendChild(b);
+  }
+
+  const spacer = document.createElement('span');
+  spacer.style.flex = '1';
+  const useMap = document.createElement('button');
+  useMap.className = 'tiny ghost'; useMap.dataset.usemap = '1';
+  useMap.onclick = () => { assign(ctxMapId, ev.key, id); rebuildMatrixValues(); };
+  const useDef = document.createElement('button');
+  useDef.className = 'tiny ghost'; useDef.textContent = 'Use for all maps';
+  useDef.title = 'Set the default — every map that hasn\'t overridden this event follows it';
+  useDef.onclick = () => { assign('default', ev.key, id); rebuildMatrixValues(); };
+  controls.append(spacer, useMap, useDef);
+
+  card.appendChild(controls);
+  return card;
+}
+
+// Tier buttons carry the CONTEXT map's real items, so a 5-tier chain shows five
+// buttons with the right names — not a hardcoded 9.
+function refreshTierButtons() {
+  const items = itemsOf(ctxMapId);
+  const n = items.length || 9;
+  document.querySelectorAll('.voice[data-voice]').forEach(card => {
+    const holder = card.querySelector('[data-tiers]');
+    if (!holder) return;
+    const id = card.dataset.voice;
+    holder.innerHTML = '';
+    for (let i = 0; i < n; i++) {
+      const it = items[i];
       const b = document.createElement('button');
       b.className = 'tier-btn';
-      b.innerHTML = `<span class="n">tier ${i}</span><span class="note">${noteName(i)}</span>`;
-      b.onclick = () => playTier(timbre, i);
-      tiers.appendChild(b);
+      b.innerHTML = (it && it.sprite ? `<img src="${it.sprite}" alt="">` : '') +
+                    `<span class="pn">${it ? it.name : 'tier ' + i}</span>`;
+      b.onclick = () => playVoice(id, ctxMapId, { tier: i, tiers: n });
+      holder.appendChild(b);
+    }
+  });
+}
+
+function setCtxMap(id) {
+  ctxMapId = id;
+  document.getElementById('ctxmap').value = id;
+  document.querySelectorAll('#matrix tbody tr').forEach(tr =>
+    tr.classList.toggle('ctx', tr.dataset.map === id));
+  const items = itemsOf(id);
+  document.getElementById('ctxinfo').textContent =
+    `${items.length} tiers — ${items.map(i => i.name).join(' → ')}`;
+  document.querySelectorAll('[data-usemap]').forEach(b =>
+    b.textContent = 'Use for ' + mapById(id).label);
+  refreshTierButtons();
+}
+
+// Highlight the voices currently wired up, and say where.
+function refreshUsage() {
+  const users = {};
+  const add = (voiceId, chip, cls) => (users[voiceId] = users[voiceId] || []).push([chip, cls]);
+  for (const ev of SOUND_EVENTS) {
+    add(work.default[ev.key], 'all maps', 'def');
+    for (const m of MAPS) {
+      const own = (work[m.id] || {})[ev.key];
+      if (own) add(own, m.label, '');
     }
   }
-  card._rebuild = rebuild;
-  rebuild();
-  card.querySelector('[data-act=cascade]').onclick = () => {
-    const t0 = ac().currentTime + 0.02;
-    for (let i = 0; i < TIERS; i++) playTier(timbre, i, t0 + i * 0.11);
-  };
-  card.querySelector('[data-act=chord]').onclick = () => {
-    const t0 = ac().currentTime + 0.02;
-    const n = 3 + Math.floor(Math.random() * 3);
-    for (let k = 0; k < n; k++) {
-      const tier = Math.floor(Math.random() * TIERS);
-      playTier(timbre, tier, t0 + k * 0.015); // near-simultaneous
-    }
-  };
-});
-// ---- coin run + collision knock (mirror audio.js coinTickMusical / clinkMusical) ----
-const COIN_SCALE = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21]; // pentatonic, always (not the dropdown)
-function coinRunSemi(i) { // zigzag: climb, then turn around at the top (no octave snap-back)
-  const L = COIN_SCALE.length, period = 2 * (L - 1);
-  const p = i % period;
-  return COIN_SCALE[p < L ? p : period - p];
-}
-// one plucked coin note at a given pentatonic semitone above C5
-function coinPluck(semi, when) {
-  const a = ac(), t = when;
-  const f = 523.25 * Math.pow(2, semi / 12); // C5 root
-  const o = a.createOscillator(), g = a.createGain();
-  o.type = 'triangle'; o.frequency.setValueAtTime(f, t);
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(0.09, t + 0.006);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
-  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.2);
-  const o2 = a.createOscillator(), g2 = a.createGain();
-  o2.type = 'sine'; o2.frequency.setValueAtTime(f * 2, t);
-  g2.gain.setValueAtTime(0.0001, t);
-  g2.gain.exponentialRampToValueAtTime(0.028, t + 0.006);
-  g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
-  o2.connect(g2).connect(a.destination); o2.start(t); o2.stop(t + 0.13);
-}
-// Shepard pluck: same pitch class stacked across octaves, weighted by a bell
-// curve FIXED in pitch (centered ~C6). Stepping the pitch class up the pentatonic
-// each coin makes the run seem to rise forever — the top octave fades out as a
-// new one fades in at the bottom, masking the octave wrap.
-const SHEP_PENT = [0, 2, 4, 7, 9];
-function shepardNote(i, when) {
-  const a = ac(), t = when;
-  const frac = SHEP_PENT[((i % 5) + 5) % 5] / 12;   // position within the octave
-  const FMIN = 65.41, OCT = 7;                        // C2 .. C8
-  const centerLog = Math.log2(1046.5), sigma = 1.4;  // bell anchored at C6, ~1.4 oct wide
-  for (let k = 0; k < OCT; k++) {
-    const f = FMIN * Math.pow(2, frac + k);
-    const w = Math.exp(-0.5 * Math.pow((Math.log2(f) - centerLog) / sigma, 2));
-    if (w < 0.04) continue;
-    const o = a.createOscillator(), g = a.createGain();
-    o.type = 'triangle'; o.frequency.setValueAtTime(f, t);
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.06 * w, t + 0.006);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.19);
-    o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.21);
-  }
-}
-function coinNoteFor(i, when, mode) {
-  if (mode === 'shepard') return shepardNote(i, when);
-  const semi = (mode === 'hold')
-    ? COIN_SCALE[Math.min(i, COIN_SCALE.length - 1)]  // climb, then repeat the top note
-    : coinRunSemi(i);                                  // zigzag (default)
-  coinPluck(semi, when);
-}
-function coinBurst(n) {
-  const mode = document.getElementById('coinmode').value;
-  const t0 = ac().currentTime + 0.02;
-  for (let i = 0; i < n; i++) coinNoteFor(i, t0 + i * 0.11, mode); // ~110ms apart, real game tempo
-}
-function knock(impact, when) {
-  const a = ac(), t = when ?? ac().currentTime;
-  const vol = Math.min(0.16, impact * 0.035);
-  if (vol < 0.013) return;
-  const base = 220 + Math.random() * 160;
-  [1, 1.5].forEach((mult, i) => {
-    const o = a.createOscillator(), g = a.createGain();
-    o.type = 'sine';
-    o.frequency.setValueAtTime(base * mult, t);
-    o.frequency.exponentialRampToValueAtTime(base * mult * 0.9, t + 0.07);
-    const pv = vol * (i === 0 ? 1 : 0.4);
-    g.gain.setValueAtTime(pv, t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
-    o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.11);
-  });
-  const len = Math.floor(a.sampleRate * 0.02);
-  const buf = a.createBuffer(1, len, a.sampleRate);
-  const ch = buf.getChannelData(0);
-  for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / len);
-  const src = a.createBufferSource(); src.buffer = buf;
-  const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 700;
-  const ng = a.createGain(); ng.gain.setValueAtTime(vol * 0.5, t);
-  src.connect(lp).connect(ng).connect(a.destination); src.start(t);
-}
-document.querySelectorAll('[data-coins]').forEach(b =>
-  b.onclick = () => coinBurst(+b.dataset.coins));
-document.querySelectorAll('[data-knock]').forEach(b =>
-  b.onclick = () => knock(+b.dataset.knock));
-
-// ---- personal-best flourishes ----
-// A · Current: mirrors fanfare() in audio.js exactly (rising major arpeggio + sparkle tail)
-function pbCurrent() {
-  const a = ac(), t = a.currentTime + 0.02;
-  const notes = [1047, 1319, 1568, 2093]; // C6 E6 G6 C7
-  notes.forEach((f, i) => {
-    const st = t + i * 0.10;
-    const o = a.createOscillator(), g = a.createGain();
-    o.type = 'triangle'; o.frequency.setValueAtTime(f, st);
-    g.gain.setValueAtTime(0.0001, st);
-    g.gain.exponentialRampToValueAtTime(0.22, st + 0.015);
-    g.gain.exponentialRampToValueAtTime(0.0001, st + 0.32);
-    o.connect(g).connect(a.destination); o.start(st); o.stop(st + 0.34);
-    const o2 = a.createOscillator(), g2 = a.createGain();
-    o2.type = 'sine'; o2.frequency.setValueAtTime(f * 0.5, st);
-    g2.gain.setValueAtTime(0.0001, st);
-    g2.gain.exponentialRampToValueAtTime(0.10, st + 0.02);
-    g2.gain.exponentialRampToValueAtTime(0.0001, st + 0.24);
-    o2.connect(g2).connect(a.destination); o2.start(st); o2.stop(st + 0.26);
-  });
-  const ts = t + notes.length * 0.10;
-  const o3 = a.createOscillator(), g3 = a.createGain();
-  o3.type = 'triangle';
-  o3.frequency.setValueAtTime(2093, ts);
-  o3.frequency.exponentialRampToValueAtTime(3136, ts + 0.20); // sweep to G7
-  g3.gain.setValueAtTime(0.0001, ts);
-  g3.gain.exponentialRampToValueAtTime(0.13, ts + 0.02);
-  g3.gain.exponentialRampToValueAtTime(0.0001, ts + 0.45);
-  o3.connect(g3).connect(a.destination); o3.start(ts); o3.stop(ts + 0.48);
-}
-// B · Shipped fanfare: EXACT port of fanfare() in audio.js (brass "ta-ta-ta-daaa" with
-// vibrato chord + sparkle tail). Keep in sync if audio.js changes.
-function fanfareShipped() {
-  const a = ac(), t = a.currentTime + 0.02;
-  const brass = (f, st, dur, vol, vib) => {
-    const o = a.createOscillator(), g = a.createGain(), lp = a.createBiquadFilter();
-    o.type = 'sawtooth'; o.frequency.setValueAtTime(f, st);
-    lp.type = 'lowpass'; lp.Q.value = 1.2;
-    lp.frequency.setValueAtTime(f * 1.5, st);
-    lp.frequency.linearRampToValueAtTime(f * 4.5, st + 0.06); // the brassy "blat"
-    g.gain.setValueAtTime(0.0001, st);
-    g.gain.exponentialRampToValueAtTime(vol, st + 0.025);
-    g.gain.setValueAtTime(vol, st + Math.max(0.03, dur - 0.09));
-    g.gain.exponentialRampToValueAtTime(0.0001, st + dur);
-    if (vib) {
-      const lfo = a.createOscillator(), lg = a.createGain();
-      lfo.frequency.value = 5.5; lg.gain.value = f * 0.014;
-      lfo.connect(lg).connect(o.frequency);
-      lfo.start(st + 0.18); lfo.stop(st + dur);
-    }
-    o.connect(lp).connect(g).connect(a.destination);
-    o.start(st); o.stop(st + dur + 0.02);
-  };
-  brass(784,  t + 0.00, 0.15, 0.15);
-  brass(784,  t + 0.17, 0.15, 0.15);
-  brass(784,  t + 0.34, 0.15, 0.15);
-  brass(1047, t + 0.52, 1.00, 0.17, true);   // lead: C6, held with vibrato
-  brass(659,  t + 0.52, 1.00, 0.07, true);   // harmony: E5
-  brass(784,  t + 0.52, 1.00, 0.07, true);   // harmony: G5
-  const ts = t + 0.62;
-  const o3 = a.createOscillator(), g3 = a.createGain();
-  o3.type = 'triangle';
-  o3.frequency.setValueAtTime(2093, ts);
-  o3.frequency.exponentialRampToValueAtTime(3136, ts + 0.20);
-  g3.gain.setValueAtTime(0.0001, ts);
-  g3.gain.exponentialRampToValueAtTime(0.13, ts + 0.02);
-  g3.gain.exponentialRampToValueAtTime(0.0001, ts + 0.45);
-  o3.connect(g3).connect(a.destination); o3.start(ts); o3.stop(ts + 0.48);
-}
-// C · Harp run + chord: fast ascending pentatonic pluck resolving on a bright major chord
-function harpPluck(f, st, vol = 0.13) {
-  const a = ac();
-  const o = a.createOscillator(), g = a.createGain();
-  o.type = 'triangle'; o.frequency.setValueAtTime(f, st);
-  g.gain.setValueAtTime(0.0001, st);
-  g.gain.exponentialRampToValueAtTime(vol, st + 0.006);
-  g.gain.exponentialRampToValueAtTime(0.0001, st + 0.5);
-  o.connect(g).connect(a.destination); o.start(st); o.stop(st + 0.55);
-  const o2 = a.createOscillator(), g2 = a.createGain();
-  o2.type = 'sine'; o2.frequency.setValueAtTime(f * 2, st);
-  g2.gain.setValueAtTime(0.0001, st);
-  g2.gain.exponentialRampToValueAtTime(vol * 0.3, st + 0.006);
-  g2.gain.exponentialRampToValueAtTime(0.0001, st + 0.22);
-  o2.connect(g2).connect(a.destination); o2.start(st); o2.stop(st + 0.25);
-}
-function pbHarp() {
-  const t = ac().currentTime + 0.02;
-  const run = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24]; // C4 major pentatonic, up 2 octaves
-  run.forEach((s, i) => harpPluck(261.63 * Math.pow(2, s / 12), t + i * 0.05));
-  const tc = t + run.length * 0.05 + 0.04;
-  [1047, 1319, 1568, 2093].forEach(f => harpPluck(f, tc, 0.14)); // C6 E6 G6 C7 chord
-}
-// D · Music-box sparkle: reuse the celesta timbre, rising then a shimmering high chord
-function pbMusicbox() {
-  const t = ac().currentTime + 0.02;
-  const notes = [1047, 1319, 1568, 2093, 2637]; // C6 E6 G6 C7 E7
-  notes.forEach((f, i) => musicbox(f, 0.30, t + i * 0.11));
-  [2093, 2637, 3136].forEach(f => musicbox(f, 0.16, t + notes.length * 0.11 + 0.05));
-}
-const PB = { shipped: fanfareShipped, bells: pbCurrent, harp: pbHarp, musicbox: pbMusicbox };
-document.querySelectorAll('[data-pb]').forEach(b => b.onclick = () => PB[b.dataset.pb]());
-
-// ================= Paris — Le Petit Café =================
-const PARIS_TIER_NAMES = ['sugar cube', 'macaron', 'petit chou', 'croissant', 'eclair',
-                          'berry tart', 'paris-brest', 'charlotte', 'strawb. cake'];
-
-// short shaped noise burst — shared texture helper for the Paris sounds
-function pnoise(t, dur, vol, type, ffreq) {
-  const a = ac();
-  const len = Math.max(8, Math.floor(a.sampleRate * dur));
-  const buf = a.createBuffer(1, len, a.sampleRate);
-  const ch = buf.getChannelData(0);
-  for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 1.6);
-  const src = a.createBufferSource(); src.buffer = buf;
-  const g = a.createGain(); g.gain.setValueAtTime(vol, t);
-  const f = a.createBiquadFilter(); f.type = type; f.frequency.value = ffreq;
-  src.connect(f).connect(g).connect(a.destination); src.start(t);
-}
-
-// A · Porcelain & silver spoon: inharmonic china partials + a tiny spoon-tap attack
-function parisChina(tier, when) {
-  const a = ac(), t = when ?? a.currentTime + 0.02;
-  const base = 740 * Math.pow(1.09, tier);
-  [[1, 1, 0.4], [2.53, 0.42, 0.25], [4.9, 0.15, 0.12]].forEach(([m, amp, dec]) => {
-    const o = a.createOscillator(), g = a.createGain();
-    o.type = 'sine'; o.frequency.setValueAtTime(base * m, t);
-    o.frequency.exponentialRampToValueAtTime(base * m * 1.015, t + dec); // faint upward curl
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.2 * amp, t + 0.004);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
-    o.connect(g).connect(a.destination); o.start(t); o.stop(t + dec + 0.03);
-  });
-  pnoise(t, 0.008, 0.1, 'highpass', 3000); // spoon-tap click
-}
-
-// B · Pâtisserie poof: soft squishy body + cream poof + powdered-sugar sparkle
-function parisPastry(tier, when) {
-  const a = ac(), t = when ?? a.currentTime + 0.02;
-  const base = 250 * Math.pow(1.11, tier);
-  const o = a.createOscillator(), g = a.createGain();
-  o.type = 'sine'; o.frequency.setValueAtTime(base * 1.25, t);
-  o.frequency.exponentialRampToValueAtTime(base * 0.85, t + 0.16);
-  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.26, t + 0.014);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
-  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.28);
-  pnoise(t, 0.09, 0.15, 'lowpass', 750); // cream poof
-  const o2 = a.createOscillator(), g2 = a.createGain();
-  o2.type = 'sine'; o2.frequency.setValueAtTime(base * 6, t + 0.02);
-  g2.gain.setValueAtTime(0.0001, t + 0.02);
-  g2.gain.exponentialRampToValueAtTime(0.05, t + 0.04);
-  g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
-  o2.connect(g2).connect(a.destination); o2.start(t + 0.02); o2.stop(t + 0.24);
-}
-
-// C · Musette accordion: three wet-tuned sawtooth reeds with a reed swell (not a pluck).
-// Tiers climb F major, so cascades play a melody.
-const PARIS_SCALE = [0, 2, 4, 5, 7, 9, 11, 12, 14]; // 9 tiers, F major
-function parisMusette(tier, when) {
-  const a = ac(), t = when ?? a.currentTime + 0.02;
-  const f = 349.23 * Math.pow(2, PARIS_SCALE[tier] / 12); // F4 root
-  const dur = 0.28 + tier * 0.02;
-  const g = a.createGain(), bp = a.createBiquadFilter();
-  bp.type = 'bandpass'; bp.frequency.value = f * 2.2; bp.Q.value = 0.8;
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.linearRampToValueAtTime(0.16, t + 0.03);
-  g.gain.setValueAtTime(0.16, t + dur * 0.7);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  [0.988, 1, 1.012].forEach(det => { // ~±20 cents — the musette shimmer
-    const o = a.createOscillator();
-    o.type = 'sawtooth'; o.frequency.setValueAtTime(f * det, t);
-    o.connect(bp); o.start(t); o.stop(t + dur + 0.02);
-  });
-  bp.connect(g).connect(a.destination);
-}
-
-const PARIS_POPS = { china: parisChina, pastry: parisPastry, musette: parisMusette };
-document.querySelectorAll('.card[data-ppop]').forEach(card => {
-  const fn = PARIS_POPS[card.dataset.ppop];
-  const tiers = card.querySelector('.tiers');
-  PARIS_TIER_NAMES.forEach((name, i) => {
-    const b = document.createElement('button');
-    b.className = 'tier-btn';
-    b.innerHTML = `<span class="n">tier ${i}</span><span class="pn">${name}</span>`;
-    b.onclick = () => fn(i);
-    tiers.appendChild(b);
-  });
-  card.querySelector('[data-act=run]').onclick = () => {
-    const t0 = ac().currentTime + 0.02;
-    PARIS_TIER_NAMES.forEach((_, i) => fn(i, t0 + i * 0.13));
-  };
-});
-
-// Paris collisions
-function parisSaucer(impact) { // delicate china tap — daintier + quieter than default clink
-  const a = ac(), t = a.currentTime;
-  const vol = Math.min(0.11, impact * 0.026);
-  if (vol < 0.011) return;
-  const base = 2600 + Math.random() * 1000;
-  [[1, 0.08], [2.7, 0.05]].forEach(([m, dec], i) => {
-    const o = a.createOscillator(), g = a.createGain();
-    o.type = 'sine'; o.frequency.setValueAtTime(base * m, t);
-    g.gain.setValueAtTime(vol * (i === 0 ? 1 : 0.4), t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
-    o.connect(g).connect(a.destination); o.start(t); o.stop(t + dec + 0.02);
+  document.querySelectorAll('.voice[data-voice]').forEach(card => {
+    const list = users[card.dataset.voice] || [];
+    card.classList.toggle('in-use', list.length > 0);
+    card.querySelector('.used').innerHTML = list.length
+      ? list.map(([c, cls]) => `<span class="chip ${cls}">${c}</span>`).join('')
+      : '<span class="chip none">unused</span>';
   });
 }
-function parisPastryBump(impact) { // soft dusted thud — pastry on plate
-  const a = ac(), t = a.currentTime;
-  const vol = Math.min(0.26, impact * 0.06);
-  if (vol < 0.018) return;
-  const base = 180 + Math.random() * 90;
-  const o = a.createOscillator(), g = a.createGain();
-  o.type = 'sine'; o.frequency.setValueAtTime(base, t);
-  o.frequency.exponentialRampToValueAtTime(base * 0.6, t + 0.1);
-  g.gain.setValueAtTime(vol, t);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
-  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.17);
-  pnoise(t, 0.06, vol * 0.7, 'lowpass', 800);
-}
-document.querySelectorAll('[data-pclink]').forEach(b => b.onclick = () => {
-  const [kind, imp] = b.dataset.pclink.split(':');
-  (kind === 'saucer' ? parisSaucer : parisPastryBump)(+imp);
-});
 
-// Paris coins
-function parisCoinDefault(when) { // mirrors the shipping coinTick() blip
-  const a = ac(), t = when;
-  const o = a.createOscillator(), g = a.createGain();
-  o.type = 'square'; o.frequency.setValueAtTime(1568, t);
-  o.frequency.setValueAtTime(2093, t + 0.04);
-  g.gain.setValueAtTime(0.05, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
-  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.13);
-}
-function parisCoinBell(when) { // tiny service-bell ding, pitch wobbles per coin
-  const a = ac(), t = when;
-  const f = 2093 * (1 + (Math.random() - 0.5) * 0.05);
-  [[1, 0.07, 0.22], [2.67, 0.025, 0.12]].forEach(([m, vol, dec]) => {
-    const o = a.createOscillator(), g = a.createGain();
-    o.type = 'sine'; o.frequency.setValueAtTime(f * m, t);
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(vol, t + 0.005);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
-    o.connect(g).connect(a.destination); o.start(t); o.stop(t + dec + 0.02);
-  });
-}
-document.querySelectorAll('[data-pcoin]').forEach(b => b.onclick = () => {
-  const [kind, n] = b.dataset.pcoin.split(':');
-  const fn = kind === 'bell' ? parisCoinBell : parisCoinDefault;
-  const t0 = ac().currentTime + 0.02;
-  for (let i = 0; i < +n; i++) fn(t0 + i * 0.11);
-});
-
-// ================= Farm — Sprout Valley =================
-const FARM_TIER_NAMES = ['seed', 'sprout', 'strawberry', 'blueberries', 'pepper',
-                         'cabbage', 'watermelon', 'cauliflower', 'prize pumpkin'];
-const FARM_PENT = [0, 2, 4, 7, 9, 12, 14, 16, 19]; // C major pentatonic, 9 tiers
-const farmFreq = tier => 261.63 * Math.pow(2, FARM_PENT[tier] / 12); // C4 root
-
-// A · Sprout bloop: rounded sine that bends up quickly + a tiny high sparkle
-function farmBloop(tier, when) {
-  const a = ac(), t = when ?? a.currentTime + 0.02;
-  const f = farmFreq(tier);
-  const o = a.createOscillator(), g = a.createGain();
-  o.type = 'sine';
-  o.frequency.setValueAtTime(f * 0.6, t);
-  o.frequency.exponentialRampToValueAtTime(f, t + 0.07);   // the "bloop" bend up
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(0.28, t + 0.012);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
-  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.22);
-  const o2 = a.createOscillator(), g2 = a.createGain();     // sparkle
-  o2.type = 'sine'; o2.frequency.setValueAtTime(f * 4, t + 0.02);
-  g2.gain.setValueAtTime(0.0001, t + 0.02);
-  g2.gain.exponentialRampToValueAtTime(0.05, t + 0.04);
-  g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
-  o2.connect(g2).connect(a.destination); o2.start(t + 0.02); o2.stop(t + 0.18);
-}
-
-// B · Woody marimba: triangle + strong 4th harmonic, round and warm
-function farmMarimba(tier, when) {
-  const a = ac(), t = when ?? a.currentTime + 0.02;
-  const f = farmFreq(tier);
-  const o = a.createOscillator(), g = a.createGain();
-  o.type = 'triangle'; o.frequency.setValueAtTime(f, t);
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(0.3, t + 0.006);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
-  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.44);
-  const o2 = a.createOscillator(), g2 = a.createGain();
-  o2.type = 'sine'; o2.frequency.setValueAtTime(f * 4, t);
-  g2.gain.setValueAtTime(0.0001, t);
-  g2.gain.exponentialRampToValueAtTime(0.12, t + 0.006);
-  g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
-  o2.connect(g2).connect(a.destination); o2.start(t); o2.stop(t + 0.16);
-}
-
-// C · Ocarina bloom: two detuned reeds through a bandpass with a soft breath attack
-function farmOcarina(tier, when) {
-  const a = ac(), t = when ?? a.currentTime + 0.02;
-  const f = farmFreq(tier);
-  const dur = 0.26 + tier * 0.015;
-  const g = a.createGain(), bp = a.createBiquadFilter();
-  bp.type = 'bandpass'; bp.frequency.value = f * 1.5; bp.Q.value = 0.9;
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.linearRampToValueAtTime(0.18, t + 0.04);          // breathy swell, not a pluck
-  g.gain.setValueAtTime(0.18, t + dur * 0.65);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  [0.997, 1.003].forEach(det => {
-    const o = a.createOscillator();
-    o.type = 'triangle'; o.frequency.setValueAtTime(f * det, t);
-    o.connect(bp); o.start(t); o.stop(t + dur + 0.02);
-  });
-  bp.connect(g).connect(a.destination);
-  pnoise(t, 0.05, 0.05, 'highpass', 2000);                 // breath
-}
-
-const FARM_POPS = { bloop: farmBloop, marimba: farmMarimba, ocarina: farmOcarina };
-document.querySelectorAll('.card[data-fpop]').forEach(card => {
-  const fn = FARM_POPS[card.dataset.fpop];
-  const tiers = card.querySelector('.tiers');
-  FARM_TIER_NAMES.forEach((name, i) => {
-    const b = document.createElement('button');
-    b.className = 'tier-btn';
-    b.innerHTML = `<span class="n">tier ${i}</span><span class="pn">${name}</span>`;
-    b.onclick = () => fn(i);
-    tiers.appendChild(b);
-  });
-  card.querySelector('[data-act=run]').onclick = () => {
-    const t0 = ac().currentTime + 0.02;
-    FARM_TIER_NAMES.forEach((_, i) => fn(i, t0 + i * 0.13));
-  };
-});
-
-// Farm collisions
-function farmDirt(impact) { // earthy crumbly thud — produce settling into soil
-  const a = ac(), t = a.currentTime;
-  const vol = Math.min(0.24, impact * 0.055);
-  if (vol < 0.016) return;
-  const base = 140 + Math.random() * 70;
-  const o = a.createOscillator(), g = a.createGain();
-  o.type = 'sine'; o.frequency.setValueAtTime(base, t);
-  o.frequency.exponentialRampToValueAtTime(base * 0.55, t + 0.11);
-  g.gain.setValueAtTime(vol, t);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
-  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.16);
-  pnoise(t, 0.07, vol * 0.85, 'lowpass', 550);             // soil crumble
-}
-function farmWood(impact) { // woody knock — hitting the raised-bed frame
-  const a = ac(), t = a.currentTime;
-  const vol = Math.min(0.2, impact * 0.045);
-  if (vol < 0.014) return;
-  const base = 300 + Math.random() * 140;
-  [[1, 0.09], [2.8, 0.05]].forEach(([m, dec], i) => {
-    const o = a.createOscillator(), g = a.createGain();
-    o.type = 'triangle'; o.frequency.setValueAtTime(base * m, t);
-    g.gain.setValueAtTime(vol * (i === 0 ? 1 : 0.35), t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
-    o.connect(g).connect(a.destination); o.start(t); o.stop(t + dec + 0.02);
-  });
-  pnoise(t, 0.01, vol * 0.4, 'highpass', 2500);            // knock click
-}
-document.querySelectorAll('[data-fclink]').forEach(b => b.onclick = () => {
-  const [kind, imp] = b.dataset.fclink.split(':');
-  (kind === 'dirt' ? farmDirt : farmWood)(+imp);
-});
-
-// Farm coins
-function farmCoinWood(when) { // bright wooden xylophone tick, slight wobble
-  const a = ac(), t = when;
-  const f = 1568 * (1 + (Math.random() - 0.5) * 0.04);
-  const o = a.createOscillator(), g = a.createGain();
-  o.type = 'triangle'; o.frequency.setValueAtTime(f, t);
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(0.08, t + 0.005);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
-  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.14);
-  const o2 = a.createOscillator(), g2 = a.createGain();
-  o2.type = 'sine'; o2.frequency.setValueAtTime(f * 4, t);
-  g2.gain.setValueAtTime(0.0001, t);
-  g2.gain.exponentialRampToValueAtTime(0.02, t + 0.005);
-  g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
-  o2.connect(g2).connect(a.destination); o2.start(t); o2.stop(t + 0.08);
-}
-function farmCoinChime(when) { // glockenspiel sparkle
-  const a = ac(), t = when;
-  const f = 2093 * (1 + (Math.random() - 0.5) * 0.05);
-  [[1, 0.06, 0.24], [3.5, 0.02, 0.12]].forEach(([m, vol, dec]) => {
-    const o = a.createOscillator(), g = a.createGain();
-    o.type = 'sine'; o.frequency.setValueAtTime(f * m, t);
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(vol, t + 0.004);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
-    o.connect(g).connect(a.destination); o.start(t); o.stop(t + dec + 0.02);
-  });
-}
-document.querySelectorAll('[data-fcoin]').forEach(b => b.onclick = () => {
-  const [kind, n] = b.dataset.fcoin.split(':');
-  const fn = kind === 'chime' ? farmCoinChime : farmCoinWood;
-  const t0 = ac().currentTime + 0.02;
-  for (let i = 0; i < +n; i++) fn(t0 + i * 0.11);
-});
-
-// ================= Game over (shared by all maps) =================
-// A · Gently down: three warm descending notes, soft low C under the last one
-function goDown() {
-  const a = ac(), t = a.currentTime + 0.02;
-  [659.25, 523.25, 392.00].forEach((f, i) => { // E5 C5 G4
-    const st = t + i * 0.22, last = i === 2;
-    const o = a.createOscillator(), g = a.createGain();
-    o.type = 'triangle'; o.frequency.setValueAtTime(f, st);
-    g.gain.setValueAtTime(0.0001, st);
-    g.gain.exponentialRampToValueAtTime(last ? 0.16 : 0.14, st + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, st + (last ? 0.8 : 0.3));
-    o.connect(g).connect(a.destination); o.start(st); o.stop(st + (last ? 0.85 : 0.34));
-  });
-  const st = t + 0.44; // soft low C3 landing under the G4
-  const o = a.createOscillator(), g = a.createGain();
-  o.type = 'sine'; o.frequency.setValueAtTime(130.81, st);
-  g.gain.setValueAtTime(0.0001, st);
-  g.gain.exponentialRampToValueAtTime(0.08, st + 0.04);
-  g.gain.exponentialRampToValueAtTime(0.0001, st + 0.9);
-  o.connect(g).connect(a.destination); o.start(st); o.stop(st + 0.95);
-}
-// B · Last-call bell: two mellow low tolls — "the bar is closing"
-function goLastCall() {
-  const a = ac(), t = a.currentTime + 0.02;
-  [0, 0.55].forEach((dt, n) => {
-    const base = 392, vol = n === 0 ? 0.13 : 0.10; // second toll a touch softer
-    [[1, 1], [2.4, 0.35], [4.2, 0.12]].forEach(([m, amp]) => {
-      const dec = 1.1 / Math.sqrt(m);
-      const o = a.createOscillator(), g = a.createGain();
-      o.type = 'sine'; o.frequency.setValueAtTime(base * m, t + dt);
-      g.gain.setValueAtTime(0.0001, t + dt);
-      g.gain.exponentialRampToValueAtTime(vol * amp, t + dt + 0.008);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + dt + dec);
-      o.connect(g).connect(a.destination); o.start(t + dt); o.stop(t + dt + dec + 0.03);
+// Re-sync the dropdowns after the library assigns something.
+function rebuildMatrixValues() {
+  document.querySelectorAll('#matrix tbody tr').forEach(tr => {
+    SOUND_EVENTS.forEach((ev, i) => {
+      const sel = tr.children[i + 1].querySelector('select');
+      const own = tr.dataset.map === 'default'
+        ? work.default[ev.key] : (work[tr.dataset.map] || {})[ev.key];
+      sel.value = own || '';
+      sel.classList.toggle('inherited', !own);
+      sel.title = SOUND_LIB[resolveId(tr.dataset.map, ev.key)].desc;
     });
   });
 }
-// C · Slide & plop: comedic slide-whistle deflate with a soft plop landing
-function goSlide() {
-  const a = ac(), t = a.currentTime + 0.02;
-  const o = a.createOscillator(), g = a.createGain();
-  o.type = 'triangle';
-  o.frequency.setValueAtTime(950, t);
-  o.frequency.exponentialRampToValueAtTime(340, t + 0.55);
-  const lfo = a.createOscillator(), lg = a.createGain(); // slide-whistle warble
-  lfo.frequency.value = 7; lg.gain.value = 14;
-  lfo.connect(lg).connect(o.frequency); lfo.start(t); lfo.stop(t + 0.6);
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(0.12, t + 0.03);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
-  o.connect(g).connect(a.destination); o.start(t); o.stop(t + 0.62);
-  const tp = t + 0.6; // plop
-  const o2 = a.createOscillator(), g2 = a.createGain();
-  o2.type = 'sine'; o2.frequency.setValueAtTime(180, tp);
-  o2.frequency.exponentialRampToValueAtTime(55, tp + 0.1);
-  g2.gain.setValueAtTime(0.2, tp);
-  g2.gain.exponentialRampToValueAtTime(0.0001, tp + 0.13);
-  o2.connect(g2).connect(a.destination); o2.start(tp); o2.stop(tp + 0.15);
-  pnoise(tp, 0.03, 0.1, 'lowpass', 500);
-}
-// D · Bittersweet resolve: descending line that lands on a warm low major chord —
-// "well played, the table's closed"
-function goResolve() {
-  const a = ac(), t = a.currentTime + 0.02;
-  [783.99, 659.25, 523.25].forEach((f, i) => { // G5 E5 C5
-    const st = t + i * 0.15;
-    const o = a.createOscillator(), g = a.createGain();
-    o.type = 'triangle'; o.frequency.setValueAtTime(f, st);
-    g.gain.setValueAtTime(0.0001, st);
-    g.gain.exponentialRampToValueAtTime(0.11, st + 0.015);
-    g.gain.exponentialRampToValueAtTime(0.0001, st + 0.28);
-    o.connect(g).connect(a.destination); o.start(st); o.stop(st + 0.3);
-  });
-  const tc = t + 0.5;
-  [261.63, 329.63, 392.00].forEach(f => { // C4 E4 G4, soft swell
-    const o = a.createOscillator(), g = a.createGain();
-    o.type = 'sine'; o.frequency.setValueAtTime(f, tc);
-    g.gain.setValueAtTime(0.0001, tc);
-    g.gain.linearRampToValueAtTime(0.07, tc + 0.12);
-    g.gain.exponentialRampToValueAtTime(0.0001, tc + 0.9);
-    o.connect(g).connect(a.destination); o.start(tc); o.stop(tc + 0.95);
-  });
-}
-const GO = { down: goDown, lastcall: goLastCall, slide: goSlide, resolve: goResolve };
-document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => {
-  GO[b.dataset.go]();
-  if (document.getElementById('go-fanfare').checked) setTimeout(fanfareShipped, 1400);
-});
 
-['scale', 'root', 'dir'].forEach(id =>
-  document.getElementById(id).addEventListener('change', () =>
-    document.querySelectorAll('.card[data-timbre]').forEach(c => c._rebuild())));
+// ---------- file output ----------
+// Written whole from in-memory state, never read-modify-write — so the save
+// picker's truncate-at-pick behaviour (which ate config/items.js on
+// 2026-07-26) can't hurt anything here.
+function fileText() {
+  const pad = s => (s + ':').padEnd(10);
+  const lines = [];
+  lines.push('// WHICH sound each map plays for each event.');
+  lines.push('//');
+  lines.push('// Voice ids come from SOUND_LIB in config/sounds.js (that file holds the actual');
+  lines.push('// synthesis). This file is pure data — the "wiring board".');
+  lines.push('//');
+  lines.push('// GENERATED by tools/sound-lab.html: pick a sound per map+event there, hit');
+  lines.push('// Save, and this whole file is rewritten. Hand-editing works too, but the lab');
+  lines.push('// will overwrite it, so make the change there instead if you can.');
+  lines.push('//');
+  lines.push('// `default` is the fallback: a map only lists an event when it wants something');
+  lines.push('// other than the default. So an empty map entry = "sounds like the house set",');
+  lines.push('// and adding a new event to `default` automatically applies everywhere.');
+  lines.push('');
+  lines.push('const SOUND_MAP = {');
+  lines.push('  default: {');
+  for (const ev of SOUND_EVENTS) lines.push(`    ${pad(ev.key)} '${work.default[ev.key]}',`);
+  lines.push('  },');
+  for (const m of MAPS) {
+    const own = work[m.id] || {};
+    const keys = SOUND_EVENTS.filter(ev => own[ev.key]);
+    lines.push('');
+    lines.push(`  // ${m.label}${m.sublabel ? ' — ' + m.sublabel : ''}`);
+    if (!keys.length) { lines.push(`  ${m.id}: {},`); continue; }
+    lines.push(`  ${m.id}: {`);
+    for (const ev of keys) lines.push(`    ${pad(ev.key)} '${own[ev.key]}',`);
+    lines.push('  },');
+  }
+  lines.push('};');
+  lines.push('');
+  return lines.join('\r\n');
+}
+function renderFileText() { document.getElementById('filetext').value = fileText(); }
+
+let fileHandle = null;
+function status(msg, err) {
+  const el = document.getElementById('status');
+  el.textContent = msg; el.className = err ? 'err' : '';
+}
+document.getElementById('save').onclick = async () => {
+  try {
+    if (!window.showSaveFilePicker) {
+      status('This browser has no file picker — copy the text below instead.', true); return;
+    }
+    if (!fileHandle) {
+      fileHandle = await window.showSaveFilePicker({
+        suggestedName: 'soundmap.js',
+        types: [{ description: 'JavaScript', accept: { 'text/javascript': ['.js'] } }],
+      });
+    }
+    const w = await fileHandle.createWritable();
+    await w.write(fileText());
+    await w.close();
+    localStorage.removeItem(DRAFT_KEY);
+    status('Saved. Reload the game tab — and bump the ?v= in index.html before deploying.');
+  } catch (e) {
+    if (e && e.name === 'AbortError') return;
+    status('Save failed: ' + e, true);
+  }
+};
+document.getElementById('copy').onclick = async () => {
+  await navigator.clipboard.writeText(fileText());
+  status('Copied — paste over config/soundmap.js.');
+};
+document.getElementById('revert').onclick = () => {
+  work = JSON.parse(SHIPPED);
+  localStorage.removeItem(DRAFT_KEY);
+  document.getElementById('restored').hidden = true;
+  rebuildMatrixValues(); markChanged();
+  status('Reverted to what config/soundmap.js currently holds.');
+};
+document.getElementById('discard-draft').onclick = () => document.getElementById('revert').click();
+
+// ---------- boot ----------
+const ctxSel = document.getElementById('ctxmap');
+MAPS.forEach(m => ctxSel.appendChild(new Option(m.label + ' — ' + m.sublabel, m.id)));
+ctxSel.onchange = () => setCtxMap(ctxSel.value);
+
+buildMatrix();
+buildLibrary();
+setCtxMap(MAPS[0].id);
+markChanged();
 </script>

@@ -23,12 +23,20 @@ buglog.js             — Bug-report capture: rolling ring of the last 10 shots
                          (each with the pre-shot board) + game-over events →
                          copyable MMB1. code via the 🐞 HUD button. Replay a
                          code with TT.bug / TT.bugLoad in test mode.
-audio.js              — Web Audio API synthesis (pop, shoot, clink, coinTick,
-                         fanfare) + BGM. pop/clink/coinTick are per-map via
-                         `soundProfile` (wood/ceramic/arcane/plush/music); add a
-                         profile branch + synth fns to theme a new map's sounds.
-                         ALL synths must connect to `sfxBus`, NEVER straight to
-                         ctx.destination (iOS routing — see "Known issues").
+config/sounds.js      — SOUND_LIB: every synth voice in the game, one entry each
+                         (`play(a, out, opts)`) — the single source of truth for
+                         HOW a sound is made. A voice renders into the `out` node
+                         it is handed and must NEVER touch ctx.destination
+                         (iOS routing — see "Known issues").
+config/soundmap.js    — SOUND_MAP: WHICH voice each map plays for each event
+                         (merge/collide/coin/shoot/gameOver/best/levelUp), over a
+                         `default` row every map inherits. Pure data, generated
+                         by tools/sound-lab.html — see "Sound editing" below.
+audio.js              — Audio PLUMBING only: output routing (incl. the iOS
+                         workarounds), mute/music toggles, BGM, and a thin
+                         dispatch from a game event to the active map's voice
+                         (pop/clink/coinTick/shoot/fanfare/levelUp/gameOver all
+                         one-liners over `playSound`). No synthesis lives here.
 render.js             — All canvas drawing (bg, drinks, coins, bag, particles,
                          aim); `drawXray` is the player-facing X-ray diagnostic
                          (see "X-ray" below), separate from the dev `drawHitboxes`
@@ -37,17 +45,17 @@ welcome.js            — Main menu: map cards, size/combo checkboxes, score lis
 game.js               — Physics engine, state object, merge logic, render loop
 style.css             — All CSS
 index.html            — Shell: loads scripts in order (constants → hitboxes →
-                         items → maps → scores → buglog → audio → render →
-                         ui → welcome → game)
+                         items → maps → sounds → soundmap → scores → buglog →
+                         audio → render → ui → welcome → game)
 process_assets.py     — Asset pipeline: source images → game-ready PNGs
 tools/
   hitbox-editor.html  — Visual hitbox editor (see "Hitbox editing" below)
   sprite-editor.html  — Visual sprite prep: AI sheet -> individual PNGs, then
                          PNGs -> an items.js tier chain (see "Sprite editing")
-  sound-lab.html      — Standalone sound-audition sandbox (open in the same
-                         server). Prototype/compare synth sounds here BEFORE
-                         wiring them into audio.js — used to design the music
-                         map's merge/coin/collision/personal-best sounds.
+  sound-lab.html      — Sound library + wiring board: audition every voice and
+                         assign one per map+event (see "Sound editing" below).
+                         Loads config/sounds.js + config/soundmap.js from the
+                         real project, so it plays exactly what the game plays.
   shot-receiver.py    — Local POST receiver for canvas screenshots from the
                          (often hidden) preview tab — see "Known issues".
 assets/
@@ -202,6 +210,51 @@ round-tripping the shipped chains back to identical values, and by extracting
 `farm/items_combined.png` to within a few px of the hand-made sprites.
 
 ---
+
+## Sound editing
+
+Open **http://localhost:5500/tools/sound-lab.html** (same server as the game).
+
+Sound is split in two, the same way hitboxes are split from items:
+`config/sounds.js` holds **how** each sound is made (`SOUND_LIB`, one voice per
+entry), `config/soundmap.js` holds **which** voice each map plays for each event
+(`SOUND_MAP`). `audio.js` is plumbing — it looks up the active map's voice and
+renders it into `sfxBus`. The lab loads those same two files from the project
+root (via `<base href="../">`), so an audition there IS the game's sound; the
+old lab's hand-copied synth duplicates (which drifted from audio.js) are gone.
+
+- **Wiring board** — a map × event matrix. Every cell is a dropdown of the
+  voices valid for that event plus a ▶ that plays it the way the game fires it
+  (a merge plays the map's whole chain as a combo cascade, a collision plays
+  soft → medium → hard, coins play a full payout shower). Changing a dropdown
+  auditions it immediately. The top **All maps** row is `default`: a map only
+  stores an event when it wants something else, so editing the default row moves
+  every map still inheriting it, and a new event added to `default` applies
+  everywhere at once.
+- **Library** — all voices grouped by event kind, each with its description, the
+  maps currently using it, and audition controls. Pick a **context map** at the
+  top: tier buttons then show that map's real items (name + sprite) and the
+  right tier COUNT, so a 5-tier chain isn't auditioned as 9. **Use for &lt;map&gt;**
+  assigns the voice to the context map; **Use for all maps** sets the default.
+- **Save** rewrites `config/soundmap.js` whole from memory — never
+  read-modify-write, so the `showSaveFilePicker` truncation trap can't bite (see
+  "Sprite editing"). Unsaved picks survive a reload via localStorage and are
+  offered back with a Discard button; **Revert** restores what's on disk.
+  Firefox has no file picker — copy the generated text at the bottom instead.
+
+The Mai-feedback loop: set the context map, play the alternatives, click
+**Use for &lt;map&gt;**, Save, bump the `?v=` in index.html. No code change.
+
+**Adding a NEW sound** is the only part that is still code: add an entry to
+`SOUND_LIB` in config/sounds.js with a `kind` matching one of `SOUND_EVENTS`,
+and it appears in the lab automatically — in every dropdown of that kind and as
+a library card — with no wiring anywhere else. The voice contract is
+`play(a, out, o)` where `o` carries `when` (absolute start time — schedule
+everything from it, never `a.currentTime`), plus `tier`/`tiers` for merges,
+`impact` for collisions, and `index` for coins (the coin's position in the
+current payout shower; audio.js counts the run, so climbing-run voices like
+`coin-pentatonic-run` stay stateless). Connect to `out`, never
+`a.destination` — that is what keeps iOS SFX on the media volume channel.
 
 ## Art prompts for merge-item grids
 
@@ -486,10 +539,11 @@ checkbox on; `sizes: {large, small}` + `defaultSize` to offer a Large-table
 toggle (drop the extra background in `assets/source/<map>/`, point the `sizes`
 paths at it, then trace each size's boundary in the hitbox editor); `coin:` /
 `bag:` to override the
-shared coin/money-bag art with map-specific PNGs (omit to use the shared art);
-a `soundProfile` branch in audio.js (`setSoundProfile`) + `popX`/`clinkX`/
-`coinTickX` synth fns to theme the map's sounds. Melody Lane (music shop) is the
-worked example of all of these.
+shared coin/money-bag art with map-specific PNGs (omit to use the shared art).
+To theme the map's sounds, add a `SOUND_MAP` entry for it in the sound lab (see
+"Sound editing") — a new map with no entry just inherits the default set, so
+this can wait until the map plays well. Melody Lane (music shop) is the worked
+example of all of these.
 
 Temporarily hiding the Large-table toggle (e.g. its art isn't ready): comment
 out the `sizes`/`defaultSize` lines — the checkbox keys off `map.sizes`, and if
