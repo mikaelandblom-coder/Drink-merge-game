@@ -463,8 +463,8 @@ combo windows and coin flights all fast-forward deterministically — hidden
 preview tab or not. No rAF, no real-time waits, no pointer-event simulation.
 
 ```js
-await TT.start('hawaii', {happyHour:true}); // bypass menu; audio muted; rAF OFF
-TT.seed(42);              // deterministic Math.random
+await TT.start('hawaii', {seed:42, happyHour:true}); // bypass menu; muted; rAF OFF
+TT.seed(42);              // (or reseed mid-session — also re-rolls next/queued)
 TT.shoot(210, 100);       // real shot (ghost->solidify, counts for HH arrivals)
 TT.spawn(3, 200, 300);    // or place a body directly ('receipt' kind supported)
 TT.step(120);             // advance exactly 2s of game time, synchronously
@@ -477,6 +477,17 @@ TT.bugLoad(code, i?);     // rebuild the board before shot i (default last)
 await TT.shot('label');   // composite bg+canvas -> tools/shot-receiver.py :5599
 TT.live(true);            // hand back to the real rAF loop to watch in a pane
 ```
+
+**Reproducibility: pass the seed to `TT.start`.** `startGame` → `resetState`
+draws the first two tiers immediately, so a seed installed afterwards used to
+miss them: a cold load opened off the native `Math.random`, a second run in the
+same page off the already-advanced PRNG, and the same script played out
+differently (measured on `paris`, 2026-07-26). `TT.start(map, {seed})` seeds
+before `startGame`, and `TT.seed()` now re-rolls `next`/`queuedTier` through
+`rollFreshTiers()` (game.js) — the same call `resetState` makes, so both
+orderings consume the same two rolls and give the same run. An UNSEEDED run is
+still non-reproducible by design; seed every run you intend to compare. Any new
+code that draws the starting pair must go through `rollFreshTiers()` too.
 
 Notes: high-score saves are stubbed in test mode (localStorage boards stay
 clean); map ids are `hawaii/saigon/kyoto/mage/teddy/melody` (TT.start errors

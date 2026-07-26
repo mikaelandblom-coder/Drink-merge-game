@@ -16,9 +16,11 @@
 //     tools/shot-receiver.py (port 5599) — the known-good hidden-tab capture.
 //
 // Quick tour (see TT.help()):
-//   await TT.start('tikibar', {happyHour:true});  // bypass menu, audio muted,
-//                                                 // rAF loop OFF, sprites loaded
-//   TT.seed(42);                    // deterministic Math.random
+//   await TT.start('tikibar', {seed:42, happyHour:true});  // bypass menu, audio
+//                             // muted, rAF loop OFF, sprites loaded; the seed
+//                             // covers the opening tiers resetState() rolls
+//   TT.seed(42);                    // (or reseed mid-session — re-rolls the
+//                                   //  pending tiers so it matches the above)
 //   TT.shoot(210, 100);             // fire nextTier at physics point (210,100)
 //   TT.spawn(3, 200, 300);          // or place a tier-3 drink directly
 //   TT.step(120);                   // advance exactly 2s of game time
@@ -47,6 +49,7 @@ if (/[?&]test\b/.test(location.search)) {
   const TT = {};
 
   // ---- run control -------------------------------------------------------
+  // opts: {size, combos, happyHour, seed} — seed is TT's own (see below).
   TT.start = function (mapId, opts = {}) {
     const map = MAPS.find(m => m.id === mapId);
     if (!map) throw new Error('unknown map "' + mapId + '" — ids: ' + MAPS.map(m => m.id).join(', '));
@@ -55,6 +58,13 @@ if (/[?&]test\b/.test(location.search)) {
     document.getElementById('over').style.display = 'none';
     document.getElementById('over-peek').style.display = 'none';
     muted = true;                       // no AudioContext churn during tests
+    // Seed BEFORE startGame — resetState() draws the opening tiers, and those
+    // rolls have to be covered or the run isn't reproducible (cold load uses
+    // the native Math.random, a later run in the same page an already advanced
+    // PRNG). installSeed, not TT.seed: resetState does the re-roll itself here,
+    // so a second one would just burn draws #1/#2 and desync this path from
+    // seed-after-start.
+    if (opts.seed !== undefined) installSeed(opts.seed);
     startGame(map, opts);
     running = false;                    // TT.step drives frames, not rAF
     if (bgmEl) bgmEl.pause();
@@ -99,9 +109,9 @@ if (/[?&]test\b/.test(location.search)) {
     return 'reset';
   };
 
-  // Deterministic Math.random (mulberry32) — fixes nextTier rolls, customer
-  // faces and order tiers for reproducible runs.
-  TT.seed = function (s) {
+  // Install a deterministic Math.random (mulberry32) — fixes nextTier rolls,
+  // customer faces and order tiers. Rewinds to draw #1 every time it is called.
+  function installSeed(s) {
     let a = s >>> 0;
     Math.random = function () {
       a |= 0; a = a + 0x6D2B79F5 | 0;
@@ -109,6 +119,19 @@ if (/[?&]test\b/.test(location.search)) {
       t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
       return ((t ^ t >>> 14) >>> 0) / 4294967296;
     };
+  }
+
+  // Seed mid-session. state.nextTier/queuedTier were already drawn by
+  // resetState() during startGame — off whatever RNG was live then (the native
+  // one on a cold load, an advanced PRNG on a later run in the same page), so
+  // reseeding alone left the opening shots irreproducible. Re-rolling through
+  // rollFreshTiers() (game.js — the same call resetState makes) puts them on
+  // draws #1/#2 of the fresh PRNG, exactly where TT.start({seed}) leaves them:
+  // both orderings give the same run. Nothing else in startGame draws from
+  // Math.random — if that changes, this equivalence needs rechecking.
+  TT.seed = function (s) {
+    installSeed(s);
+    rollFreshTiers();
     return 'seeded ' + s;
   };
 
@@ -283,8 +306,8 @@ if (/[?&]test\b/.test(location.search)) {
 
   TT.help = function () {
     return [
-      "await TT.start(mapId, {size, combos, happyHour}) — bypass menu; muted; rAF OFF; waits for sprites",
-      "TT.seed(n)                — deterministic Math.random",
+      "await TT.start(mapId, {seed, size, combos, happyHour}) — bypass menu; muted; rAF OFF; waits for sprites",
+      "TT.seed(n)                — deterministic Math.random; re-rolls the pending tiers",
       "TT.shoot(tx, ty, tier?)   — fire nextTier (or tier) at physics point; returns body id",
       "TT.spawn(tier, x, y, kind='drink'|'receipt') — place a body directly",
       "TT.step(n=1)              — advance n frames (16.67ms virtual each), sync; returns state",
@@ -297,6 +320,7 @@ if (/[?&]test\b/.test(location.search)) {
       "TT.live(true|false)       — hand control back to the real rAF loop",
       "TT.reset()                — fresh board, same run settings",
       "notes: high-score saves are stubbed out; audio muted; game clock is virtual (wall time irrelevant)",
+      "reproducibility: seed via TT.start({seed}) — an unseeded run's first tiers come from the native RNG",
     ];
   };
 
