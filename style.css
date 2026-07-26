@@ -35,7 +35,7 @@ html, body {
      with the content and the lower cards sit on the bare background colour. */
   position: fixed; inset: 0;
   /* Drop welcome-bg.png into assets/images/ to show a background image */
-  background: url('assets/images/bg-main-menu.png') center / cover no-repeat,
+  background: url('assets/images/bg-main-menu.webp') center / cover no-repeat,
               radial-gradient(ellipse at 50% 80%, #2a1a0e 0%, #17100b 100%);
   opacity: 0.45;
   pointer-events: none;
@@ -403,7 +403,7 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
 .xp-medal {
   width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  background: url('assets/images/xp-medal.png') center / contain no-repeat;
+  background: url('assets/images/xp-medal.webp') center / contain no-repeat;
   color: #241708; font-size: 13px; font-weight: bold;
   text-shadow: 0 1px 0 rgba(255, 244, 220, .5);
   /* NO will-change / transform here: iOS WebKit fails to paint the bar's art
@@ -433,7 +433,7 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
   background: linear-gradient(to top, #8a5a1e, #e8b04e 60%, #ffe9a8);
   transition: height .45s cubic-bezier(.3, 1, .4, 1);
 }
-/* Horizontal (default): the plush stitched frame from xp-bar-frame.png,
+/* Horizontal (default): the plush stitched frame from xp-bar-frame.webp,
    consumed as a 9-slice so the end caps stay undistorted while the stitched
    middle tiles. Source is 1394x264 with the open window at x147-1249,
    y70-178; at track height 28px that maps to slice 132/240 at border-width
@@ -450,7 +450,7 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
 #xp-bar.h .xp-track::after {
   content: ''; position: absolute; inset: 0; pointer-events: none;
   border: 14px solid transparent; border-left-width: 25.5px; border-right-width: 25.5px;
-  border-image: url('assets/images/xp-bar-frame.png') 132 240 round;
+  border-image: url('assets/images/xp-bar-frame.webp') 132 240 round;
   /* NO will-change here (see .xp-medal): composited border-image renders
      BLANK on iOS WebKit. This frame must never be promoted to a layer —
      which is also why #xp-fill below animates width, not transform. */

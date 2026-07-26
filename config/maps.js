@@ -3,7 +3,7 @@ const MAPS = [
     id:        'hawaii',
     label:     'Hawaii',
     sublabel:  'Tiki Bar',
-    bg:        'assets/source/tikibar/tiki_bar_background.png',
+    bg:        'assets/images/hawaii/bg.webp',
     bgm:       'assets/audio/bgm.mp3',
     bgmVol:    0.35,
     itemsData: null, // filled after items.js loads (see bottom of this file)
@@ -12,7 +12,7 @@ const MAPS = [
     id:        'saigon',
     label:     'Saigon',
     sublabel:  'Pho House',
-    bg:        'assets/source/saigon/bg-saigon.png',
+    bg:        'assets/images/saigon/bg.webp',
     bgm:       'assets/audio/bgm-saigon.mp3',
     bgmVol:    0.30,
     itemsData: null, // filled below
@@ -23,21 +23,21 @@ const MAPS = [
     id:       'kyoto',
     label:    'Kyoto',
     sublabel: 'Night Market',
-    bg:       'assets/source/kyoto/bg_large.png',
+    bg:       'assets/images/kyoto/bg_large.webp',
     bgm:      'assets/audio/Lantern Alley.mp3',
     bgmVol:   0.35,
     itemsData: null,
     // Two table framings share the same play field / hitboxes; only the
     // backdrop art changes. See the size checkbox in the main menu.
-    sizes:       { large: 'assets/source/kyoto/bg_large.png',
-                   small: 'assets/source/kyoto/bg_small.png' },
+    sizes:       { large: 'assets/images/kyoto/bg_large.webp',
+                   small: 'assets/images/kyoto/bg_small.webp' },
     defaultSize: 'large',
   },
   {
     id:       'mage',
     label:    'Mage Tower',
     sublabel: 'Arcane Sanctum',
-    bg:       'assets/source/mage/bg.png',
+    bg:       'assets/images/mage/bg.webp',
     bgm:      'assets/audio/Arcane Sanctum.mp3',
     bgmVol:   0.35,
     itemsData: null,
@@ -47,20 +47,20 @@ const MAPS = [
     id:       'teddy',
     label:    'Plushie Factory',
     sublabel: 'Made for Mai',
-    bg:       'assets/source/teddy/bg.png',
+    bg:       'assets/images/teddy/bg.webp',
     bgm:      'assets/audio/Stuffed with love.mp3',
     bgmVol:   0.35,
     itemsData: null,
     combos:   true,   // cascade-merge multipliers (like Mage Tower)
-    sizes:       { large: 'assets/source/teddy/bg_large.png',
-                   small: 'assets/source/teddy/bg.png' },
+    sizes:       { large: 'assets/images/teddy/bg_large.webp',
+                   small: 'assets/images/teddy/bg.webp' },
     defaultSize: 'small',
   },
   {
     id:       'melody',
     label:    'Melody Lane',
     sublabel: 'Music Shop',
-    bg:       'assets/source/melody/bg.png',
+    bg:       'assets/images/melody/bg.webp',
     bgm:      'assets/audio/Melody Lane.mp3',   // TODO: add track (or reuse another map's bgm)
     bgmVol:   0.35,
     itemsData: null,
@@ -69,30 +69,31 @@ const MAPS = [
     bag:      'assets/images/melody/bag.png',
     // TEMP: Large-table framing disabled until the large background art exists —
     // omitting `sizes` hides the "Large table" checkbox and plays only the small
-    // framing (bg above). Drop the art in assets/source/melody/bg_large.png and
-    // restore both lines once it's in. (defaultSize was 'small', so the
-    // score/hitbox key stays 'melody' either way — no scores lost by toggling.)
-    // sizes:       { large: 'assets/source/melody/bg_large.png',
-    //                small: 'assets/source/melody/bg.png' },
+    // framing (bg above). Drop the art in assets/source/melody/bg_large.png,
+    // run `python compress_backgrounds.py` to emit the .webp, and restore both
+    // lines once it's in. (defaultSize was 'small', so the score/hitbox key
+    // stays 'melody' either way — no scores lost by toggling.)
+    // sizes:       { large: 'assets/images/melody/bg_large.webp',
+    //                small: 'assets/images/melody/bg.webp' },
     // defaultSize: 'small',
   },
   {
     id:       'paris',
     label:    'Paris',
     sublabel: 'Le Petit Café',
-    bg:       'assets/source/paris/bg_large.png',
+    bg:       'assets/images/paris/bg_large.webp',
     bgm:      'assets/audio/Le Petit Cafe.mp3',
     bgmVol:   0.35,
     itemsData: null,
-    sizes:       { large: 'assets/source/paris/bg_large.png',
-                   small: 'assets/source/paris/bg_small.png' },
+    sizes:       { large: 'assets/images/paris/bg_large.webp',
+                   small: 'assets/images/paris/bg_small.webp' },
     defaultSize: 'large',
   },
   {
     id:       'farm',
     label:    'Farm',
     sublabel: 'Sprout Valley',   // working name, not locked (see memory/design-farm-map)
-    bg:       'assets/source/farm/bg_large.png',
+    bg:       'assets/images/farm/bg_large.webp',
     bgm:      'assets/audio/Sprout Valley.mp3',  // TODO: add Suno track (Stardew-vibe
                                                  // folk loop). Missing file just 404s — no crash.
     bgmVol:   0.35,
@@ -103,9 +104,10 @@ const MAPS = [
     // "Large table" checkbox and plays `bg` above. defaultSize is intended
     // 'large', and since the default size keeps the plain map-id key ('farm'),
     // the boundary you trace NOW is the large boundary and is reused when sizes
-    // is restored. Drop assets/source/farm/bg_small.png in, then uncomment:
-    // sizes:       { large: 'assets/source/farm/bg_large.png',
-    //                small: 'assets/source/farm/bg_small.png' },
+    // is restored. Drop assets/source/farm/bg_small.png in, run
+    // `python compress_backgrounds.py` to emit the .webp, then uncomment:
+    // sizes:       { large: 'assets/images/farm/bg_large.webp',
+    //                small: 'assets/images/farm/bg_small.webp' },
     // defaultSize: 'large',
   },
 ];
