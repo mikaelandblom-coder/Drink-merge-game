@@ -496,13 +496,13 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
 .devtools-links a:hover { color: var(--brass); border-color: #5a4630; }
 
 /* Backup & transfer panel on the welcome screen */
-#backup-box { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 10px; }
-#backup-toggle {
+#backup-box, #credits-box { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+#backup-toggle, #credits-toggle {
   background: none; border: 1px solid #3d2d1a; color: #9a7a52;
   font-family: inherit; font-size: 12px; letter-spacing: .05em;
   padding: 7px 18px; border-radius: 999px; cursor: pointer;
 }
-#backup-toggle:hover { color: var(--brass); border-color: #5a4630; }
+#backup-toggle:hover, #credits-toggle:hover { color: var(--brass); border-color: #5a4630; }
 #backup-panel {
   width: 100%; display: flex; flex-direction: column; gap: 10px;
   background: rgba(10, 6, 3, .82); border: 1px solid #3d2d1a;
@@ -528,6 +528,26 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
 #backup-import { background: transparent; border: 1px solid #5a4630; color: var(--brass); }
 #backup-status { font-size: 11px; min-height: 14px; color: var(--brass); }
 #backup-status.err { color: #ff8a8a; }
+
+/* Credits panel — shares the toggle button + card look with Backup & transfer.
+   The explicit [hidden] rule is REQUIRED, not belt-and-braces: the UA's
+   [hidden]{display:none} has the same weight as this id's display:flex and
+   loses, so the panel would render open on every load. */
+#credits-panel {
+  width: 100%; display: flex; flex-direction: column; gap: 10px;
+  background: rgba(10, 6, 3, .82); border: 1px solid #3d2d1a;
+  border-radius: 14px; padding: 14px 16px;
+}
+#credits-panel[hidden] { display: none; }
+.credits-list { display: flex; flex-direction: column; gap: 9px; }
+/* Label left, credit right — wraps to two lines on narrow phones rather than
+   squeezing the name, since the labels are long. */
+.credit-row {
+  display: flex; flex-wrap: wrap; justify-content: space-between;
+  align-items: baseline; gap: 4px 12px;
+}
+.credit-row dt { font-size: 11px; line-height: 1.4; color: #9a7a52; }
+.credit-row dd { font-size: 12px; color: var(--brass); }
 
 @media (prefers-reduced-motion: reduce) { .shake { animation: none !important; } }
 .shake { animation: shk .18s; }

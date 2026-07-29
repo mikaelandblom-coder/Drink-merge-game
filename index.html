@@ -50,6 +50,33 @@
         <div id="backup-status"></div>
       </div>
     </div>
+    <!-- Credits: same quiet toggle + collapsible panel pattern as Backup &
+         transfer above, so it adds a line to the menu rather than a screen. -->
+    <div id="credits-box">
+      <button id="credits-toggle">Credits</button>
+      <div id="credits-panel" hidden>
+        <dl class="credits-list">
+          <div class="credit-row">
+            <dt>Soundtracks / background music</dt><dd>Suno</dd>
+          </div>
+          <div class="credit-row">
+            <dt>Art assets</dt><dd>ChatGPT</dd>
+          </div>
+          <div class="credit-row">
+            <dt>Code and documentation</dt><dd>Claude</dd>
+          </div>
+          <div class="credit-row">
+            <dt>Web hosting and version control</dt><dd>GitHub</dd>
+          </div>
+          <div class="credit-row">
+            <dt>Physics engine</dt><dd>Matter.js</dd>
+          </div>
+          <div class="credit-row">
+            <dt>Ideas, testing, design, review, etc</dt><dd>Mikael Andblom</dd>
+          </div>
+        </dl>
+      </div>
+    </div>
     <!-- Dev tools. Rendered ONLY on localhost or with ?dev=1 (see welcome.js) —
          tools/ ships with the repo, so an ungated link would show up on the
          deployed site for Mai, where the editors are noise at best. -->

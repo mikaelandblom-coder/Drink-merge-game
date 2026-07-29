@@ -244,6 +244,16 @@ function wireBackup() {
 }
 wireBackup();
 
+// ---------- Credits ----------
+// Static HTML outside #map-cards, so wired ONCE here like wireBackup().
+function wireCredits() {
+  const panel = document.getElementById('credits-panel');
+  document.getElementById('credits-toggle').onclick = () => {
+    panel.hidden = !panel.hidden;
+  };
+}
+wireCredits();
+
 // Dev tools row: only where Mikael is actually developing. The tools live in
 // the repo, so they deploy alongside the game — this gate, not their absence,
 // is what keeps them off Mai's menu. `?dev=1` is the escape hatch for reaching
