@@ -54,9 +54,9 @@ TARGETS = [
     ('assets/source/farm/bg_small.png',               'assets/images/farm/bg_small.webp',   BACKDROP_Q),
 
     # --- site chrome (style.css url(...)) ---
-    ('assets/images/bg-main-menu.png',  'assets/images/bg-main-menu.webp',  BACKDROP_Q),
-    ('assets/images/xp-bar-frame.png',  'assets/images/xp-bar-frame.webp',  CHROME_Q),
-    ('assets/images/xp-medal.png',      'assets/images/xp-medal.webp',      CHROME_Q),
+    ('assets/source/chrome/bg-main-menu.png', 'assets/images/bg-main-menu.webp',  BACKDROP_Q),
+    ('assets/source/chrome/xp-bar-frame.png', 'assets/images/xp-bar-frame.webp',  CHROME_Q),
+    ('assets/source/chrome/xp-medal.png',     'assets/images/xp-medal.webp',      CHROME_Q),
 ]
 
 

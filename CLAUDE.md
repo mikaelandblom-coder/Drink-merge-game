@@ -33,7 +33,7 @@ config/sounds.js      — SOUND_LIB: every synth voice in the game, one entry ea
 config/soundmap.js    — SOUND_MAP: WHICH voice each map plays for each event
                          (merge/collide/coin/shoot/gameOver/best/levelUp), over a
                          `default` row every map inherits. Pure data, generated
-                         by tools/sound-lab.html — see "Sound editing" below.
+                         by tools/sound-lab.html — see tools/README.md.
 audio.js              — Audio PLUMBING only: output routing (incl. the iOS
                          workarounds), mute/music toggles, BGM, and a thin
                          dispatch from a game event to the active map's voice
@@ -58,11 +58,14 @@ compress_audio.py     — BGM mp3 → 112 kbps (ran 2026-07-26: 40.8→24.4 MB).
                          ffmpeg (these files are VBR, so the first frame header
                          lies); re-encoding needs ffmpeg. Idempotent.
 tools/
-  hitbox-editor.html  — Visual hitbox editor (see "Hitbox editing" below)
+  README.md           — Manuals for the three editors below (hitbox, sprite,
+                         sound). READ THE RELEVANT SECTION before editing a tool
+                         or hand-touching config/hitboxes.js or config/items.js.
+  hitbox-editor.html  — Visual hitbox editor (manual: tools/README.md)
   sprite-editor.html  — Visual sprite prep: AI sheet -> individual PNGs, then
-                         PNGs -> an items.js tier chain (see "Sprite editing")
+                         PNGs -> an items.js tier chain (manual: tools/README.md)
   sound-lab.html      — Sound library + wiring board: audition every voice and
-                         assign one per map+event (see "Sound editing" below).
+                         assign one per map+event (manual: tools/README.md).
                          Loads config/sounds.js + config/soundmap.js from the
                          real project, so it plays exactly what the game plays.
   tool.css            — Shared look for ALL tools: tokens (--bg/--panel/--accent
@@ -98,6 +101,10 @@ assets/
                          into images/<map>/ and config/maps.js `bg:` points there
                          (see "Bandwidth" below).
     _archive/         — Superseded source art, kept for reference
+    chrome/           — Masters for the site chrome WebPs (bg-main-menu,
+                         xp-bar-frame, xp-medal). They used to sit in images/
+                         next to their own output, so 3.2MB of PNG deployed for
+                         nothing; moved 2026-07-29.
     shared/           — coins_and_bag.png (shared across all maps)
     tikibar/          — Per-map source images
   images/             — Processed output used by the game (git-committed).
@@ -111,308 +118,26 @@ assets/
                         (favicon-32, icon-192, apple-touch-icon, bg-main-menu,
                         xp-*) deliberately stays at the top level —
                         apple-touch-icon is Mai's iPad home-screen icon and
-                        moving it risks breaking that for no gain.
+                        moving it risks breaking that for no gain. Only the
+                        SERVED form lives here: the icons (PNG, referenced by
+                        index.html) and the chrome WebPs. Their PNG masters are
+                        in source/chrome/.
 ```
 
 ---
 
-## Hitbox editing
+## Dev tools — hitbox editor, sprite editor, sound lab
 
-Open **http://localhost:5500/tools/hitbox-editor.html** (same server as the game).
+Their manuals live in **[tools/README.md](tools/README.md)** — how each one
+works, what it owns, and the traps it exists to avoid. **Read the relevant
+section there before editing anything under `tools/`, and before hand-editing
+`config/hitboxes.js` or `config/items.js`** (both are tool-generated).
 
-Pick a map from the top **Map** dropdown, then choose **Background** or
-**Merge items**. The dropdown also has a map-less **"Happy Hour — Receipts"**
-entry for the shared receipt chain: it opens the item tab directly (the
-Background tab is disabled — receipts have no boundary of their own) and its
-overrides save to `ITEM_HITBOXES` like any other item.
-- **Background tab:** edit the boundary as a Catmull-Rom spline — drag knots,
-  double-click the curve to add a knot, double-click a knot (or Del) to remove.
-  Three draggable horizontal lines: **horizon** (red), **free-shot line**
-  (green), **danger line** (white, game-over threshold — saved as `dangerLine`
-  per boundary; never dragged = game default, physics H-150). The nearest line
-  to the pointer wins the grab; zoom in to separate close lines.
-  The magenta shapes are the actual perspective-corrected physics walls,
-  regenerated live. "Enter test mode" runs real Matter.js physics: click to
-  shoot balls at the boundary exactly like in the game. Size-variant maps show a
-  **framing** selector here (one boundary per framing).
-- **Merge items tab:** shows **all of the map's items at once** at true relative
-  scale, so hitbox sizes are comparable across tiers. Click an item to select;
-  drag its circle **edge/square** to resize (bodyRatio) or **inside** to move
-  (dx/dy offset). Scroll to **zoom** toward the cursor, drag empty space to
-  **pan**, double-click to reset zoom (needed to tune small circles precisely).
-  Each item can instead use a **capsule** hitbox (see below) via the
-  **Switch to capsule / circle** button — for non-circular art where a circle
-  leaves too much sprite uncovered (drinks visually overlap when packed).
-- **Save:** writes `config/hitboxes.js` (File System API asks for the file once,
-  then overwrites on every save). Reload the game tab to play with the result.
-- **Unsaved work:** nothing is persisted until you export, so the sidebar shows a
-  `saved` / `unsaved changes` pill and leaving the page prompts for confirmation.
-  Every edit funnels through `changed()` (boundary) or `pushItemHB()` (items) —
-  route any NEW edit path through one of those, or the guard won't see it. All
-  three exports (Save / Download / Copy) clear it, since each produces the
-  complete file; a failed clipboard write correctly leaves it lit.
-
-**Capsule (stadium) item hitboxes.** A second per-item primitive alongside the
-circle, for elongated/non-circular art (guitars, violins, saxes). Toggle it with
-the **Switch to capsule** button in the item tab, then:
-- **RIGHT** square handle = length, **TOP** square = thickness, **knob on the
-  stalk** = rotation, drag inside = move (dx/dy, shared with the circle).
-- Saved to `ITEM_HITBOXES[sprite]` as
-  `{ shape:'capsule', w, h, rot?, dx?, dy? }` — `w`/`h` are half-extent fractions
-  of sprite height (same scaling as `bodyRatio`, so a square capsule ≈ the
-  equivalent circle); `rot` is radians (omitted when 0).
-- In-game (`makeDrink`) it is a **chamfered rectangle locked at its authored
-  angle** (`inertia: Infinity`) — it never spins, so the upright sprite never
-  drifts from its body (`drawDrink` ignores `body.angle` — see below). `rot`
-  only tilts the HITBOX to follow diagonal art; the sprite is NOT rotated.
-- `physR` for a capsule is its **vertical projection** (`|hw·sinθ|+|hh·cosθ|`),
-  so the danger-line / shadow keep working. The stadium shadow in `render.js` is
-  orientation- and rotation-aware.
-- Melody Lane is the worked example — every instrument uses a capsule, several
-  rotated. Existing circle items are untouched (capsule is opt-in; no capsule =
-  `item.cap` is null and the old `Bodies.circle` path runs).
-
-The game consumes hitboxes via `MAP_HITBOXES` / `ITEM_HITBOXES` in
-`config/hitboxes.js`; the spline knots are stored alongside the generated walls
-so the editor can always re-edit from where you left off.
-
-**Size variants in the editor:** maps with a `sizes` field (see "Menu options"
-below) appear once per framing in the dropdown, e.g. "Kyoto — Large" and
-"Kyoto — Small". Each loads its own background and edits its own boundary under
-a distinct `MAP_HITBOXES` key (`hitboxKey()` in maps.js): the default size keeps
-the plain map id (`kyoto`), the other size gets a suffix (`kyoto__small`). Until
-a size is traced it falls back to the map's base boundary — so trace + save each
-new size once. Item-tab targets are per-item and unaffected by size.
+`tools/tool.css`, `tools/tool-handles.js` and `tools/tool-nav.js` are shared by
+all three; all three set `<base href="../">`, so every path they reference must
+be written relative to the PROJECT ROOT.
 
 ---
-
-## Sprite editing
-
-Open **http://localhost:5500/tools/sprite-editor.html** (same server as the game).
-Two INDEPENDENT modules that share only the folder of PNGs on disk — so
-multiple AI sheets need no "combine" step: extract each one, then the tier
-chain picks freely across everything in the folder.
-
-**1 · Extract** — load one AI sheet → individual transparent PNGs.
-Everything renders on a **checkerboard** with an alpha readout (`% fully
-transparent`), which is the standing antidote to the Read-preview trap where a
-good transparent sheet looks like it has a painted backdrop. Cells come from
-the transparent gutters (a live JS port of `split_alpha_grid`), so grid drift
-is fine; the sliders (gutter alpha / min px / merge gap / min band) tune band
-detection when glow bridges a gutter. **Rows are found over the whole sheet,
-then columns are found INSIDE each row band** — never a second full-height
-scan. Two neighbours can touch in ONE row and still leave a clean gutter in
-every other row; a full-height column profile then sees no gutter anywhere and
-fuses those columns into one double-wide cell, with no slider setting that can
-recover it (`shared/customers 2.png`, 2026-07-26 — its column gutter sits at
-x654-685 in row 1 but x697-726 in row 3, so the union is solid). A row-local
-scan is always at least as fine as the global one, so it only ever splits more;
-the readout says `3 cols × 4 rows` when every row agrees and
-`4 rows, 3/3/3/2 cols` when they don't. The mirror case — items JOINED across a
-row by a shared prop (`shared/customers 3.png`, where a wooden shelf runs under
-all three) — is not a detection bug and no slider fixes it: regenerate the art
-with the "generous gaps, nothing touches" clause. Each item is then isolated by
-**connected component flood-fill**, not by rigid grid lines — the fix for a
-neighbour's stem poking into the cell. "keep parts ≥" is the floor for
-genuinely separate pieces (a violin bow ≈ 13% of the item, stray specks ≈ 1%);
-rejected blobs are excluded from the feather pass so they can't reappear.
-"Strip baked shadow" raises the core threshold to 128 (the game draws its own
-`SHADOW_SPRITE`, so a baked one double-shadows). Save writes the PNGs straight
-into a folder you pick once.
-
-**Saving downscales by default (built 2026-07-28).** A **max height** control in
-the Save fieldset (default **256 px**, `0` = source resolution) is applied at
-save AND download time by `outCanvas()`, and each cell's readout shows the
-resulting size (`1125×1026 → 281×256`) so an oversized save is visible before it
-lands. Measured on `farm/pumpkin_improved.png`: 1658 KB → 124 KB with alpha
-intact. It downscales by **repeated halving** before the final step — a single
-big `drawImage` jump samples too few source pixels and aliases the feathered
-edges the isolate pass just built.
-
-This was the standing TODO, and the bug it prevents is not hypothetical: a
-1024×1536 AI sheet yields ~420–460 px sprites for art the game draws at ~108 px
-(customers) or `r*2.4` ≈ 36–170 px (items), i.e. ~4× oversampled at ~265 KB
-each — how the Happy Hour cast reached 4.0 MB on 2026-07-26 (see "Menu options →
-Happy Hour"). The right size is per-USE, not per-sheet (a customer draws far
-bigger than a tier-0 item), so it stays a control rather than a constant — but
-it defaults ON, because the oversized case is the one that happens by accident.
-
-**2 · Tier chain** — a **set picker** mirroring the hitbox editor's map
-dropdown: one row per map (same labels, same order, built from `MAPS` by
-matching `itemsData` BY IDENTITY against the `*_ITEMS` consts, so no map-id →
-const-name guessing), then the two map-less shared sets — **Happy Hour —
-Receipts** and **Happy Hour — Customers** — then "— new chain —", the only entry
-that asks for a const name. Picking a set loads it AND jumps the sprite folder to
-that set's art. The old raw `load existing` / `const name` / `sprite path` inputs
-are gone: a map knows all three. The sprite root is now the constant
-`SPRITE_ROOT` (`assets/images/`).
-
-Pick **assets/images/** as the root once and browse it as a folder tree (📁 to
-descend, ↰ or the breadcrumb to go back up), since the sprite folder is
-map-based. A tier stores its path RELATIVE to the root (`farm/seed.png`), so one
-chain can mix a map's items with something from `shared/`. Thumbnails are read
-through the DIRECTORY HANDLE (blob URLs), never fetched from `SPRITE_ROOT` +
-name — picking a map folder as the root used to 404 every one of them, and an
-`<img>` that fails inside a `.checker` tile paints NOTHING, so the library went
-silently blank-checkerboard.
-
-**Sprite paths are resolved and then verified — the tool can no longer emit a
-path that 404s** (2026-07-28). Two independent guards, because a wrong
-`sprite:` path is *invisible*: every draw site gates on
-`img.complete && img.naturalWidth`, so the item just doesn't appear, in the game
-AND in the hitbox editor.
-1. **Root resolution.** Picking `assets/images/farm/` instead of
-   `assets/images/` used to emit `assets/images/seed.png` for a file at
-   `assets/images/farm/seed.png`. `resolveRootPrefix()` HEAD-probes the
-   server with a PNG it can see through the handle and keeps the prefix that
-   answers 200, so `relPath()` is right whichever folder was picked
-   (`libRootPrefix`, `''` or `'farm/'`). A folder that isn't served under
-   `assets/images/` at all is called out instead of guessed. On `file://` there
-   is no server to probe and a handle cannot see ABOVE the folder that was
-   picked, so the prefix is inferred from the folder's own NAME (`images` = no
-   prefix, anything else = one level down, `rootState:'inferred'`). A wrong
-   guess is recoverable rather than silent — guard 2 re-checks every path.
-2. **Write-time validation.** `pathGuard()` checks every emitted path before
-   Write / Copy / Download, via `spriteExists()`. A path it can locate by
-   basename under the picked root is **corrected in memory and the write is
-   still refused**, so the repaired source can be read before it hits disk; one
-   it can't is a hard refusal.
-
-`spriteExists()` asks the SERVER first and the picked FOLDER second, and the
-order is deliberate: over http the server is ground truth for what the game will
-actually fetch, so localhost behaviour is exactly what it was before the folder
-fallback existed. The handle answers only when fetch can't — which is what makes
-the guard work from `file://`, where it used to warn and write anyway. It
-degrades to a warning ONLY when neither can answer (no folder picked *and* no
-server), so Firefox's copy-the-text path still works. Verified all four states by
-stubbing `fetch` to throw (2026-07-29).
-
-**Picked folders are REMEMBERED across reloads** (2026-07-29), via the shared
-`ToolHandles` store in `tools/tool-handles.js` — see that file for why a handle
-can never come from a path. This tool remembers three: `libRoot` (the
-assets/images/ tree), the extract tab's save folder, and `config/items.js`. On
-load it adopts a remembered handle SILENTLY when the browser still reports
-`queryPermission === 'granted'`, and the library opens where it was, with the
-current set's folder already showing.
-
-Permission is the part a click still buys. Chromium drops file-system permission
-when the browser restarts, and `requestPermission()` requires user activation —
-so it can only run from an event handler, never at load. When a handle is
-remembered but not granted, "Choose assets/images/…" relabels to **"Reconnect
-images/…"**: one click, no walking the tree. `forget()` drops a handle that
-turns out to be unusable (permission refused, or the picked file isn't items.js)
-— without it the tool would recall the same bad handle forever and never let a
-different one be picked.
-
-**The hitbox editor and sound lab remember their save file the same way**
-(`hitbox:file` → config/hitboxes.js, `sound:file` → config/soundmap.js). Both
-funnel Save through an `ensureSaveFile()` that tries the live handle, then the
-remembered one, then the picker — so the usual Save is one click with no picker
-at all, and at worst one permission prompt after a browser restart. Each Save
-button's tooltip says at load which of those it will be. This also means
-`showSaveFilePicker` runs far less often, which matters beyond convenience: that
-picker TRUNCATES its target the moment it is dismissed (see the trap below).
-Harmless for these two — they never read, they always write a complete file from
-memory — but fewer invocations is strictly safer.
-
-Pick which PNG is which tier, drag to reorder, then write
-`config/items.js`. `r` belongs to the SLOT, not the item, so a drag re-assigns
-the chain's existing r values smallest→largest — a hand-tuned ladder survives a
-reorder. "Reset r ladder" regenerates a plain geometric 15→71 ramp instead, so
-it is for NEW chains: the shipped maps are hand-tuned and it will retune them.
-`vis` is the per-item rescale
-(visual only, physics untouched) and auto-fills to area parity
-`sqrt(0.75/aspect)`; a ⚠ appears when an item would draw under 45% of its
-tier's footprint, mirroring the load-time guardrail in items.js. `glass`/`liq`
-fallback colours are sampled from the art.
-
-**Cast mode — Happy Hour customers.** Picking **Happy Hour — Customers** edits
-`CUSTOMER_SPRITES` (config/items.js): a plain sprite list, not a tier chain, so
-every tier-only control (r, vis, the r-ladder / auto-vis buttons, the ⚠) is
-hidden and rows show the sprite path instead of an editable name. Add faces by
-clicking art in `shared/`, drag to reorder, Write. **The cast SIZE is what
-matters** — the game picks a face at random per arrival, so more faces = more
-variety, and nothing else needs editing (see "Happy Hour" below). New faces come
-from the Extract tab: run a customer sheet through it, save into
-`assets/images/shared/`, then add them here. Writing requires the existing
-`const CUSTOMER_SPRITES` block — the "append a new chain" fallback would
-register a sprite list in the physR pre-load spread, so cast mode refuses it.
-
-Note: a write-back normalises `bodyRatio:0.80` to `0.8` (the emitter drops
-trailing zeros). Values round-trip exactly; the diff is cosmetic but touches
-lines you didn't edit.
-
-Two things it deliberately does NOT own:
-- **bodyRatio** — `config/hitboxes.js` is the authority (the hitbox editor
-  writes it, and items.js overwrites the in-memory value from it at load). The
-  tool re-reads the AUTHORED literal out of items.js source when loading a
-  chain, so a write-back can never launder a hitbox override into items.js.
-  New items get a 0.85 placeholder to tune in the hitbox editor afterwards.
-- **process_assets.py** — still the path for the legacy chroma-key maps and
-  shared art. For transparent grids (the standard) the editor replaces it.
-
-**`showSaveFilePicker` TRUNCATES the file you pick, at pick time.** Any tool
-that needs to READ-MODIFY-WRITE an existing file must use
-`showOpenFilePicker` + `requestPermission({mode:'readwrite'})` instead — with
-the save picker the file is already zero bytes by the time you read it, so
-there is nothing to merge into. This wiped `config/items.js` on 2026-07-26
-(recovered from git + re-applying the path migration). The hitbox editor may
-keep using the save picker: it never reads, it always writes a complete file
-from in-memory state. The sprite editor also refuses to write a result much
-smaller than the file it read, as a backstop.
-
-Writing is surgical: it replaces only the one `const X_ITEMS = [ … ]` block, or
-appends a new chain and registers it in the pre-load spread; CRLF and authored
-numeric precision (`bodyRatio:0.634` stays 0.634) are preserved. Verified by
-round-tripping the shipped chains back to identical values, and by extracting
-`farm/items_combined.png` to within a few px of the hand-made sprites.
-
----
-
-## Sound editing
-
-Open **http://localhost:5500/tools/sound-lab.html** (same server as the game).
-
-Sound is split in two, the same way hitboxes are split from items:
-`config/sounds.js` holds **how** each sound is made (`SOUND_LIB`, one voice per
-entry), `config/soundmap.js` holds **which** voice each map plays for each event
-(`SOUND_MAP`). `audio.js` is plumbing — it looks up the active map's voice and
-renders it into `sfxBus`. The lab loads those same two files from the project
-root (via `<base href="../">`), so an audition there IS the game's sound; the
-old lab's hand-copied synth duplicates (which drifted from audio.js) are gone.
-
-- **Wiring board** — a map × event matrix. Every cell is a dropdown of the
-  voices valid for that event plus a ▶ that plays it the way the game fires it
-  (a merge plays the map's whole chain as a combo cascade, a collision plays
-  soft → medium → hard, coins play a full payout shower). Changing a dropdown
-  auditions it immediately. The top **All maps** row is `default`: a map only
-  stores an event when it wants something else, so editing the default row moves
-  every map still inheriting it, and a new event added to `default` applies
-  everywhere at once.
-- **Library** — all voices grouped by event kind, each with its description, the
-  maps currently using it, and audition controls. Pick a **context map** at the
-  top: tier buttons then show that map's real items (name + sprite) and the
-  right tier COUNT, so a 5-tier chain isn't auditioned as 9. **Use for &lt;map&gt;**
-  assigns the voice to the context map; **Use for all maps** sets the default.
-- **Save** rewrites `config/soundmap.js` whole from memory — never
-  read-modify-write, so the `showSaveFilePicker` truncation trap can't bite (see
-  "Sprite editing"). Unsaved picks survive a reload via localStorage and are
-  offered back with a Discard button; **Revert** restores what's on disk.
-  Firefox has no file picker — copy the generated text at the bottom instead.
-
-The Mai-feedback loop: set the context map, play the alternatives, click
-**Use for &lt;map&gt;**, Save, bump the `?v=` in index.html. No code change.
-
-**Adding a NEW sound** is the only part that is still code: add an entry to
-`SOUND_LIB` in config/sounds.js with a `kind` matching one of `SOUND_EVENTS`,
-and it appears in the lab automatically — in every dropdown of that kind and as
-a library card — with no wiring anywhere else. The voice contract is
-`play(a, out, o)` where `o` carries `when` (absolute start time — schedule
-everything from it, never `a.currentTime`), plus `tier`/`tiers` for merges,
-`impact` for collisions, and `index` for coins (the coin's position in the
-current payout shower; audio.js counts the run, so climbing-run voices like
-`coin-pentatonic-run` stay stateless). Connect to `out`, never
-`a.destination` — that is what keeps iOS SFX on the media volume channel.
 
 ## Art prompts for merge-item grids
 
@@ -501,29 +226,24 @@ in localStorage and passed into `startGame(map, {size, combos, happyHour})`:
   so a cast of ≤3 allows repeats rather than spinning forever. The cast went
   **9 → 18** on 2026-07-26 (a second AI sheet through the sprite editor).
 
-  **TODO — rename the new customer files (deliberately deferred past this
-  deploy).** Nine faces shipped under the sprite editor's placeholder names:
-  `customer-11/22/33/44/55/66/7/9.png` and `customer-viking.png`, against the
-  original nine's descriptive `customer-granny/girl/sailor/…`. They should
-  become descriptive too (`customer-fox`, `customer-biker`, `customer-elf`, …).
-  Renaming is two edits — the file on disk and its line in `CUSTOMER_SPRITES` —
-  and unlike item sprites there is NO hidden coupling: `ITEM_HITBOXES` is keyed
-  by sprite path, but customers are not items and have no hitbox entry, so
-  nothing detaches. Do it in one pass after these assets are live. Two things to
-  fold into the same pass:
-  - **Five extracted PNGs are on disk but not in the cast** (`customer-3/4/5/6`
-    and the current `customer-fox`, ~1.2 MB) — the ones that didn't make the
-    cut. Delete them rather than committing dead weight. NOTE the name clash:
-    `customer-fox.png` today is an UNUSED reject; the fox that IS in the cast is
-    `customer-11.png`, so the rename has to free that name first.
-  - **The new art is oversized.** It draws at `min(108, HORIZON*0.46)` px tall
-    but ships at 419–460 px — ~4× oversampled, ~265 KB each. The cast is now
-    4.0 MB (was 1.6 MB) and `loadCustomerSprites()` fetches ALL of it when a
-    Happy Hour run starts, so an HH session went from ~6.4 MB to ~8.8 MB (see
-    "Bandwidth"). Downscaling the cast to ~220 px tall would give back most of
-    that with nothing visible at the drawn size — the sprite editor's **max
-    height** control (see "Sprite editing") now does this on save, so re-saving
-    the sheet through it is the fix.
+  The nine new faces were renamed off the sprite editor's placeholder names
+  (`customer-11/22/33/44/55/66/7/9`) to descriptive ones matching the original
+  nine — `customer-fox/shopper/biker/kid/sensei/dancer/elf/gamer`, plus
+  `customer-viking`, which already was one (2026-07-29). Renaming a face is two
+  edits, the file on disk and its line in `CUSTOMER_SPRITES`: unlike item
+  sprites there is NO hidden coupling, since `ITEM_HITBOXES` is keyed by sprite
+  path but customers are not items and have no hitbox entry. The five extracted
+  PNGs that never made the cast were deleted in the same pass.
+
+  **Cast sprites are capped at 256 px tall.** They draw at
+  `min(108, HORIZON*0.46)` px, and the second sheet shipped at 419–460 px —
+  ~4× oversampled at ~265 KB each, which took the cast to 4.0 MB (from 1.6 MB)
+  and an HH session from ~6.4 MB to ~8.8 MB, since `loadCustomerSprites()`
+  fetches ALL of it when a Happy Hour run starts. Downscaled 2026-07-29:
+  those nine went 2.4 MB → 872 KB with nothing visible at the drawn size. Save
+  new faces through the sprite editor's **max height** control (see "Sprite
+  editing") so this doesn't recur — it defaults to 256 px, which is exactly
+  right for this use.
 
 **Cool mode (30 fps cap) — built but SHELVED.** The welcome-screen checkbox is
 commented out in index.html (with its wiring in welcome.js), and startGame pins
@@ -541,9 +261,11 @@ Each map has its own level; the **total player level** (welcome header) is the
 sum of map levels. Per-level cost doubles every 7 levels:
 `cost(n→n+1) = round(XP_A · 2^(n/7))`, no cap. **Only raw XP is stored**
 (`mm_xp_v1` in localStorage, one JSON blob) — levels are always derived, so
-`XP_A` can be retuned without migration. `XP_A = 60` is PROVISIONAL: the
-game-over "+N XP" line is literally shots-per-run, so calibrate it from a few
-real runs (target: level 1 after the first normal run).
+`XP_A` can be retuned without migration — but **`XP_A = 60` is SETTLED, not a
+placeholder**: Mikael confirmed it on 2026-07-17 after hands-on play ("keep this
+level of tuning"). Don't retune it unless he asks. (Note for anyone tempted to
+measure instead: a random-shot bot never dies, so auto-play cannot tell you a
+real run length.)
 
 - **In-game XP bar** is a DOM overlay (like `#stage-bg`) — never draw it on
   the canvas. Orientation flips via `XP_BAR_ORIENT` in ui.js; horizontal
@@ -651,7 +373,7 @@ changes nothing here) blocks `fetch` on `file://` at any privilege level, so
 anything that needed the network had to grow a File System Access path instead:
 
 - **Sprite paths are verified through the picked FOLDER** when fetch can't
-  answer — see `spriteExists()` under "Sprite editing". This is the one that
+  answer — see `spriteExists()` in tools/README.md. This is the one that
   mattered: the write-time guard used to warn and write anyway from disk.
 - **`config/items.js` is read through a handle.** `authoredBodyRatios()` still
   prefers `fetch`; from disk, click **items.js…** next to the set picker to hand
@@ -823,7 +545,7 @@ toggle (drop the extra background master in `assets/source/<map>/`, add it to
 `bag:` to override the
 shared coin/money-bag art with map-specific PNGs (omit to use the shared art).
 To theme the map's sounds, add a `SOUND_MAP` entry for it in the sound lab (see
-"Sound editing") — a new map with no entry just inherits the default set, so
+tools/README.md) — a new map with no entry just inherits the default set, so
 this can wait until the map plays well. Melody Lane (music shop) is the worked
 example of all of these.
 
@@ -848,8 +570,9 @@ Edit `config/items.js`. Each item:
 `physR` is computed automatically: `r * 2.4 * bodyRatio / 2 * 0.88`
 
 For non-circular art, leave `bodyRatio` as a rough default and give the item a
-**capsule** hitbox in the editor instead (see "Capsule (stadium) item hitboxes"
-under Hitbox editing). The capsule params live in `config/hitboxes.js`, not here.
+**capsule** hitbox in the editor instead (see "Capsule (stadium) item
+hitboxes" in tools/README.md). The capsule params live in
+`config/hitboxes.js`, not here.
 
 **`vis`** scales only the DRAWN sprite (in drawDrink + the editor + the next
 preview), not the physics body. Sprites are sized by HEIGHT (`r*2.4`), so wide

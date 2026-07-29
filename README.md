@@ -7,7 +7,7 @@ let the table overflow.
 **▶ Play it in your browser:** https://mikaelandblom-coder.github.io/Drink-merge-game/
 
 <p align="center">
-  <img src="assets/images/bg-main-menu.png" alt="Mixology Merge main menu art" width="480">
+  <img src="assets/images/bg-main-menu.webp" alt="Mixology Merge main menu art" width="480">
 </p>
 
 ## How to play
