@@ -72,6 +72,15 @@ tools/
                          <style> should hold only its LAYOUT and its own
                          components. Signal colours are deliberately NOT themed —
                          see the comment at the top of the file.
+  tool-handles.js     — Shared remembered-handle store for ALL tools: `ToolHandles`
+                         .keep/.recall/.forget/.ready over one IndexedDB db
+                         (`mm_tool_handles_v1`), keys namespaced per tool
+                         (`sprite:libRoot`, `hitbox:file`, `sound:file`). A File
+                         System Access handle can never be built from a path —
+                         only from a gesture on a picker — but handles ARE
+                         structured-cloneable, so this makes a pick last across
+                         reloads. Every op swallows its errors: no IndexedDB
+                         just means the tools prompt like they always did.
   tool-nav.js         — Tool switcher. A tool marks its mount point with
                          `data-toolnav="<id>"` and gets pills for the others,
                          PLUS its browser-tab icon (same emoji, as an SVG data
@@ -254,18 +263,57 @@ path that 404s** (2026-07-28). Two independent guards, because a wrong
 AND in the hitbox editor.
 1. **Root resolution.** Picking `assets/images/farm/` instead of
    `assets/images/` used to emit `assets/images/seed.png` for a file at
-   `assets/images/farm/seed.png`. `resolveRootPrefix()` now HEAD-probes the
+   `assets/images/farm/seed.png`. `resolveRootPrefix()` HEAD-probes the
    server with a PNG it can see through the handle and keeps the prefix that
    answers 200, so `relPath()` is right whichever folder was picked
    (`libRootPrefix`, `''` or `'farm/'`). A folder that isn't served under
-   `assets/images/` at all is called out instead of guessed.
-2. **Write-time validation.** `pathGuard()` HEAD-checks every emitted path
-   before Write / Copy / Download. A path it can locate by basename under the
-   picked root is **corrected in memory and the write is still refused**, so the
-   repaired source can be read before it hits disk; one it can't is a hard
-   refusal. `file://` can't be checked (fetch throws) — that warns rather than
-   blocking, so Firefox's copy-the-text path still works, which is another
-   reason to run the tool over http.
+   `assets/images/` at all is called out instead of guessed. On `file://` there
+   is no server to probe and a handle cannot see ABOVE the folder that was
+   picked, so the prefix is inferred from the folder's own NAME (`images` = no
+   prefix, anything else = one level down, `rootState:'inferred'`). A wrong
+   guess is recoverable rather than silent — guard 2 re-checks every path.
+2. **Write-time validation.** `pathGuard()` checks every emitted path before
+   Write / Copy / Download, via `spriteExists()`. A path it can locate by
+   basename under the picked root is **corrected in memory and the write is
+   still refused**, so the repaired source can be read before it hits disk; one
+   it can't is a hard refusal.
+
+`spriteExists()` asks the SERVER first and the picked FOLDER second, and the
+order is deliberate: over http the server is ground truth for what the game will
+actually fetch, so localhost behaviour is exactly what it was before the folder
+fallback existed. The handle answers only when fetch can't — which is what makes
+the guard work from `file://`, where it used to warn and write anyway. It
+degrades to a warning ONLY when neither can answer (no folder picked *and* no
+server), so Firefox's copy-the-text path still works. Verified all four states by
+stubbing `fetch` to throw (2026-07-29).
+
+**Picked folders are REMEMBERED across reloads** (2026-07-29), via the shared
+`ToolHandles` store in `tools/tool-handles.js` — see that file for why a handle
+can never come from a path. This tool remembers three: `libRoot` (the
+assets/images/ tree), the extract tab's save folder, and `config/items.js`. On
+load it adopts a remembered handle SILENTLY when the browser still reports
+`queryPermission === 'granted'`, and the library opens where it was, with the
+current set's folder already showing.
+
+Permission is the part a click still buys. Chromium drops file-system permission
+when the browser restarts, and `requestPermission()` requires user activation —
+so it can only run from an event handler, never at load. When a handle is
+remembered but not granted, "Choose assets/images/…" relabels to **"Reconnect
+images/…"**: one click, no walking the tree. `forget()` drops a handle that
+turns out to be unusable (permission refused, or the picked file isn't items.js)
+— without it the tool would recall the same bad handle forever and never let a
+different one be picked.
+
+**The hitbox editor and sound lab remember their save file the same way**
+(`hitbox:file` → config/hitboxes.js, `sound:file` → config/soundmap.js). Both
+funnel Save through an `ensureSaveFile()` that tries the live handle, then the
+remembered one, then the picker — so the usual Save is one click with no picker
+at all, and at worst one permission prompt after a browser restart. Each Save
+button's tooltip says at load which of those it will be. This also means
+`showSaveFilePicker` runs far less often, which matters beyond convenience: that
+picker TRUNCATES its target the moment it is dismissed (see the trap below).
+Harmless for these two — they never read, they always write a complete file from
+memory — but fewer invocations is strictly safer.
 
 Pick which PNG is which tier, drag to reorder, then write
 `config/items.js`. `r` belongs to the SLOT, not the item, so a drag re-assigns
@@ -595,18 +643,32 @@ open on a worktree's port; re-pick after switching.
 
 ### Running the tools from disk (`file://`)
 
-Mostly fine, with one real exception. The hitbox editor and sound lab do no
-`fetch` and no `getImageData`, and pull config through plain `<script src>` tags,
-which work from disk; welcome.js already lists `file` as a dev-tools hostname.
-The **sprite editor** is the exception: `authoredBodyRatios()` fetches
-`config/items.js` as TEXT to recover the authored `bodyRatio` literals, and
-Chrome blocks `fetch` on `file://`. It says so rather than guessing — but until
-you pick `config/items.js` through the write picker (which then supplies the text
-via `itemsHandle`), a shown bodyRatio may be the hitbox override rather than the
-authored value. Secondarily, a `file://` sprite taints the canvas, so
-`spriteColours()` silently falls back to grey `#888888`/`#dddddd` for auto-filled
-colours. Serve it over http when writing items.js. Note also that `file://` has
-its own localStorage bucket, so the game opened from disk shows no scores or XP.
+**All three tools now work from disk** (made true 2026-07-29 — before that the
+sprite editor silently degraded). They pull config through plain `<script src>`
+tags, which work from `file://`, and welcome.js already lists `file` as a
+dev-tools hostname. Chromium (Edge included — it is the same engine, so it
+changes nothing here) blocks `fetch` on `file://` at any privilege level, so
+anything that needed the network had to grow a File System Access path instead:
+
+- **Sprite paths are verified through the picked FOLDER** when fetch can't
+  answer — see `spriteExists()` under "Sprite editing". This is the one that
+  mattered: the write-time guard used to warn and write anyway from disk.
+- **`config/items.js` is read through a handle.** `authoredBodyRatios()` still
+  prefers `fetch`; from disk, click **items.js…** next to the set picker to hand
+  the tool the file. Without it, a shown `bodyRatio` may be the hitbox-editor
+  override rather than the authored literal — it says so rather than guessing.
+  It is the same handle Write wants, so picking early also saves a prompt.
+
+Two things that remain true from disk and are not worth "fixing": a `file://`
+image taints the canvas, so `spriteColours()` falls back to grey
+`#888888`/`#dddddd` — but only for a tier added with neither a preset nor a blob
+src, which no caller does (library clicks pass a blob URL, set loads pass a
+preset), so it is unreachable in practice. And `file://` has its own
+localStorage bucket, so the GAME opened from disk shows no scores or XP.
+
+`--allow-file-access-from-files` is NOT needed and should not be used: it does
+not fix the `fetch` (wrong layer), and it makes every local page able to read any
+file on disk.
 
 A **Dev tools** row sits at the bottom of the welcome screen (below Backup &
 transfer) linking to the three editors. `tools/` deploys with the game, so that

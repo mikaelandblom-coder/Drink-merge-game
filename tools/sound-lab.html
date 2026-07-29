@@ -144,6 +144,7 @@
 </div>
 
 <script src="tools/tool-nav.js"></script>
+<script src="tools/tool-handles.js"></script>
 <script src="config/constants.js"></script>
 <script src="config/hitboxes.js"></script>
 <script src="config/items.js"></script>
@@ -497,18 +498,35 @@ function status(msg, err) {
   const el = document.getElementById('status');
   el.textContent = msg; el.className = err ? 'err' : '';
 }
+const SKEY = 'sound:file';
+
+// The file picked last time, if the browser will still hand it over. Runs from
+// a click, so it may prompt — Chromium drops file-system permission on restart
+// and requestPermission() needs user activation. Fewer showSaveFilePicker calls
+// is also strictly safer: that picker TRUNCATES its target the moment it is
+// dismissed (harmless here, since this tool always writes a complete file from
+// memory and never reads).
+async function ensureSaveFile() {
+  if (!fileHandle) fileHandle = await ToolHandles.recall(SKEY);
+  if (await ToolHandles.ready(fileHandle, 'readwrite', true)) return fileHandle;
+  fileHandle = null;
+  await ToolHandles.forget(SKEY);        // refused or stale — don't recall it again
+  fileHandle = await window.showSaveFilePicker({
+    suggestedName: 'soundmap.js',
+    id: 'mmSoundmap',
+    types: [{ description: 'JavaScript', accept: { 'text/javascript': ['.js'] } }],
+  });
+  await ToolHandles.keep(SKEY, fileHandle);
+  return fileHandle;
+}
+
 document.getElementById('save').onclick = async () => {
   try {
     if (!window.showSaveFilePicker) {
       status('This browser has no file picker — copy the text below instead.', true); return;
     }
-    if (!fileHandle) {
-      fileHandle = await window.showSaveFilePicker({
-        suggestedName: 'soundmap.js',
-        types: [{ description: 'JavaScript', accept: { 'text/javascript': ['.js'] } }],
-      });
-    }
-    const w = await fileHandle.createWritable();
+    const h = await ensureSaveFile();
+    const w = await h.createWritable();
     await w.write(fileText());
     await w.close();
     localStorage.removeItem(DRAFT_KEY);
@@ -518,6 +536,18 @@ document.getElementById('save').onclick = async () => {
     status('Save failed: ' + e, true);
   }
 };
+// Say so at load, so it is obvious BEFORE clicking Save that the tool already
+// knows where it writes — and, when permission lapsed, that the click costs one
+// prompt rather than a trip through the file picker.
+(async () => {
+  const h = await ToolHandles.recall(SKEY);
+  if (!h) return;
+  const btn = document.getElementById('save');
+  btn.title = await ToolHandles.ready(h, 'readwrite', false)
+    ? `Overwrites ${h.name} — remembered from last time, no picker.`
+    : `Overwrites ${h.name} — remembered, but the browser will ask once to re-grant access.`;
+})();
+
 document.getElementById('copy').onclick = async () => {
   await navigator.clipboard.writeText(fileText());
   status('Copied — paste over config/soundmap.js.');

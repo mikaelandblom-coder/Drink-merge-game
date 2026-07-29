@@ -117,6 +117,7 @@
 <div id="status">Ready.</div>
 
 <script src="tools/tool-nav.js"></script>
+<script src="tools/tool-handles.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
 <script src="config/constants.js"></script>
 <script src="config/hitboxes.js"></script>
@@ -1001,19 +1002,53 @@ ${itemsSrc || '  // (no overrides yet)'}
 `;
 }
 let fileHandle = null;
+const HKEY = 'hitbox:file';
+
+// The file picked last time, if the browser will still hand it over. Runs from
+// a click, so it may prompt — Chromium drops file-system permission on restart
+// and requestPermission() needs user activation.
+//
+// Remembering also means showSaveFilePicker runs FAR less often, which is worth
+// something here beyond convenience: that picker TRUNCATES the file it is
+// pointed at, the moment it is dismissed. Harmless for this tool (it never
+// reads — it always writes a complete file from in-memory state), but fewer
+// invocations is still strictly safer.
+async function ensureSaveFile() {
+  if (!fileHandle) fileHandle = await ToolHandles.recall(HKEY);
+  if (await ToolHandles.ready(fileHandle, 'readwrite', true)) return fileHandle;
+  fileHandle = null;
+  await ToolHandles.forget(HKEY);        // refused or stale — don't recall it again
+  fileHandle = await showSaveFilePicker({
+    suggestedName: 'hitboxes.js',
+    id: 'mmHitboxes',
+    types: [{ description: 'JavaScript', accept: { 'text/javascript': ['.js'] } }],
+  });
+  await ToolHandles.keep(HKEY, fileHandle);
+  return fileHandle;
+}
+
 document.getElementById('saveDisk').onclick = async () => {
   const text = serialize();
   if (!window.showSaveFilePicker) return status('File System API unavailable — use Download or Copy.');
   try {
-    if (!fileHandle) fileHandle = await showSaveFilePicker({
-      suggestedName: 'hitboxes.js',
-      types: [{ description: 'JavaScript', accept: { 'text/javascript': ['.js'] } }],
-    });
-    const w = await fileHandle.createWritable(); await w.write(text); await w.close();
+    const h = await ensureSaveFile();
+    const w = await h.createWritable(); await w.write(text); await w.close();
     markExported();
     status('Saved. Reload the game tab to play with the new hitbox.');
   } catch (err) { if (err.name !== 'AbortError') status('Save failed: ' + err.message); }
 };
+
+// Say so at load, so it is obvious BEFORE clicking Save that the tool already
+// knows where it writes — and, when permission lapsed, that the click costs one
+// prompt rather than a trip through the file picker.
+(async () => {
+  const h = await ToolHandles.recall(HKEY);
+  if (!h) return;
+  const btn = document.getElementById('saveDisk');
+  btn.title = await ToolHandles.ready(h, 'readwrite', false)
+    ? `Overwrites ${h.name} — remembered from last time, no picker.`
+    : `Overwrites ${h.name} — remembered, but the browser will ask once to re-grant access.`;
+})();
 document.getElementById('copyBtn').onclick = async () => {
   // A rejected clipboard write (denied permission, non-secure context) used to
   // fail silently — looking exactly like a successful copy. Now it says so, and

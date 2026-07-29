@@ -212,6 +212,8 @@
     <fieldset>
       <legend>Set</legend>
       <label>edit <select id="chainPick"></select></label>
+      <button class="ghost" id="pickItemsJs"
+        title="Read config/items.js through a file handle instead of fetching it. Only needed when running the tool from file:// — fetch cannot read a file:// URL, so without this the shown bodyRatio may be the hitbox override rather than the authored value.">items.js…</button>
       <div id="newNameRow" hidden><label>const name
         <input type="text" id="constName" value="NEWMAP_ITEMS" style="width:150px"></label></div>
       <div class="hint" id="setHint">Pick a map to retune its tier chain, or start
@@ -300,6 +302,7 @@
 <div id="status">Ready.</div>
 
 <script src="tools/tool-nav.js"></script>
+<script src="tools/tool-handles.js"></script>
 <script src="config/constants.js"></script>
 <script src="config/hitboxes.js"></script>
 <script src="config/items.js"></script>
@@ -310,6 +313,18 @@ const $ = id => document.getElementById(id);
 const status = m => { $('status').textContent = m; };
 const clamp = (v,a,b) => v<a?a:v>b?b:v;
 const LS = 'mm_sprite_tool_v1';
+
+// ── remembered handles ────────────────────────────────────────────────────
+// The store itself lives in tools/tool-handles.js, shared with the hitbox
+// editor and sound lab (see the file for WHY a handle can't come from a path).
+// These aliases keep the call sites short and namespace this tool's keys.
+// handleReady(h, mode, interactive): interactive=false is the load-time path —
+// report whether the handle is ALREADY usable, never prompt, because
+// requestPermission() needs user activation and there is none at load.
+const keepHandle   = (k, h) => ToolHandles.keep('sprite:' + k, h);
+const recallHandle = k => ToolHandles.recall('sprite:' + k);
+const forgetHandle = k => ToolHandles.forget('sprite:' + k);
+const handleReady  = (h, mode, interactive) => ToolHandles.ready(h, mode, interactive);
 
 // ══════════════════════════════════════════════════════════════════════════
 //  Tabs
@@ -705,13 +720,14 @@ window.addEventListener('resize', () => { if (workID) drawSheet(); });
 // ── saving PNGs ───────────────────────────────────────────────────────────
 let dirHandle = null;
 async function ensureDir() {
-  if (dirHandle) {
-    const p = await dirHandle.queryPermission({ mode:'readwrite' });
-    if (p === 'granted') return dirHandle;
-    if (await dirHandle.requestPermission({ mode:'readwrite' }) === 'granted') return dirHandle;
-  }
+  // Runs from a click, so it may prompt. Try the live handle, then the one
+  // remembered from a previous session, and only then the picker.
+  if (!dirHandle) dirHandle = await recallHandle('saveDir');
+  if (await handleReady(dirHandle, 'readwrite', true)) return dirHandle;
+  dirHandle = null;
   if (!window.showDirectoryPicker) { status('No File System API — use Download instead.'); return null; }
-  dirHandle = await window.showDirectoryPicker({ mode:'readwrite' });
+  dirHandle = await window.showDirectoryPicker({ mode:'readwrite', id:'mmSpriteSaveDir' });
+  await keepHandle('saveDir', dirHandle);
   return dirHandle;
 }
 const toBlob = cv => new Promise(r => cv.toBlob(r, 'image/png'));
@@ -809,11 +825,32 @@ let libHandles = new Map();   // file name (current folder) -> FileSystemFileHan
 let libBlobs = [];            // object URLs currently handed to thumbnails
 let chain = [];   // {file,img,name,r,vis,bodyRatio,glass,liq,aspect}
 
+// Adopt the remembered assets/images/ folder. interactive=true is allowed to
+// prompt (called from a click); false is the silent load-time attempt.
+async function adoptLibRoot(interactive) {
+  const h = await recallHandle('libRoot');
+  if (!await handleReady(h, 'read', interactive)) return false;
+  libRoot = h;
+  await resolveRootPrefix();            // before any path is built from it
+  await libGoto([]);
+  return true;
+}
+
 $('pickLib').onclick = async () => {
+  // A remembered folder only needs its permission re-granted — one click, no
+  // walking the tree again. Fall through to the picker if that is refused.
+  if (!libRoot && await adoptLibRoot(true)) {
+    await jumpToFolder(currentSet && currentSet.items && currentSet.items[0]
+                       && currentSet.items[0].sprite);
+    return status(`Reconnected “${libRoot.name}/” — ${libFiles.length} PNGs here.`);
+  }
   try {
-    libRoot = await window.showDirectoryPicker({ mode:'read' });
-    await resolveRootPrefix();          // before any path is built from it
+    // `id` makes Chromium reopen the picker where it was last used for this
+    // same id, so even a fresh pick starts in the right place.
+    libRoot = await window.showDirectoryPicker({ mode:'read', id:'mmSpriteRoot' });
+    await resolveRootPrefix();
     await libGoto([]);
+    await keepHandle('libRoot', libRoot);
   } catch (err) { if (err.name !== 'AbortError') status('Could not open folder: ' + err.message); }
 };
 
@@ -851,12 +888,47 @@ async function scanLib() {
 // the server with a PNG we can see through the handle and keep the prefix that
 // answers 200, so the paths come out right whichever folder was picked.
 let libRootPrefix = '';    // '' when the root IS assets/images/, else e.g. 'farm/'
-let rootState = 'ok';      // ok | fixed | unknown (file://) | bad (not served here)
+let rootState = 'ok';      // ok | fixed | inferred (file://) | bad (not served here)
 
 // null = could not tell (file:// throws on fetch) — never treat that as a 404.
 async function headOK(url) {
   try { const r = await fetch(url, { method:'HEAD', cache:'no-store' }); return r.ok; }
   catch { return null; }
+}
+
+// ── the same question, asked of the DISK instead of the server ────────────
+// A tier's `file` is relative to assets/images/, and libRoot sits at
+// assets/images/<libRootPrefix>, so strip the prefix and walk the handle down
+// to the file. This is what lets the tool verify paths from file://, where
+// fetch cannot answer at all — the picked folder always has the bytes.
+async function handleFor(rel) {
+  if (!libRoot) return null;
+  let p = rel;
+  if (libRootPrefix) {
+    if (!p.startsWith(libRootPrefix)) return null;
+    p = p.slice(libRootPrefix.length);
+  }
+  const segs = p.split('/').filter(Boolean);
+  const name = segs.pop();
+  if (!name) return null;
+  let dir = libRoot;
+  try {
+    for (const s of segs) dir = await dir.getDirectoryHandle(s);
+    return await dir.getFileHandle(name);
+  } catch { return null; }
+}
+
+// true / false definitively, or null when NEITHER check is available (no
+// folder picked and not served over http). null must never read as "missing".
+//
+// The server is asked FIRST wherever it can answer, deliberately: over http it
+// is the ground truth for what the game will actually fetch, so localhost
+// behaviour is unchanged from before this existed. The handle is the fallback
+// that makes file:// work, not a replacement.
+async function spriteExists(rel) {
+  const served = await headOK(SPRITE_ROOT + rel);
+  if (served !== null) return served;
+  return libRoot ? (await handleFor(rel)) !== null : null;
 }
 
 async function findProbePng(dir, prefix, depth) {
@@ -879,7 +951,19 @@ async function resolveRootPrefix() {
   const probe = await findProbePng(libRoot, '', 2);
   if (!probe) return;                                   // empty folder — nothing to test with
   const direct = await headOK(SPRITE_ROOT + probe);
-  if (direct === null) { rootState = 'unknown'; return; }
+  if (direct === null) {
+    // file:// — the server cannot be asked, and a directory handle cannot see
+    // ABOVE the folder that was picked, so the folder's own NAME is the only
+    // evidence available: assets/images/ itself needs no prefix, anything else
+    // is a map folder one level down. A wrong guess here is recoverable rather
+    // than silent — pathGuard resolves every emitted path through the handle,
+    // and locateSprite repairs the ones that don't land.
+    const tail = SPRITE_ROOT.replace(/\/+$/, '').split('/').pop();   // 'images'
+    if (libRoot.name.toLowerCase() !== tail.toLowerCase())
+      libRootPrefix = libRoot.name + '/';
+    rootState = 'inferred';
+    return;
+  }
   if (direct) return;                                   // the root IS assets/images/
   if (await headOK(SPRITE_ROOT + libRoot.name + '/' + probe) === true) {
     libRootPrefix = libRoot.name + '/'; rootState = 'fixed'; return;
@@ -892,9 +976,9 @@ function rootNote() {
   if (rootState === 'fixed')
     return { text:`“${libRoot.name}/” sits under ${SPRITE_ROOT} — emitting paths as ` +
                   `${SPRITE_ROOT}${libRootPrefix}…`, warn:false };
-  if (rootState === 'unknown')
-    return { text:`⚠ served paths can’t be verified from file:// — open the tool over ` +
-                  `http://localhost:5500 before writing items.js`, warn:true };
+  if (rootState === 'inferred')
+    return { text:`file:// — emitting paths as ${SPRITE_ROOT}${libRootPrefix}…, ` +
+                  `checked against this folder rather than the server`, warn:false };
   return { text:`⚠ “${libRoot.name}/” isn’t served under ${SPRITE_ROOT} — the emitted ` +
                 `sprite: paths would 404. Pick a folder inside assets/images/.`, warn:true };
 }
@@ -1270,24 +1354,26 @@ async function locateSprite(file) {
   const rel = await hunt(libRoot, '', 2);
   if (!rel) return null;
   const cand = libRootPrefix + rel;
-  return (await headOK(SPRITE_ROOT + cand)) === true ? cand : null;
+  return (await spriteExists(cand)) === true ? cand : null;
 }
 
 // Returns '' when the chain is safe to emit, else the reason to stop. Blocking
-// only ever happens on a path the server ANSWERED 404 for — an unverifiable
-// origin (file://) warns instead, so Firefox's copy-the-text path still works.
+// happens on a path that a check ANSWERED "missing" for — from the server over
+// http, or from the picked folder on file://. Only when NEITHER can answer (no
+// folder picked and no server) does it warn instead of blocking, so Firefox's
+// copy-the-text path still works.
 async function pathGuard() {
   const bad = [];
   let checked = false;
   for (const t of chain) {
-    const ok = await headOK(SPRITE_ROOT + t.file);
-    if (ok === null) continue;                 // file:// — cannot check, don't block
+    const ok = await spriteExists(t.file);
+    if (ok === null) continue;                 // nothing can answer — don't block
     checked = true;
     if (!ok) bad.push(t);
   }
   if (!checked) {
-    status(`⚠ sprite paths not verified (file://) — serve the tool over ` +
-           `http://localhost:5500 to have wrong paths caught before items.js.`);
+    status(`⚠ sprite paths not verified — pick assets/images/ above (or serve the ` +
+           `tool over http://localhost:5500) to have wrong paths caught before items.js.`);
     return '';
   }
   if (!bad.length) return '';
@@ -1301,7 +1387,7 @@ async function pathGuard() {
   if (!stuck.length)
     return `Corrected ${fixed.length} sprite path(s): ${fixed.join(', ')}. ` +
            `Nothing was written — check the preview, then click again.`;
-  return `Refused: ${stuck.length} sprite path(s) don’t exist on the server — ` +
+  return `Refused: ${stuck.length} sprite path(s) could not be found — ` +
          stuck.map(t => SPRITE_ROOT + t.file).join(', ') + `. Nothing was written.`;
 }
 
@@ -1348,15 +1434,18 @@ $('writeItems').onclick = async () => {
     // leaves the file alone; we ask for write permission separately.
     // (tools/hitbox-editor.html can safely use the save picker because it
     // never reads — it always writes a complete file from in-memory state.)
+    if (!itemsHandle) itemsHandle = await recallHandle('itemsJs');
     if (!itemsHandle) {
       [itemsHandle] = await window.showOpenFilePicker({
         types: [{ description:'JavaScript', accept:{ 'text/javascript':['.js'] } }],
         multiple: false,
+        id: 'mmItemsJs',
       });
+      await keepHandle('itemsJs', itemsHandle);
     }
     if (await itemsHandle.queryPermission({ mode:'readwrite' }) !== 'granted' &&
         await itemsHandle.requestPermission({ mode:'readwrite' }) !== 'granted') {
-      itemsHandle = null;
+      itemsHandle = null; await forgetHandle('itemsJs');
       return status('Permission to write that file was declined.');
     }
 
@@ -1365,7 +1454,7 @@ $('writeItems').onclick = async () => {
     // Guard against a mis-picked file: never rewrite something that isn't
     // items.js, or we'd replace its whole contents with one chain.
     if (!/_ITEMS\s*=\s*\[/.test(text)) {
-      itemsHandle = null;
+      itemsHandle = null; await forgetHandle('itemsJs');
       return status('That file does not look like config/items.js — nothing was written.');
     }
     // items.js is CRLF on this machine — match it, or the rewritten block
@@ -1429,11 +1518,43 @@ async function authoredBodyRatios() {
     // Silently falling back to the live objects would emit the hitbox-editor
     // override as if it were the authored value — say so instead of guessing.
     status('Could not read config/items.js — bodyRatio may show the hitbox ' +
-           'override rather than the authored value. Serve the tool from ' +
-           'http://localhost:5500/tools/sprite-editor.html.');
+           'override rather than the authored value. Click “items.js…” above ' +
+           '(or serve the tool over http://localhost:5500).');
   }
   return (authoredCache = map);
 }
+
+// Hand the tool config/items.js directly. This is the whole reason the tool
+// used to need a server: fetch() cannot read a file:// URL at any privilege
+// level, so from disk the authored bodyRatio literals were unreachable and a
+// shown ratio could silently be the hitbox-editor override instead. A handle
+// sidesteps the scheme entirely. It is the SAME handle the write path wants,
+// so picking here also saves the prompt later.
+$('pickItemsJs').onclick = async () => {
+  if (!window.showOpenFilePicker)
+    return status('No File System API — serve the tool over http instead.');
+  try {
+    // showOpenFilePicker, never showSaveFilePicker: the save picker truncates
+    // the file at pick time (see the comment in the write path below).
+    const [h] = await window.showOpenFilePicker({
+      types: [{ description:'JavaScript', accept:{ 'text/javascript':['.js'] } }],
+      multiple: false,
+    });
+    if (!/_ITEMS\s*=\s*\[/.test(await (await h.getFile()).text()))
+      return status('That file does not look like config/items.js — ignored.');
+    itemsHandle = h;
+    await keepHandle('itemsJs', h);
+    authoredCache = null;              // re-read the ratios from the real source
+    // Reload the set so the ratios on screen become the authored ones. ONLY for
+    // a loaded chain: re-running the picker's handler resets `chain`, which
+    // would throw away an unsaved "new chain" or an edited cast.
+    if (chain.length && currentSet.kind === 'chain') await $('chainPick').onchange();
+    status(`Reading config/items.js from “${h.name}” — authored bodyRatios are ` +
+           `now exact, and Write will reuse this file.`);
+  } catch (err) {
+    if (err.name !== 'AbortError') status('Could not open that file: ' + err.message);
+  }
+};
 
 const CHAINS = {
   HAWAII_ITEMS, SAIGON_ITEMS, KYOTO_ITEMS, MAGE_ITEMS, TEDDY_ITEMS,
@@ -1552,11 +1673,39 @@ function saveSettings() {
 
 status('Load an AI sheet to start, or jump to “Tier chain” to retune a map or the customer cast.');
 
+// ── startup ───────────────────────────────────────────────────────────────
+// Restore the remembered folder BEFORE loading the set, so the set's
+// jumpToFolder lands in the right place instead of no-oping against a null
+// root. Both are async, so they have to be sequenced explicitly — this used to
+// be a bare $('chainPick').onchange() and adding an awaited step above it
+// would otherwise race.
+//
 // Open on the first map's chain rather than an empty list under a map's name —
 // the picker must never claim to be showing something it isn't. Runs after
 // loadSettings so the restored const name can't outlive its set, and last so
 // its own status line survives.
-$('chainPick').onchange();
+(async () => {
+  const adopted = await adoptLibRoot(false);       // silent: no gesture at load
+  if (!adopted) {
+    // Distinguish "never picked" from "picked before, just needs a click" —
+    // the second is one button press, and saying so is the whole point of
+    // remembering the handle at all.
+    const remembered = await recallHandle('libRoot');
+    if (remembered) {
+      $('pickLib').textContent = `Reconnect ${remembered.name}/…`;
+      $('pickLib').title = 'Re-grant access to the folder you picked last time. ' +
+        'Chromium drops file-system permission when the browser restarts; this ' +
+        'is one click rather than navigating the tree again.';
+    }
+  }
+  if (!itemsHandle) itemsHandle = await recallHandle('itemsJs');
+
+  await $('chainPick').onchange();
+
+  if (adopted)
+    status(`${libFiles.length} PNGs in ${SPRITE_ROOT}${libRootPrefix}${libPath.join('/')} — ` +
+           `folder restored from last time. ${currentSet.label} loaded.`);
+})();
 </script>
 </body>
 </html>
