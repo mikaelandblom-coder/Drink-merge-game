@@ -668,7 +668,7 @@ const ITEM_HITBOXES = {
   'assets/images/farm/cabbage.png': { bodyRatio: 0.727, dx: -0.005, dy: -0.23 },
   'assets/images/farm/watermelon.png': { bodyRatio: 0.764, dx: -0.033, dy: -0.254 },
   'assets/images/farm/cauliflower.png': { shape: 'capsule', w: 0.879, h: 0.712, dx: -0.008, dy: -0.241 },
-  'assets/images/farm/prizepumpkin.png': { shape: 'capsule', w: 0.93, h: 0.599, dx: -0.023, dy: -0.178 },
+  'assets/images/farm/prizepumpkin.png': { shape: 'capsule', w: 0.963, h: 0.599, dx: 0.004, dy: -0.113 },
   'assets/images/saigon/bowl-small.png': { bodyRatio: 0.802, dx: 0.004, dy: -0.243 },
   'assets/images/saigon/bowl-large.png': { bodyRatio: 0.86, dx: -0.002, dy: -0.282 },
   'assets/images/saigon/pot.png': { bodyRatio: 0.869, dx: -0.013, dy: -0.205 },

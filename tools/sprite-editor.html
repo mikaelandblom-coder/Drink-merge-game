@@ -181,13 +181,18 @@
     <fieldset>
       <legend>Save</legend>
       <label>name prefix <input type="text" id="prefix" value="" style="width:140px"></label>
+      <label title="Sprites are saved no taller than this. An AI sheet is 1024-1536px but the game draws items at r*2.4 (36-170px) and customers at ~108px, so saving at source resolution ships ~4x the pixels anything can show. 0 = keep the source size.">max height
+        <input type="number" id="maxH" min="0" max="2048" step="16" value="256" style="width:64px"> px</label>
       <button class="act" id="saveCells">Save PNGs to folder…</button>
       <button class="ghost" id="dlCells">Download individually</button>
       <div class="hint">Pick the map’s own folder — <b>assets/images/farm/</b>,
         not assets/images/ — and the folder is reused for the rest of the
         session. Sprites there need no <code>farm-</code> prefix any more;
         the folder says which map they belong to, so name them
-        <code>seed</code>, <code>sprout</code>, … Untick a cell to skip it.</div>
+        <code>seed</code>, <code>sprout</code>, … Untick a cell to skip it.<br>
+        <b>max height</b> downscales on the way out: 256 suits items and the
+        customer cast. Raise it only for art that draws big; a shipped sprite
+        should be ~100KB, not ~1.5MB.</div>
     </fieldset>
   </div>
 
@@ -651,7 +656,11 @@ function renderCells() {
     nm.oninput = () => { c.name = nm.value; c.typed = true; };
     const meta = document.createElement('div');
     meta.className = 'meta';
-    meta.innerHTML = `<span>${c.canvas.width}×${c.canvas.height}</span>` +
+    const oh = outH(c.canvas);
+    meta.innerHTML = `<span>${c.canvas.width}×${c.canvas.height}` +
+                     (oh < c.canvas.height
+                        ? ` <b style="color:var(--accent)">→ ${Math.round(c.canvas.width * oh / c.canvas.height)}×${oh}</b>`
+                        : '') + `</span>` +
                      `<span>ar ${c.aspect.toFixed(2)}</span>`;
     div.append(top, cw, nm, meta);
     host.appendChild(div);
@@ -690,6 +699,7 @@ SLIDERS.forEach(id => {
   };
 });
 $('prefix').oninput = () => { renumber(); renderCells(); saveSettings(); };
+$('maxH').oninput = () => { renderCells(); saveSettings(); };
 window.addEventListener('resize', () => { if (workID) drawSheet(); });
 
 // ── saving PNGs ───────────────────────────────────────────────────────────
@@ -706,20 +716,58 @@ async function ensureDir() {
 }
 const toBlob = cv => new Promise(r => cv.toBlob(r, 'image/png'));
 
+// ── save size ─────────────────────────────────────────────────────────────
+// A sheet arrives at 1024-1536px per cell; the game draws items at r*2.4
+// (~36-170px) and customers at ~108px. Saving the source resolution therefore
+// ships roughly 4x the pixels anything can display — that is how one pumpkin
+// reached 1.7MB against ~100KB for every other farm item, and how the Happy
+// Hour cast reached 4.0MB. The right size is per-USE, not per-sheet (a customer
+// draws far bigger than a tier-0 item), so it is a control rather than a
+// constant — but it defaults ON, because the oversized case is the one that
+// happens by accident.
+const saveMaxH = () => Math.max(0, Math.round(+$('maxH').value || 0));
+const outH = cv => { const m = saveMaxH(); return m ? Math.min(cv.height, m) : cv.height; };
+
+// Halve repeatedly before the final step: one big drawImage jump samples too
+// few source pixels and aliases the feathered edges the isolate pass just built.
+function outCanvas(cv) {
+  const target = outH(cv);
+  if (target >= cv.height) return cv;
+  const shrink = (src, w, h) => {
+    const t = document.createElement('canvas');
+    t.width = Math.max(1, Math.round(w)); t.height = Math.max(1, Math.round(h));
+    const c = t.getContext('2d');
+    c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
+    c.drawImage(src, 0, 0, t.width, t.height);
+    return t;
+  };
+  let src = cv;
+  while (src.height > target * 2) src = shrink(src, src.width / 2, src.height / 2);
+  return shrink(src, src.width * (target / src.height), target);
+}
+
+const kb = n => (n / 1024).toFixed(0) + 'KB';
+
 $('saveCells').onclick = async () => {
   const list = cells.filter(c => c.include && c.name.trim());
   if (!list.length) return status('Nothing to save (name your cells first).');
   try {
     const dir = await ensureDir();
     if (!dir) return;
+    let bytes = 0;
     for (const c of list) {
       const fn = c.name.replace(/\.png$/i, '') + '.png';
       const fh = await dir.getFileHandle(fn, { create:true });
       const w  = await fh.createWritable();
-      await w.write(await toBlob(c.canvas));
+      const blob = await toBlob(outCanvas(c.canvas));
+      bytes += blob.size;
+      await w.write(blob);
       await w.close();
     }
-    status(`Saved ${list.length} PNGs. Switch to “Tier chain” and choose the same folder.`);
+    const m = saveMaxH();
+    status(`Saved ${list.length} PNGs, ${kb(bytes)} total (${kb(bytes / list.length)} each` +
+           (m ? `, max ${m}px tall` : ', SOURCE size — set “max height” to shrink them') +
+           `). Switch to “Tier chain” and choose the same folder.`);
     if (libRoot) scanLib();
   } catch (err) { if (err.name !== 'AbortError') status('Save failed: ' + err.message); }
 };
@@ -727,11 +775,11 @@ $('saveCells').onclick = async () => {
 $('dlCells').onclick = async () => {
   for (const c of cells.filter(c => c.include && c.name.trim())) {
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(await toBlob(c.canvas));
+    a.href = URL.createObjectURL(await toBlob(outCanvas(c.canvas)));
     a.download = c.name.replace(/\.png$/i, '') + '.png';
     a.click();
   }
-  status('Downloaded — move them into assets/images/.');
+  status('Downloaded — move them into assets/images/<map>/.');
 };
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -764,6 +812,7 @@ let chain = [];   // {file,img,name,r,vis,bodyRatio,glass,liq,aspect}
 $('pickLib').onclick = async () => {
   try {
     libRoot = await window.showDirectoryPicker({ mode:'read' });
+    await resolveRootPrefix();          // before any path is built from it
     await libGoto([]);
   } catch (err) { if (err.name !== 'AbortError') status('Could not open folder: ' + err.message); }
 };
@@ -787,22 +836,67 @@ async function scanLib() {
   }
   libDirs.sort(); libFiles.sort();
   renderLib();
-  const bad = rootMismatch();
+  const note = rootNote();
   status(`${libDirs.length} folders, ${libFiles.length} PNGs in ` +
-         (SPRITE_ROOT + libPath.join('/')) + (bad ? ' — ⚠ ' + bad : ''));
+         (SPRITE_ROOT + libRootPrefix + libPath.join('/')) + (note ? ' — ' + note.text : ''));
 }
 
-// The picked root must BE the folder that `sprite path` names, or every emitted
-// sprite: path is wrong (picking assets/images/farm/ emits "assets/images/seed.png"
-// instead of "assets/images/farm/seed.png"). Thumbnails no longer reveal this —
-// they read the handle — so say it out loud instead.
-function rootMismatch() {
-  if (!libRoot) return '';
-  const tail = SPRITE_ROOT.replace(/\/+$/, '').split('/').pop();
-  if (!tail || libRoot.name === tail) return '';
-  return `you picked “${libRoot.name}/” but sprite path ends in “${tail}/” — ` +
-         `pick ${tail}/ as the root (then click into ${libRoot.name}/), or the ` +
-         `emitted sprite: paths will be wrong`;
+// ── where the picked folder actually sits ─────────────────────────────────
+// The emitted sprite: path is SPRITE_ROOT + the file's path relative to
+// assets/images/. Picking assets/images/farm/ as the root is a natural thing to
+// do, and it used to emit "assets/images/seed.png" for a file that lives at
+// "assets/images/farm/seed.png" — a path that 404s, which draws NOTHING (every
+// draw site gates on img.naturalWidth) rather than erroring. The old code only
+// printed a warning and wrote the broken path anyway. Now we RESOLVE it: probe
+// the server with a PNG we can see through the handle and keep the prefix that
+// answers 200, so the paths come out right whichever folder was picked.
+let libRootPrefix = '';    // '' when the root IS assets/images/, else e.g. 'farm/'
+let rootState = 'ok';      // ok | fixed | unknown (file://) | bad (not served here)
+
+// null = could not tell (file:// throws on fetch) — never treat that as a 404.
+async function headOK(url) {
+  try { const r = await fetch(url, { method:'HEAD', cache:'no-store' }); return r.ok; }
+  catch { return null; }
+}
+
+async function findProbePng(dir, prefix, depth) {
+  const subs = [];
+  for await (const [name, h] of dir.entries()) {
+    if (h.kind === 'file' && /\.png$/i.test(name)) return prefix + name;
+    if (h.kind === 'directory') subs.push([name, h]);
+  }
+  if (depth <= 0) return null;
+  for (const [name, h] of subs.sort()) {
+    const found = await findProbePng(h, prefix + name + '/', depth - 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+async function resolveRootPrefix() {
+  libRootPrefix = ''; rootState = 'ok';
+  if (!libRoot) return;
+  const probe = await findProbePng(libRoot, '', 2);
+  if (!probe) return;                                   // empty folder — nothing to test with
+  const direct = await headOK(SPRITE_ROOT + probe);
+  if (direct === null) { rootState = 'unknown'; return; }
+  if (direct) return;                                   // the root IS assets/images/
+  if (await headOK(SPRITE_ROOT + libRoot.name + '/' + probe) === true) {
+    libRootPrefix = libRoot.name + '/'; rootState = 'fixed'; return;
+  }
+  rootState = 'bad';
+}
+
+function rootNote() {
+  if (!libRoot || rootState === 'ok') return null;
+  if (rootState === 'fixed')
+    return { text:`“${libRoot.name}/” sits under ${SPRITE_ROOT} — emitting paths as ` +
+                  `${SPRITE_ROOT}${libRootPrefix}…`, warn:false };
+  if (rootState === 'unknown')
+    return { text:`⚠ served paths can’t be verified from file:// — open the tool over ` +
+                  `http://localhost:5500 before writing items.js`, warn:true };
+  return { text:`⚠ “${libRoot.name}/” isn’t served under ${SPRITE_ROOT} — the emitted ` +
+                `sprite: paths would 404. Pick a folder inside assets/images/.`, warn:true };
 }
 
 // Thumbnail source: the folder handle's bytes, falling back to the served URL
@@ -830,7 +924,9 @@ function freeThumbs() {
   });
 }
 
-const relPath = name => [...libPath, name].join('/');
+// A tier's `file` is always relative to assets/images/ — never to whatever
+// folder happened to be picked. libRootPrefix is what closes that gap.
+const relPath = name => libRootPrefix + [...libPath, name].join('/');
 
 function renderCrumbs() {
   const host = $('crumbs');
@@ -842,16 +938,16 @@ function renderCrumbs() {
     a.onclick = () => libGoto(arr);
     host.appendChild(a);
   };
-  add(SPRITE_ROOT.replace(/\/$/, ''), []);
+  add((SPRITE_ROOT + libRootPrefix).replace(/\/$/, ''), []);
   libPath.forEach((seg, i) => {
     host.appendChild(document.createTextNode(' / '));
     add(seg, libPath.slice(0, i + 1));
   });
-  const bad = rootMismatch();
-  if (bad) {
+  const note = rootNote();
+  if (note) {
     const w = document.createElement('span');
-    w.style.cssText = 'color:var(--warn);flex:1 0 100%;font-size:10px';
-    w.textContent = '⚠ ' + bad;
+    w.style.cssText = `color:var(--${note.warn ? 'warn' : 'muted'});flex:1 0 100%;font-size:10px`;
+    w.textContent = note.text;
     host.appendChild(w);
   }
 }
@@ -1147,11 +1243,77 @@ function emit() {
   return src;
 }
 
+// ── sprite: paths must resolve ────────────────────────────────────────────
+// The backstop under libRootPrefix, and the one that catches what prefix
+// resolution can't: a file renamed or moved on disk after the chain was loaded.
+// A sprite: path that 404s is invisible in the game AND in the hitbox editor —
+// every draw site gates on `img.complete && img.naturalWidth` and falls back to
+// the glass/liq colours — so it must never reach items.js. Nothing here writes
+// on its own: a repairable path is corrected in memory and the write is still
+// refused, so the emitted source can be read before it lands on disk.
+async function locateSprite(file) {
+  if (!libRoot) return null;
+  const base = file.split('/').pop();
+  const hunt = async (dir, prefix, depth) => {
+    const subs = [];
+    for await (const [name, h] of dir.entries()) {
+      if (h.kind === 'file' && name.toLowerCase() === base.toLowerCase()) return prefix + name;
+      if (h.kind === 'directory') subs.push([name, h]);
+    }
+    if (depth <= 0) return null;
+    for (const [name, h] of subs.sort()) {
+      const found = await hunt(h, prefix + name + '/', depth - 1);
+      if (found) return found;
+    }
+    return null;
+  };
+  const rel = await hunt(libRoot, '', 2);
+  if (!rel) return null;
+  const cand = libRootPrefix + rel;
+  return (await headOK(SPRITE_ROOT + cand)) === true ? cand : null;
+}
+
+// Returns '' when the chain is safe to emit, else the reason to stop. Blocking
+// only ever happens on a path the server ANSWERED 404 for — an unverifiable
+// origin (file://) warns instead, so Firefox's copy-the-text path still works.
+async function pathGuard() {
+  const bad = [];
+  let checked = false;
+  for (const t of chain) {
+    const ok = await headOK(SPRITE_ROOT + t.file);
+    if (ok === null) continue;                 // file:// — cannot check, don't block
+    checked = true;
+    if (!ok) bad.push(t);
+  }
+  if (!checked) {
+    status(`⚠ sprite paths not verified (file://) — serve the tool over ` +
+           `http://localhost:5500 to have wrong paths caught before items.js.`);
+    return '';
+  }
+  if (!bad.length) return '';
+  const fixed = [], stuck = [];
+  for (const t of bad) {
+    const found = await locateSprite(t.file);
+    if (found) { fixed.push(`${t.file} → ${found}`); t.file = found; }
+    else stuck.push(t);
+  }
+  if (fixed.length) { renderChain(); emit(); }
+  if (!stuck.length)
+    return `Corrected ${fixed.length} sprite path(s): ${fixed.join(', ')}. ` +
+           `Nothing was written — check the preview, then click again.`;
+  return `Refused: ${stuck.length} sprite path(s) don’t exist on the server — ` +
+         stuck.map(t => SPRITE_ROOT + t.file).join(', ') + `. Nothing was written.`;
+}
+
 $('copyItems').onclick = async () => {
+  const bad = await pathGuard();
+  if (bad) return status(bad);
   await navigator.clipboard.writeText(emit());
   status('Copied the chain to the clipboard.');
 };
-$('dlItems').onclick = () => {
+$('dlItems').onclick = async () => {
+  const bad = await pathGuard();
+  if (bad) return status(bad);
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([emit()], { type:'text/javascript' }));
   a.download = 'items-chain.js'; a.click();
@@ -1171,6 +1333,12 @@ $('writeItems').onclick = async () => {
   // almost certainly a mistake here.
   if (castMode && chain.length <= 3)
     status(`Warning: ${chain.length} faces means repeats in the queue (max 3 at once).`);
+  // Before touching the file: every sprite: path must resolve. A 404 path is
+  // silent in both the game and the hitbox editor, so items.js is the last
+  // place it can still be caught cheaply.
+  const badPaths = await pathGuard();
+  if (badPaths) return status(badPaths);
+  src = emit();                       // pathGuard may have repaired a path
   if (!window.showOpenFilePicker) return status('No File System API — use Copy instead.');
   try {
     // MUST be showOpenFilePicker, NEVER showSaveFilePicker. The save picker
@@ -1352,14 +1520,19 @@ const stripRoot = sprite => sprite.startsWith(SPRITE_ROOT)
 // editor's map picker loads that map's art. No-op until a root is picked.
 async function jumpToFolder(sprite) {
   if (!libRoot || !sprite) return;
-  const parts = stripRoot(sprite).split('/');
+  let rel = stripRoot(sprite);
+  // libPath is relative to the PICKED root, so drop the part of the path that
+  // is the root itself (picking assets/images/farm/ makes libRootPrefix 'farm/').
+  if (libRootPrefix && rel.startsWith(libRootPrefix)) rel = rel.slice(libRootPrefix.length);
+  else if (libRootPrefix) return;          // that set lives outside the picked root
+  const parts = rel.split('/');
   parts.pop();
-  if (parts.length && parts.join('/') !== libPath.join('/')) await libGoto(parts);
+  if (parts.join('/') !== libPath.join('/')) await libGoto(parts);
 }
 
 // ── settings persistence ──────────────────────────────────────────────────
 function saveSettings() {
-  const s = { prefix:$('prefix').value, constName:$('constName').value };
+  const s = { prefix:$('prefix').value, constName:$('constName').value, maxH:$('maxH').value };
   SLIDERS.forEach(id => s[id] = $(id).value);
   ['keyWhite','isolate','stripShadow'].forEach(id => s[id] = $(id).checked);
   try { localStorage.setItem(LS, JSON.stringify(s)); } catch {}

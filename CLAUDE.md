@@ -211,17 +211,22 @@ rejected blobs are excluded from the feather pass so they can't reappear.
 `SHADOW_SPRITE`, so a baked one double-shadows). Save writes the PNGs straight
 into a folder you pick once.
 
-**TODO — the extract tab should save at a TARGET SIZE, not at source
-resolution.** `$('saveCells')` blobs `c.canvas` as-is, so a 1024×1536 AI sheet
-yields ~420–460 px sprites for art the game draws at ~108 px (customers) or
-`r*2.4` ≈ 36–170 px (items) — roughly 4× oversampled, ~265 KB per PNG. That is
-how the Happy Hour cast reached 4.0 MB on 2026-07-26 (see "Menu options →
-Happy Hour"), and every future sheet will do the same by default. Wanted: a
-"max height" control (default ~256 px, off = source) applied at save time via a
-high-quality downscale, with the readout showing the resulting file size. Note
-the right size is per-USE, not per-sheet — customers draw far bigger than a
-tier-0 item — so it must be a control, not a constant. Until it exists, resample
-by hand after extracting.
+**Saving downscales by default (built 2026-07-28).** A **max height** control in
+the Save fieldset (default **256 px**, `0` = source resolution) is applied at
+save AND download time by `outCanvas()`, and each cell's readout shows the
+resulting size (`1125×1026 → 281×256`) so an oversized save is visible before it
+lands. Measured on `farm/pumpkin_improved.png`: 1658 KB → 124 KB with alpha
+intact. It downscales by **repeated halving** before the final step — a single
+big `drawImage` jump samples too few source pixels and aliases the feathered
+edges the isolate pass just built.
+
+This was the standing TODO, and the bug it prevents is not hypothetical: a
+1024×1536 AI sheet yields ~420–460 px sprites for art the game draws at ~108 px
+(customers) or `r*2.4` ≈ 36–170 px (items), i.e. ~4× oversampled at ~265 KB
+each — how the Happy Hour cast reached 4.0 MB on 2026-07-26 (see "Menu options →
+Happy Hour"). The right size is per-USE, not per-sheet (a customer draws far
+bigger than a tier-0 item), so it stays a control rather than a constant — but
+it defaults ON, because the oversized case is the one that happens by accident.
 
 **2 · Tier chain** — a **set picker** mirroring the hitbox editor's map
 dropdown: one row per map (same labels, same order, built from `MAPS` by
@@ -240,9 +245,28 @@ chain can mix a map's items with something from `shared/`. Thumbnails are read
 through the DIRECTORY HANDLE (blob URLs), never fetched from `SPRITE_ROOT` +
 name — picking a map folder as the root used to 404 every one of them, and an
 `<img>` that fails inside a `.checker` tile paints NOTHING, so the library went
-silently blank-checkerboard. A root whose name isn't `images` is now called out
-in the breadcrumb + status bar, because it would still corrupt the emitted
-`sprite:` paths.
+silently blank-checkerboard.
+
+**Sprite paths are resolved and then verified — the tool can no longer emit a
+path that 404s** (2026-07-28). Two independent guards, because a wrong
+`sprite:` path is *invisible*: every draw site gates on
+`img.complete && img.naturalWidth`, so the item just doesn't appear, in the game
+AND in the hitbox editor.
+1. **Root resolution.** Picking `assets/images/farm/` instead of
+   `assets/images/` used to emit `assets/images/seed.png` for a file at
+   `assets/images/farm/seed.png`. `resolveRootPrefix()` now HEAD-probes the
+   server with a PNG it can see through the handle and keeps the prefix that
+   answers 200, so `relPath()` is right whichever folder was picked
+   (`libRootPrefix`, `''` or `'farm/'`). A folder that isn't served under
+   `assets/images/` at all is called out instead of guessed.
+2. **Write-time validation.** `pathGuard()` HEAD-checks every emitted path
+   before Write / Copy / Download. A path it can locate by basename under the
+   picked root is **corrected in memory and the write is still refused**, so the
+   repaired source can be read before it hits disk; one it can't is a hard
+   refusal. `file://` can't be checked (fetch throws) — that warns rather than
+   blocking, so Firefox's copy-the-text path still works, which is another
+   reason to run the tool over http.
+
 Pick which PNG is which tier, drag to reorder, then write
 `config/items.js`. `r` belongs to the SLOT, not the item, so a drag re-assigns
 the chain's existing r values smallest→largest — a hand-tuned ladder survives a
@@ -449,7 +473,9 @@ in localStorage and passed into `startGame(map, {size, combos, happyHour})`:
     4.0 MB (was 1.6 MB) and `loadCustomerSprites()` fetches ALL of it when a
     Happy Hour run starts, so an HH session went from ~6.4 MB to ~8.8 MB (see
     "Bandwidth"). Downscaling the cast to ~220 px tall would give back most of
-    that with nothing visible at the drawn size.
+    that with nothing visible at the drawn size — the sprite editor's **max
+    height** control (see "Sprite editing") now does this on save, so re-saving
+    the sheet through it is the fix.
 
 **Cool mode (30 fps cap) — built but SHELVED.** The welcome-screen checkbox is
 commented out in index.html (with its wiring in welcome.js), and startGame pins
@@ -526,10 +552,61 @@ defaults — changing a default would re-point the legacy key.
 Python is installed. Start a local server from the project root:
 
 ```
-python -m http.server 5500
+python serve.py
 ```
 
-Then open http://localhost:5500 in a browser.
+Then open http://localhost:5500 in a browser. Use `serve.py`, not
+`python -m http.server 5500`: the only difference is a `Cache-Control: no-cache`
+header, and that header is what stops the browser serving a STALE `config/*.js`
+or `game.js` under an unchanged `?v=` — a symptom indistinguishable from "my edit
+didn't work". Pass a port to run a second one (`python serve.py 5501`); it also
+honours `$PORT`. Neither this file nor `.claude/launch.json` is loaded by the
+game, so nothing here can reach Mai.
+
+### Preview servers & PARALLEL SESSIONS — pick the right launch config
+
+`.claude/launch.json` has three, and picking wrong is silent:
+
+| config | when | what it does |
+|--------|------|--------------|
+| `game` | **default**, cwd = main checkout | ATTACHES to the server already on 5500. Starts no process. |
+| `game-server` | main checkout, nothing on 5500 | Starts `serve.py` pinned to 5500. |
+| `game-worktree` | **cwd is NOT the main checkout** | `autoPort` — its own server rooted in its own directory. |
+
+The default is attach-only because `autoPort` used to hand every `preview_start`
+the next free port, so 5500/5501/5502… piled up and it stopped being obvious
+which tab was which. One fixed port, one server.
+
+**The trap for parallel work:** `.claude/launch.json` is a TRACKED file, so a git
+worktree (`.claude/worktrees/…`, from `EnterWorktree` or `isolation:"worktree"`)
+inherits the `game` attach config — and attaching would serve the MAIN checkout's
+files while you edit the worktree's. Your changes would appear to do nothing, for
+no visible reason. **If the session's cwd is not `E:\Projekt\Drink-merge-game`
+itself, use `game-worktree`.** A second port there is correct, not the pile-up
+this was fixing.
+
+Two more things that are shared across every parallel session, because they are
+keyed by ORIGIN rather than by directory: `localhost:5500` has ONE localStorage
+bucket, so high-score boards (`mm_s_*`) and XP (`mm_xp_v1`) are shared by every
+session pointed at it — use `?test=1`, which stubs score saves and disables XP
+persistence. And the File System Access handles the tools hold are to the file
+you PICKED, which is the main checkout's `config/hitboxes.js` even if the tool is
+open on a worktree's port; re-pick after switching.
+
+### Running the tools from disk (`file://`)
+
+Mostly fine, with one real exception. The hitbox editor and sound lab do no
+`fetch` and no `getImageData`, and pull config through plain `<script src>` tags,
+which work from disk; welcome.js already lists `file` as a dev-tools hostname.
+The **sprite editor** is the exception: `authoredBodyRatios()` fetches
+`config/items.js` as TEXT to recover the authored `bodyRatio` literals, and
+Chrome blocks `fetch` on `file://`. It says so rather than guessing — but until
+you pick `config/items.js` through the write picker (which then supplies the text
+via `itemsHandle`), a shown bodyRatio may be the hitbox override rather than the
+authored value. Secondarily, a `file://` sprite taints the canvas, so
+`spriteColours()` silently falls back to grey `#888888`/`#dddddd` for auto-filled
+colours. Serve it over http when writing items.js. Note also that `file://` has
+its own localStorage bucket, so the game opened from disk shows no scores or XP.
 
 A **Dev tools** row sits at the bottom of the welcome screen (below Backup &
 transfer) linking to the three editors. `tools/` deploys with the game, so that

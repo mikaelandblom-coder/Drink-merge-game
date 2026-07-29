@@ -109,15 +109,15 @@ const PARIS_ITEMS = [
 // are STARTING points sized to the round body — trace/tune each in
 // tools/hitbox-editor.html before shipping. Background art still pending.
 const FARM_ITEMS = [
-  { name:'seed', r:15, glass:'#e0cbc3', liq:'#93472a', sprite:'assets/images/farm/seed.png', bodyRatio:0.85, vis:0.88 },
-  { name:'sprout', r:18, glass:'#d8d3bc', liq:'#776312', sprite:'assets/images/farm/sprout.png', bodyRatio:0.85, vis:0.83 },
-  { name:'strawberry', r:22, glass:'#edc9be', liq:'#c24117', sprite:'assets/images/farm/strawberry.png', bodyRatio:0.85, vis:0.89 },
-  { name:'blueberries', r:27, glass:'#c6cdd9', liq:'#364d7a', sprite:'assets/images/farm/blueberry.png', bodyRatio:0.85, vis:0.84 },
-  { name:'bell pepper', r:33, glass:'#f4e4bc', liq:'#d9a010', sprite:'assets/images/farm/pepper.png', bodyRatio:0.85, vis:0.88 },
-  { name:'purple cabbage', r:40, glass:'#dacad7', liq:'#7b4372', sprite:'assets/images/farm/cabbage.png', bodyRatio:0.85, vis:0.78 },
-  { name:'watermelon', r:48, glass:'#cedbbd', liq:'#518116', sprite:'assets/images/farm/watermelon.png', bodyRatio:0.85, vis:0.87 },
-  { name:'cauliflower', r:58, glass:'#e6ebd1', liq:'#a7b95d', sprite:'assets/images/farm/cauliflower.png', bodyRatio:0.85, vis:0.8 },
-  { name:'prize pumpkin', r:71, glass:'#e6d4c5', liq:'#a86631', sprite:'assets/images/farm/prizepumpkin.png', bodyRatio:0.85, vis:0.82 },
+  { name:'seed',           r:15, glass:'#e0cbc3', liq:'#93472a', sprite:'assets/images/farm/seed.png',         bodyRatio:0.85, vis:0.88 },
+  { name:'sprout',         r:18, glass:'#d8d3bc', liq:'#776312', sprite:'assets/images/farm/sprout.png',       bodyRatio:0.85, vis:0.83 },
+  { name:'strawberry',     r:22, glass:'#edc9be', liq:'#c24117', sprite:'assets/images/farm/strawberry.png',   bodyRatio:0.85, vis:0.89 },
+  { name:'blueberries',    r:27, glass:'#c6cdd9', liq:'#364d7a', sprite:'assets/images/farm/blueberry.png',    bodyRatio:0.85, vis:0.84 },
+  { name:'bell pepper',    r:33, glass:'#f4e4bc', liq:'#d9a010', sprite:'assets/images/farm/pepper.png',       bodyRatio:0.85, vis:0.88 },
+  { name:'purple cabbage', r:40, glass:'#dacad7', liq:'#7b4372', sprite:'assets/images/farm/cabbage.png',      bodyRatio:0.85, vis:0.78 },
+  { name:'watermelon',     r:48, glass:'#cedbbd', liq:'#518116', sprite:'assets/images/farm/watermelon.png',   bodyRatio:0.85, vis:0.87 },
+  { name:'cauliflower',    r:58, glass:'#e6ebd1', liq:'#a7b95d', sprite:'assets/images/farm/cauliflower.png',  bodyRatio:0.85, vis:0.8 },
+  { name:'prize pumpkin',  r:71, glass:'#ebd7bf', liq:'#b7701c', sprite:'assets/images/farm/prizepumpkin.png', bodyRatio:0.85, vis:0.82 },
 ];
 
 // Happy Hour mode: the receipt merge chain, shared by every map. Serving a
