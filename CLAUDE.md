@@ -1004,8 +1004,36 @@ Two traps that script now handles, both of which cost real time:
   Verified by measuring the carrier stream with a second AudioContext:
   healthy 0.24 peak → track stopped 0 → old resume+play still 0 → after one
   tap 0.24 again.
-- **No Node.js installed**: use `python -m http.server 5500` to serve locally.
-  Install Node.js to use `npx serve .` and enable the Claude Code preview panel.
+- **Node.js IS installed** (`C:\Program Files\nodejs\node.exe`) — corrected
+  2026-07-29; this line used to claim it wasn't, and that stale fact was
+  load-bearing for "what could we build the tools with" questions. Serving is
+  still `python serve.py` (see "Running the game locally") — it carries the
+  no-cache header `npx serve .` does not. `cargo` is NOT installed, so anything
+  Rust-based (Tauri) needs a toolchain first. WebView2 is present.
+- **The dev tools stay browser pages — no standalone/Electron app** (decided
+  2026-07-29, after the question was raised properly). The reason is fidelity,
+  not effort: the tools' worth comes from running the GAME'S OWN code. The sound
+  lab plays `config/sounds.js` itself (the previous lab kept hand-copied synth
+  voices and they drifted from audio.js — deleting that duplication was the
+  design win), the hitbox editor's test mode runs real Matter.js, and its wall
+  drawing shares the perspective math with render.js. A non-browser app must
+  either reimplement those three — recreating exactly the drift bug that was
+  fixed — or embed a browser engine, at which point it is a browser with better
+  file access, bought with a build step and a packaged artifact in a repo whose
+  ethos is "no build step, no framework". It would also kill the `?dev=1` route
+  that reaches the tools from an iPad.
+  **If picker friction ever justifies more work, the answer is a scoped local
+  endpoint, not an app**: generalise `tools/shot-receiver.py` into `serve.py` as
+  `GET /_dev/ls` + `POST /_dev/write`. That closes the one thing the browser
+  genuinely cannot do — DIRECTORY LISTING, the only reason the sprite editor
+  needs a directory handle at all — in ~40 lines, with no build step and no
+  second artifact. It is NOT free, though, and this is the part to think about
+  before building it: a standing write API has ambient authority (any page open
+  in the browser can POST to it — note `shot-receiver.py` sets
+  `Access-Control-Allow-Origin: *` with no origin check, fine for a one-shot
+  capture, not for a permanent endpoint), so it needs path-whitelisting under
+  the project root and an Origin check. The File System Access picker IS the
+  consent model, which is why it stays the default and the offline fallback.
 - **Screenshot/rAF time-outs: the preview tab is often HIDDEN** (root cause,
   diagnosed 2026-07-10 — the old "rAF pages block capture" theory was wrong).
   When the Browser pane isn't open on screen, `document.hidden === true`: the
