@@ -2,10 +2,24 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "_comment": "ATTACH to the server Mikael already runs on 5500 (no command = no new process). This is the default: autoPort used to hand every preview the next free port, so 5500/5501/5502 piled up and it stopped being obvious which tab was which. One fixed port, one server, always.",
       "name": "game",
+      "url": "http://localhost:5500",
+      "port": 5500
+    },
+    {
+      "_comment": "Fallback for when nothing is listening on 5500. Pinned to 5500 so it cannot start the port pile-up autoPort used to cause.",
+      "name": "game-server",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["serve.py", "5500"],
+      "port": 5500
+    },
+    {
+      "_comment": "USE THIS WHENEVER THE SESSION'S CWD IS NOT THE MAIN CHECKOUT (a git worktree under .claude/worktrees/, or any parallel branch). launch.json is a TRACKED file, so every worktree inherits the `game` attach config above - and attaching would silently preview the MAIN checkout's files while you edit the worktree's, which looks like edits not taking effect. autoPort is correct here: a worktree genuinely needs its own server rooted in its own directory, so a second port is the point rather than the problem.",
+      "name": "game-worktree",
       "autoPort": true,
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-c", "import os,http.server\nclass H(http.server.SimpleHTTPRequestHandler):\n    def end_headers(self):\n        self.send_header('Cache-Control','no-cache')\n        super().end_headers()\nhttp.server.ThreadingHTTPServer(('',int(os.environ.get('PORT',5500))),H).serve_forever()"],
+      "runtimeArgs": ["serve.py"],
       "port": 5500
     }
   ]
