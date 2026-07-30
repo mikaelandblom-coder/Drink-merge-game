@@ -158,7 +158,12 @@ appealing. The shipped Paris prompt, and the six slots that made it work:
 2. **Style sentence** — 2–4 adjectives + surface finish + outline treatment.
 3. **Pipeline constraints** — NO drop shadows, NO background, generous gaps.
    Technical, not taste: a shadow bridging a gutter breaks the band detection in
-   `split_alpha_grid` / the sprite editor's extract tab.
+   `split_alpha_grid` / the sprite editor's extract tab. A **glow** is the
+   exception and is welcome — it is a pre-rendered blur the frame loop could
+   never afford, and the sprite editor keeps it while dropping a shadow (see
+   "strip baked shadow" in tools/README.md), so a sheet that arrives with both
+   is fine. Ask for gaps generous enough that the GLOW doesn't bridge them
+   either.
 4. **Row-by-row enumeration, one concrete named item per cell** — specificity is
    what stops the sheet drifting into mush. Row-major = TIER ORDER, which is also
    how the sprite editor's tier chain reads the folder.

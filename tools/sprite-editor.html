@@ -158,7 +158,10 @@
     <fieldset>
       <legend>Per-item isolation</legend>
       <label title="Keep only pixels connected to the item itself, instead of everything inside the cell rectangle. Leave this on.">flood-fill isolate <input type="checkbox" id="isolate" checked></label>
-      <label title="Ignore soft alpha under the item, so an AI-baked drop shadow is dropped. The game draws its own shadow.">strip baked shadow <input type="checkbox" id="stripShadow"></label>
+      <label title="Split the soft halo around the item by colour: a baked GLOW is kept, a baked DROP SHADOW is dropped (the game draws its own, sized to the hitbox). Leave this on.">strip baked shadow <input type="checkbox" id="stripShadow" checked></label>
+      <label id="rowGlowKeep" title="Where the glow/shadow line sits. Halo pixels are kept when their BRIGHTEST channel reaches this — a glow is bright, a drop shadow is dark. 255 drops the halo entirely; 0 keeps all of it. Reach is set by “glow pad”.">glow cutoff
+        <input type="range" id="glowKeep" min="0" max="255" value="110">
+        <span class="val" id="vGlowKeep">110</span></label>
       <label title="Minimum size of a detached piece, as a % of the main blob, for it to count as part of the item rather than a stray speck.">keep parts ≥
         <input type="range" id="minFrac" min="0" max="40" value="5">
         <span class="val" id="vMinFrac">5%</span></label>
@@ -174,8 +177,9 @@
       <div class="hint">Isolate keeps only blobs connected to the item, so a
         neighbour’s stem poking into the cell is dropped. “keep parts ≥” is the
         floor for genuinely separate pieces (a violin bow ≈ 13%, stray specks
-        ≈ 1%). Strip shadow ignores soft alpha under the item — the game draws
-        its own shadow.</div>
+        ≈ 1%). Strip shadow keeps a baked glow (a free pre-rendered blur) and
+        drops a baked drop shadow (drawDrink already draws one on the hitbox) —
+        “glow cutoff” is where it splits them, “glow pad” is how far it looks.</div>
     </fieldset>
 
     <fieldset>
@@ -509,12 +513,50 @@ function extractCell(id, band, o) {
   const dil = dilate(keep, lw, lh, o.dilateR);
   if (reject) for (let i = 0; i < lw * lh; i++) if (reject[i]) dil[i] = 0;
 
+  // Halo split — the reason "strip baked shadow" can be left on.
+  //
+  // A baked GLOW is worth keeping: it is a pre-rendered gaussian blur, exactly
+  // the trick render.js uses for combo pops because shadowBlur is too expensive
+  // to run per frame. A baked DROP SHADOW is not: drawDrink already draws one
+  // sized to physR and nudged by SHADOW_DROP, so a second one double-shadows,
+  // points wherever that sheet felt like, and — because sprites are pinned by
+  // total height and bottom-anchored — shrinks the drink and floats it above
+  // its own hitbox.
+  //
+  // Both are soft alpha outside the core, so the distance cut above cannot tell
+  // them apart: it drops shadow and wide glow alike. Split them by COLOUR
+  // instead. ImageData RGB is UNPREMULTIPLIED, so a white glow reads 255 and a
+  // black shadow reads ~0 however faint the alpha is — the test doesn't care
+  // how soft the halo is, only what colour it is. Brightest channel (HSV value)
+  // rather than luminance, because a saturated glow (deep purple ≈ 120,60,180)
+  // has low luminance but is obviously not a shadow.
+  //
+  // Reach is glowPad — the same margin the cell was padded by, so the halo we
+  // look for is exactly the halo the crop made room for. Anything the isolate
+  // pass rejected stays rejected, so a neighbour's blob can't come back in
+  // through its own glow.
+  let mask = dil;
+  if (o.stripShadow && o.glowPad > 0 && o.glowKeep < 255) {
+    const reach = dilate(keep, lw, lh, o.glowPad);
+    mask = dil.slice();
+    for (let y = 0; y < lh; y++) {
+      const so = ((py0 + y) * W + px0) * 4, lo = y * lw;
+      for (let x = 0; x < lw; x++) {
+        const i = lo + x;
+        if (mask[i] || !reach[i] || (reject && reject[i])) continue;
+        const p = so + x * 4;
+        if (d[p + 3] === 0) continue;
+        if (Math.max(d[p], d[p+1], d[p+2]) >= o.glowKeep) mask[i] = 1;
+      }
+    }
+  }
+
   // bbox of what survived
   let mnx = lw, mxx = -1, mny = lh, mxy = -1;
   for (let y = 0; y < lh; y++) {
     const lo = y * lw, so = ((py0 + y) * W + px0) * 4;
     for (let x = 0; x < lw; x++)
-      if (dil[lo + x] && d[so + x*4 + 3] > 0) {
+      if (mask[lo + x] && d[so + x*4 + 3] > 0) {
         if (x < mnx) mnx = x; if (x > mxx) mxx = x;
         if (y < mny) mny = y; if (y > mxy) mxy = y;
       }
@@ -532,7 +574,7 @@ function extractCell(id, band, o) {
     const lo = (cy0 + y) * lw + cx0, oo = y * cw * 4;
     for (let x = 0; x < cw; x++) {
       const r = d[so + x*4], g = d[so + x*4 + 1], b = d[so + x*4 + 2];
-      const a = dil[lo + x] ? d[so + x*4 + 3] : 0;
+      const a = mask[lo + x] ? d[so + x*4 + 3] : 0;
       od[oo + x*4] = r; od[oo + x*4 + 1] = g; od[oo + x*4 + 2] = b; od[oo + x*4 + 3] = a;
       if (a > 200) { sr += r; sg += g; sb += b; cnt++; }
       if (a > 0) cov++;
@@ -561,6 +603,7 @@ function opts() {
     isolate:$('isolate').checked, stripShadow:$('stripShadow').checked,
     minFrac:+$('minFrac').value / 100, dilateR:+$('dilateR').value,
     glowPad:+$('glowPad').value, trimPad:+$('trimPad').value,
+    glowKeep:+$('glowKeep').value,
   };
 }
 
@@ -700,7 +743,7 @@ $('sheetFile').onchange = e => {
 
 // ── control wiring ────────────────────────────────────────────────────────
 const SLIDERS = ['whiteThresh','alphaThresh','minPx','mergeGap','minSize',
-                 'minFrac','dilateR','glowPad','trimPad'];
+                 'minFrac','dilateR','glowPad','trimPad','glowKeep'];
 SLIDERS.forEach(id => {
   const el = $(id), out = $('v' + id[0].toUpperCase() + id.slice(1));
   const show = () => { out.textContent = id === 'minFrac' ? el.value + '%' : el.value; };
@@ -708,11 +751,15 @@ SLIDERS.forEach(id => {
   show();
 });
 ['keyWhite','isolate','stripShadow'].forEach(id => {
-  $(id).onchange = () => {
-    $('rowWhiteT').style.display = $('keyWhite').checked ? 'flex' : 'none';
-    rebuild(); saveSettings();
-  };
+  $(id).onchange = () => { syncRows(); rebuild(); saveSettings(); };
 });
+// Dependent controls, shown only when the checkbox that gives them meaning is
+// on. Inline style rather than [hidden]: an author display rule beats the UA
+// [hidden] rule at equal specificity, so `hidden` alone would not hide these.
+function syncRows() {
+  $('rowWhiteT').style.display   = $('keyWhite').checked    ? 'flex' : 'none';
+  $('rowGlowKeep').style.display = $('stripShadow').checked ? 'flex' : 'none';
+}
 $('prefix').oninput = () => { renumber(); renderCells(); saveSettings(); };
 $('maxH').oninput = () => { renderCells(); saveSettings(); };
 window.addEventListener('resize', () => { if (workID) drawSheet(); });
@@ -1660,6 +1707,12 @@ function saveSettings() {
 }
 (function loadSettings() {
   let s; try { s = JSON.parse(localStorage.getItem(LS) || '{}'); } catch { return; }
+  // One-shot migration: "strip baked shadow" used to default OFF, because back
+  // then it cut wide glow along with the shadow and that was the worse trade.
+  // Now it splits the two by colour, so it defaults ON — and a stored `false`
+  // from before that would silently pin every user to the old default forever.
+  // Keyed off the slider that shipped with the split, so tuned sliders survive.
+  if (s.glowKeep === undefined) delete s.stripShadow;
   for (const [k, v] of Object.entries(s)) {
     const el = $(k); if (!el) continue;
     if (el.type === 'checkbox') el.checked = v; else el.value = v;
@@ -1668,7 +1721,7 @@ function saveSettings() {
     const out = $('v' + id[0].toUpperCase() + id.slice(1));
     out.textContent = id === 'minFrac' ? $(id).value + '%' : $(id).value;
   });
-  $('rowWhiteT').style.display = $('keyWhite').checked ? 'flex' : 'none';
+  syncRows();
 })();
 
 status('Load an AI sheet to start, or jump to “Tier chain” to retune a map or the customer cast.');

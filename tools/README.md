@@ -115,9 +115,42 @@ with the "generous gaps, nothing touches" clause. Each item is then isolated by
 neighbour's stem poking into the cell. "keep parts ≥" is the floor for
 genuinely separate pieces (a violin bow ≈ 13% of the item, stray specks ≈ 1%);
 rejected blobs are excluded from the feather pass so they can't reappear.
-"Strip baked shadow" raises the core threshold to 128 (the game draws its own
-`SHADOW_SPRITE`, so a baked one double-shadows). Save writes the PNGs straight
-into a folder you pick once.
+Save writes the PNGs straight into a folder you pick once.
+
+**"Strip baked shadow" keeps a baked GLOW and drops a baked DROP SHADOW**
+(default ON since 2026-07-29). The two are worth opposite treatment. A glow is a
+pre-rendered gaussian blur — the same trick `render.js` uses for combo pops
+because `shadowBlur` is far too expensive to run per frame — so it is free
+quality. A shadow is a liability: `drawDrink` already draws one sized to `physR`
+and nudged by `SHADOW_DROP`, so a baked one double-shadows, points wherever that
+sheet felt like, and (because sprites are pinned by TOTAL HEIGHT and
+bottom-anchored at `r*0.75`) inflates the crop bbox so the drink renders smaller
+and floats above its own hitbox. Measured on a synthetic item carrying both:
+crop 145×167 → 155×139, i.e. the phantom height goes away.
+
+Both are soft alpha outside the core, so the old distance-based cut could not
+tell them apart — it raised the core threshold to 128 and dropped whatever sat
+further than `edge feather` from the body, shadow and wide glow alike. The split
+is by **colour** instead: ImageData RGB is UNPREMULTIPLIED, so a white glow reads
+255 and a black shadow reads ~0 no matter how faint the alpha, which makes the
+test independent of how soft the halo is. It compares the **brightest channel**
+(HSV value) rather than luminance, because a saturated glow (deep purple ≈
+120,60,180) has low luminance and is obviously not a shadow.
+
+- **glow cutoff** (default 110) is where the line sits. **255 reproduces the old
+  behaviour** (halo dropped entirely); 0 keeps all of it, shadow included.
+- **glow pad** doubles as the REACH: the halo searched is `glow pad` px out from
+  the body, which is exactly the margin the crop made room for. Lower it if a
+  neighbour's halo gets grabbed.
+- Blobs the isolate pass rejected stay rejected, so a neighbour cannot re-enter
+  through its own glow.
+- A thin dark skirt within `edge feather` of the body always survives, by
+  design — that band is the item's own antialiased edge and its outlines, and
+  colour-testing it would eat the "subtle warm outlines" the art prompt asks for.
+
+The default flipped with a one-shot settings migration keyed off the new slider,
+so a stored `stripShadow:false` from before the split can't silently pin you to
+the old default while your tuned sliders are preserved.
 
 **Saving downscales by default (built 2026-07-28).** A **max height** control in
 the Save fieldset (default **256 px**, `0` = source resolution) is applied at
