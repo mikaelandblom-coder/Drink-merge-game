@@ -7,3 +7,8 @@ build uses these). Subfolders mirror the original `assets/source/<map>/` layout.
 - `tikibar/tiki_bar_drinks.png` — original combined drinks spritesheet; replaced by the individual `tikibar/drink-*.png` files.
 - `mage/merge items.png` — v1 mage sheet (green screen, uneven grid); replaced by
   `mage/merge items v2.png` with real transparent background.
+- `farm/items 1.png`, `farm/items 2.png`, `farm/items_combined.png` — v1 farm
+  art (combined = sheet 1 with sheet 2's cabbage swapped in); replaced by the
+  set extracted from `farm/items 3.png` in the sprite editor. The shipped
+  `assets/images/farm/` sprites come from the EDITOR, not process_assets.py —
+  see the farm note in process_assets.py's PIPELINE before re-adding an entry.

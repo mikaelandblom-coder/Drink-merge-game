@@ -471,6 +471,13 @@ python process_assets.py --map shared
 
 Each map lists its source files. Entry types:
 
+> **Not every map is pipeline-owned.** Farm has NO PIPELINE entry: its shipped
+> sprites were extracted in the sprite editor (from `items 3.png`), with
+> hitboxes/colours tuned to those exact crops — see the farm note in the
+> PIPELINE dict before re-adding one. A full `python process_assets.py` run is
+> expected to be a **no-op** against a clean checkout (verified 2026-07-30);
+> if it dirties git, something is stale — fix the config, don't commit blindly.
+
 | type | use case |
 |------|----------|
 | `single` | one item per file (preferred) |
