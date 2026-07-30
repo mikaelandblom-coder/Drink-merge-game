@@ -194,10 +194,52 @@ function burst(x, y, color, r, particles) {
 const CUSTOMER_IMGS = CUSTOMER_SPRITES.map(
   src => { const i = new Image(); i.dataset.src = src; return i; });
 
+// Every loaded face is BAKED INTO A CANVAS and drawn from there, never from the
+// Image. iOS WebKit purges the decoded pixels of an Image that is not in the
+// render tree and has not been painted recently, and a drawImage() of a purged
+// Image paints NOTHING for the frames the re-decode takes — the customer
+// "flickers in and out" or sits missing under its own order bubble (reported on
+// Mai's iPad, 2026-07-29). The cast is the worst possible shape for that policy:
+// 18 faces are loaded but only 3 are on screen, so the other 15 go cold, and an
+// arriving customer is almost always a face nothing has painted in a minute.
+// (It only became noticeable when the 9->18 cast actually reached devices: it
+// landed on main without a cache-buster bump, so items.js stayed cached at ?v=79
+// until the v2026-07-29 deploy — the cast, not the deploy, is the cause.)
+// A canvas backing store is a retained buffer rather than a purgeable decode
+// cache, so a baked face draws the same on frame 1 and frame 100000. Same
+// pattern as SHADOW_SPRITE above; ~5MB resident for the whole cast.
+const CUSTOMER_ART = new Array(CUSTOMER_SPRITES.length).fill(null);
+// Guard against a future oversized face; the cast ships at 256-313px tall and
+// can be drawn up to 108 world px * 3.2 (MAX_SCALE*MAX_PR), so baking at natural
+// size is what keeps them sharp on a retina iPad. Never bake SMALLER than drawn.
+const CUSTOMER_ART_MAX_H = 384;
+
+function bakeCustomer(i) {
+  const img = CUSTOMER_IMGS[i];
+  if (CUSTOMER_ART[i] || !img.naturalWidth) return;
+  const h  = Math.min(CUSTOMER_ART_MAX_H, img.naturalHeight);
+  const w  = Math.round(img.naturalWidth * (h / img.naturalHeight));
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  const g = cv.getContext('2d');
+  g.imageSmoothingQuality = 'high';   // one-time scale, unlike the frame loop
+  g.drawImage(img, 0, 0, w, h);
+  CUSTOMER_ART[i] = cv;
+  // A face that lands after the board has settled would otherwise stay missing
+  // until the next shot: nothing else invalidates the idle-frame skip on load.
+  wakeRender();
+}
+
 function loadCustomerSprites() {
-  for (const img of CUSTOMER_IMGS) {
-    if (!img.getAttribute('src')) img.src = img.dataset.src;
-  }
+  CUSTOMER_IMGS.forEach((img, i) => {
+    if (CUSTOMER_ART[i]) return;                 // already baked
+    if (img.getAttribute('src')) { bakeCustomer(i); return; }  // in flight / decoded
+    img.onload  = () => bakeCustomer(i);
+    // One retry: a face whose fetch drops on a flaky phone connection would
+    // otherwise be a permanently empty slot under a live order bubble.
+    img.onerror = () => { if (!img.dataset.retried) { img.dataset.retried = '1'; img.src = img.dataset.src; } };
+    img.src = img.dataset.src;
+  });
 }
 
 // Layout is proportional to the per-map HORIZON so customers always fit in the
@@ -254,10 +296,11 @@ function drawCustomers(customers, wob) {
     if (alpha <= 0) continue;
     ctx.globalAlpha = alpha;
 
-    const img = CUSTOMER_IMGS[c.art];
-    if (img.complete && img.naturalWidth) {
-      const h = L.ch, w = h * (img.naturalWidth / img.naturalHeight);
-      ctx.drawImage(img, L.cx - w / 2, L.cBottom - h + dy, w, h);
+    // The baked canvas, never CUSTOMER_IMGS[c.art] — see the note above.
+    const art = CUSTOMER_ART[c.art];
+    if (art) {
+      const h = L.ch, w = h * (art.width / art.height);
+      ctx.drawImage(art, L.cx - w / 2, L.cBottom - h + dy, w, h);
     }
 
     // Order bubble: same parchment style as the NEXT preview; green when the
