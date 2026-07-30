@@ -9,6 +9,10 @@ Usage:
 Drop AI output (white background) into assets/source/<map>/ and add an
 entry to PIPELINE below. Run the script. Done.
 
+If the AI produced a FAKE transparent background (a grey checkerboard painted
+into the pixels), use chroma:'checker' — the checker grid is fitted and keyed
+out safely, even under white/grey items. See remove_checker_bg.
+
 --- Spritesheet tip ---
 Ask the AI to place a solid bright-magenta (#FF00FF) line between items.
 Set 'separator': [255, 0, 255] in the spritesheet config and the script will
@@ -39,6 +43,16 @@ except ImportError:
 #                               omit to use whitespace auto-detection)
 #                  'fill_holes': True to make enclosed white regions (e.g.
 #                               handle holes) transparent (optional)
+#                  'chroma': background type (optional, default 'white'):
+#                     'alpha'   — REAL transparent background; split on gutters
+#                     'checker' — FAKE transparency: the AI painted the grey
+#                                 checkerboard into the pixels. The checker
+#                                 grid is fitted (period+phase per axis) and
+#                                 only pixels matching their own predicted
+#                                 tile colour are removed, so white/grey items
+#                                 survive; then splits like 'alpha'.
+#                                 'checker_tol' overrides the match tolerance.
+#                     'green'   — green-screen keying
 #
 #   pair         — two items side by side.
 #                  'names': [left_name, right_name]
@@ -252,6 +266,28 @@ PIPELINE = {
         },
     ],
 
+    'new vietnam map': [
+        # Bun cha tier chain. The AI painted a FAKE transparency checkerboard
+        # into the pixels — chroma:'checker' fits the checker grid and keys it
+        # out (see remove_checker_bg), then splits on the resulting alpha.
+        # NOTE: 'vietnam/...' names are placeholders — settle the map id and
+        # item names when wiring config/items.js, then rerun.
+        {
+            'file':   'sprite_sheet.png',
+            'type':   'spritesheet',
+            'grid':   (3, 3),
+            'chroma': 'checker',
+            'min_component_frac': 0.05,   # clears the feathered slivers the
+                                          # checker key leaves in the two
+                                          # sub-tile-width gutters
+            'names':  [
+                'vietnam/peanuts',   'vietnam/herbs',           'vietnam/pickles',
+                'vietnam/noodles',   'vietnam/springroll',      'vietnam/grilled-pork',
+                'vietnam/bun-cha',   'vietnam/bun-cha-special', 'vietnam/feast-tray',
+            ],
+        },
+    ],
+
     # 'example-map': [
     #     {
     #         'file':      'items.png',
@@ -276,6 +312,8 @@ CELL_MARGIN  = 5    # pixels stripped from each spritesheet cell edge
 MIN_HOLE_PX  = 300  # minimum enclosed-white region size to treat as a hole
 GREEN_MARGIN = 20   # for chroma:'green' — how much G must exceed max(R,B) for
                     # a pixel to count as green-screen background
+CHECKER_TOL  = 16   # for chroma:'checker' — max per-channel distance from the
+                    # PREDICTED checker colour for a pixel to count as background
 
 SOURCE_ROOT = Path("assets/source")
 OUTPUT_DIR  = Path("assets/images")
@@ -458,6 +496,193 @@ def remove_green_screen(img: Image.Image, round_aura: bool = False) -> Image.Ima
     return Image.fromarray(data.astype(np.uint8), mode="RGBA")
 
 
+def _fit_checker_axis(band_lum: np.ndarray):
+    """Fit the checker alternation along one axis from a border band's mean
+    luminance profile. Returns (T, phi) with tile boundaries at phi + k*T,
+    or None if the profile isn't a regular alternation."""
+    lo, hi = float(band_lum.min()), float(band_lum.max())
+    if hi - lo < 8:                    # no visible alternation
+        return None
+    sq    = band_lum > (lo + hi) / 2
+    trans = np.where(sq[1:] != sq[:-1])[0] + 1
+    if len(trans) < 6:
+        return None
+    T, phi = np.polyfit(np.arange(len(trans)), trans, 1)
+    if not (6 <= T <= 200):
+        return None
+    resid = np.abs(phi + T * np.arange(len(trans)) - trans)
+    if np.median(resid) > 2.0:         # transitions off-lattice: not regular
+        return None
+    return float(T), float(phi)
+
+
+def remove_checker_bg(img: Image.Image, tol: int = CHECKER_TOL,
+                      fill_holes: bool = False,
+                      min_hole_px: int = MIN_HOLE_PX) -> Image.Image:
+    """Remove a FAKE transparency checkerboard the AI painted into the pixels.
+
+    A plain 'near white or near grey' threshold would be dangerous here: white
+    items (noodles, bowls, daikon) sit in exactly that colour range, and a
+    flood fill through such a mask can eat them. Instead we exploit the one
+    thing the checker has that items don't — perfect regularity. The tile
+    period and phase are fitted per axis from the border bands, giving the
+    exact PREDICTED background colour at every pixel; only pixels matching
+    their own prediction count as background. A white item pixel over a grey
+    tile doesn't match, so the flood fill is fenced in at every tile boundary
+    (~one tile of leak at absolute worst). Edges are feathered and de-matted
+    against the per-pixel predicted colour, so fringes take the local tile
+    shade into account.
+
+    Raises ValueError with a diagnosis when the sheet's checker is too
+    irregular to fit — fall back to regenerating the art, or hardcode splits.
+    """
+    img  = img.convert("RGBA")
+    data = np.array(img, dtype=np.float32)
+    rgb  = data[:, :, :3]
+    h, w = rgb.shape[:2]
+    lum  = rgb.mean(axis=2)
+    sat  = rgb.max(axis=2) - rgb.min(axis=2)
+
+    # --- border bands (10px strips just inside each edge), keep clean ones ---
+    bands = {
+        'top':    (slice(3, 13),      slice(None)),
+        'bottom': (slice(h-13, h-3),  slice(None)),
+        'left':   (slice(None),       slice(3, 13)),
+        'right':  (slice(None),       slice(w-13, w-3)),
+    }
+    def band_ok(sl):                   # checker is neutral; an item touching
+        return (sat[sl] <= 12).mean() > 0.97   # the band shows up as saturation
+    clean = {n: sl for n, sl in bands.items() if band_ok(sl)}
+    if not clean:
+        raise ValueError("checker: no clean border band (items touch every "
+                         "edge?) — can't sample the checker pattern")
+
+    # --- the two checker shades, from the clean bands ---
+    px   = np.concatenate([rgb[sl].reshape(-1, 3) for sl in clean.values()])
+    plum = px.mean(axis=1)
+    mid  = (plum.min() + plum.max()) / 2
+    shade_dark  = np.median(px[plum <= mid], axis=0)
+    shade_light = np.median(px[plum >  mid], axis=0)
+
+    # --- tile period + phase per axis ---
+    fit_x = fit_y = None
+    for n in ('top', 'bottom'):
+        if n in clean and fit_x is None:
+            fit_x = _fit_checker_axis(lum[clean[n]].mean(axis=0))
+    for n in ('left', 'right'):
+        if n in clean and fit_y is None:
+            fit_y = _fit_checker_axis(lum[clean[n]].mean(axis=1))
+    if not (fit_x and fit_y):
+        raise ValueError("checker: border bands don't alternate regularly — "
+                         "the painted checker is too irregular to fit")
+    Tx, phix = fit_x
+    Ty, phiy = fit_y
+
+    # --- predicted background colour per pixel ---
+    xs, ys = np.arange(w), np.arange(h)
+    parity = ((np.floor((xs - phix) / Tx).astype(int)[None, :] +
+               np.floor((ys - phiy) / Ty).astype(int)[:, None]) & 1)
+    # which parity is the light one? try both, keep the better fit
+    exp0 = np.where(parity[:, :, None] == 0, shade_dark, shade_light)
+    exp1 = np.where(parity[:, :, None] == 0, shade_light, shade_dark)
+    band_mask = np.zeros((h, w), bool)
+    for sl in clean.values():
+        band_mask[sl] = True
+    d0 = np.abs(rgb - exp0).max(axis=2)
+    d1 = np.abs(rgb - exp1).max(axis=2)
+    if (d0[band_mask] <= tol).mean() >= (d1[band_mask] <= tol).mean():
+        expected, dist = exp0, d0
+    else:
+        expected, dist = exp1, d1
+    frac = (dist[band_mask] <= tol).mean()
+    if frac < 0.9:
+        raise ValueError(f"checker: prediction only matches {frac:.0%} of the "
+                         "border — pattern drifts; regenerate with a real "
+                         "transparent background")
+
+    # --- background mask: match the prediction; at tile seams the pixels are
+    #     a blend of the two shades, so allow any neutral in-between there ---
+    off_x = (xs - phix) % Tx
+    off_y = (ys - phiy) % Ty
+    near_seam = ((np.minimum(off_x, Tx - off_x)[None, :] <= 1.5) |
+                 (np.minimum(off_y, Ty - off_y)[:, None] <= 1.5))
+    blend_ok = ((sat <= 12) &
+                (lum >= shade_dark.mean()  - tol) &
+                (lum <= shade_light.mean() + tol))
+    is_bg = (dist <= tol) | (near_seam & blend_ok)
+
+    # --- structural guard: an item's own whites/greys can match the
+    #     prediction wherever they land on the right parity, letting the flood
+    #     percolate into e.g. white noodles. True background shows the checker
+    #     TEXTURE: whole tiles matching at ~100%. Only allow removal within
+    #     one tile of such a fully-matching tile — bounds any leak into an
+    #     item to a single tile past its true edge. ---
+    strict = dist <= tol
+    tx = np.floor((xs - phix) / Tx).astype(int); tx -= tx.min()
+    ty2 = np.floor((ys - phiy) / Ty).astype(int); ty2 -= ty2.min()
+    ntx, nty = tx.max() + 1, ty2.max() + 1
+    tid    = (ty2[:, None] * ntx + tx[None, :]).ravel()
+    match  = np.bincount(tid, weights=strict.ravel(), minlength=ntx * nty)
+    total  = np.bincount(tid, minlength=ntx * nty).clip(min=1)
+    tile_bg = (match / total).reshape(nty, ntx) >= 0.85
+    grown = np.zeros_like(tile_bg)
+    for dy in (-1, 0, 1):
+        for dx in (-1, 0, 1):
+            grown |= np.roll(np.roll(tile_bg, dy, axis=0), dx, axis=1)
+    is_bg &= grown[np.ix_(ty2, tx)]
+
+    bg    = flood_fill_background(is_bg)
+    holes = find_enclosed_holes(is_bg, bg, min_hole_px) if fill_holes \
+            else np.zeros_like(bg)
+    removed = bg | holes
+
+    # --- residue shave: the guard can strand checker slivers where a gutter
+    #     is narrower than a tile (no fully-matching tile nearby to authorize
+    #     them). Those slivers hug the item edges, so component tests can't
+    #     isolate them — but distance can: real item detail (noodle strands,
+    #     bowl rims) always has NON-matching pixels within a few px (shading,
+    #     anti-aliased edges), while the middle of a checker sliver is
+    #     matching pixels through and through. Protect a small halo around
+    #     every non-matching kept pixel, then flood from the already-removed
+    #     background through unprotected matching pixels only. An item's
+    #     interior false-matches stay safe twice over: they're inside the
+    #     halo, and the flood can't cross the (protected) item edge. ---
+    kept = ~removed
+    protected = kept & ~strict
+    for _ in range(2):                       # dilate 2px (chebyshev)
+        p = protected.copy()
+        p[1:, :] |= protected[:-1, :]; p[:-1, :] |= protected[1:, :]
+        p[:, 1:] |= protected[:, :-1]; p[:, :-1] |= protected[:, 1:]
+        protected = p
+    shaveable = kept & strict & ~protected
+    if shaveable.any():
+        near_removed = np.zeros_like(removed)
+        near_removed[1:, :] |= removed[:-1, :]; near_removed[:-1, :] |= removed[1:, :]
+        near_removed[:, 1:] |= removed[:, :-1]; near_removed[:, :-1] |= removed[:, 1:]
+        seeds = [tuple(p) for p in np.argwhere(shaveable & near_removed)]
+        removed |= _bfs(shaveable, seeds)
+
+    # --- alpha + feather + de-matte against the per-pixel predicted colour ---
+    hard_alpha = np.where(removed, 0.0, 255.0).astype(np.uint8)
+    alpha_img  = Image.fromarray(hard_alpha, mode="L")
+    if FEATHER_PX > 0:
+        alpha_img = alpha_img.filter(ImageFilter.GaussianBlur(radius=FEATHER_PX))
+
+    alpha  = np.array(alpha_img).astype(np.float32)
+    a_norm = alpha / 255.0
+    safe_a = np.where(a_norm > 0.01, a_norm, 1.0)
+    edge   = (a_norm > 0.01) & (a_norm < 0.99)
+
+    for c in range(3):
+        ch = data[:, :, c]
+        corrected = np.clip((ch - expected[:, :, c] * (1.0 - a_norm)) / safe_a,
+                            0, 255)
+        data[:, :, c] = np.where(edge, corrected, ch)
+
+    data[:, :, 3] = alpha
+    return Image.fromarray(data.astype(np.uint8), mode="RGBA")
+
+
 def remove_white_bg(img: Image.Image, thresh: int = WHITE_THRESH,
                     fill_holes: bool = False,
                     min_hole_px: int = MIN_HOLE_PX,
@@ -466,6 +691,9 @@ def remove_white_bg(img: Image.Image, thresh: int = WHITE_THRESH,
                     round_aura: bool = False) -> Image.Image:
     if chroma == 'green':
         return remove_green_screen(img, round_aura=round_aura)
+    if chroma == 'checker':
+        return remove_checker_bg(img, fill_holes=fill_holes,
+                                 min_hole_px=min_hole_px)
     img  = img.convert("RGBA")
     data = np.array(img, dtype=np.float32)
     iw   = bg_mask(data.astype(np.uint8), thresh, chroma)
@@ -611,16 +839,34 @@ def split_alpha_grid(img: Image.Image, rows: int, cols: int) -> list:
     mask = data[:, :, 3] > 32          # solid content only; faint streaks ignored
     col_bands = _alpha_bands(mask, axis=0)
     row_bands = _alpha_bands(mask, axis=1)
+    # A genuine gutter narrower than merge_gap gets merged away on tight
+    # sheets — retry with minimal merging before giving up.
+    if len(col_bands) != cols:
+        retry = _alpha_bands(mask, axis=0, merge_gap=4)
+        if len(retry) == cols: col_bands = retry
+    if len(row_bands) != rows:
+        retry = _alpha_bands(mask, axis=1, merge_gap=4)
+        if len(retry) == rows: row_bands = retry
     assert len(col_bands) == cols and len(row_bands) == rows, (
         f"expected {cols}x{rows} content bands, found {len(col_bands)}x{len(row_bands)} "
         f"(cols {col_bands}, rows {row_bands}) -> glow may be bridging a gutter")
-    # pad bands so soft glow (below the solid threshold) is kept with its item
+    # pad bands so soft glow (below the solid threshold) is kept with its item —
+    # but never further than halfway into the gap to the neighbouring band,
+    # or a tight gutter would hand a cell a big slab of its neighbour
     GLOW_PAD = 24
+    def pad_lo(bands, i, lo_edge):
+        gap = bands[i][0] - (bands[i-1][1] if i > 0 else lo_edge)
+        return min(GLOW_PAD, max(0, gap // 2)) if i > 0 else GLOW_PAD
+    def pad_hi(bands, i, hi_edge):
+        gap = (bands[i+1][0] if i+1 < len(bands) else hi_edge) - bands[i][1]
+        return min(GLOW_PAD, max(0, gap // 2)) if i+1 < len(bands) else GLOW_PAD
     cells = []
-    for (y0, y1) in row_bands:
-        for (x0, x1) in col_bands:
-            cell = img.crop((max(0, x0-GLOW_PAD), max(0, y0-GLOW_PAD),
-                             min(img.width, x1+GLOW_PAD), min(img.height, y1+GLOW_PAD)))
+    for ri, (y0, y1) in enumerate(row_bands):
+        for ci, (x0, x1) in enumerate(col_bands):
+            cell = img.crop((max(0, x0 - pad_lo(col_bands, ci, 0)),
+                             max(0, y0 - pad_lo(row_bands, ri, 0)),
+                             min(img.width,  x1 + pad_hi(col_bands, ci, img.width)),
+                             min(img.height, y1 + pad_hi(row_bands, ri, img.height))))
             ca = np.array(cell)[:, :, 3] > 32
             if ca.sum() < 30: cells.append(None); continue
             ys, xs = np.where(ca)
@@ -720,10 +966,19 @@ def handle_spritesheet(src: Path, cfg: dict):
     chroma     = cfg.get('chroma', 'white')
 
     # Real transparent background: split on alpha gutters, no keying at all.
+    # 'checker' (a FAKE transparency checkerboard painted into the pixels) is
+    # keyed out first — remove_checker_bg turns it into real alpha — and then
+    # takes exactly the same gutter-splitting path.
     # Use None in 'names' to skip a cell (duplicates / empties in the sheet).
-    if chroma == 'alpha':
+    if chroma in ('alpha', 'checker'):
+        sheet = Image.open(src)
+        if chroma == 'checker':
+            sheet = remove_checker_bg(sheet,
+                                      tol=cfg.get('checker_tol', CHECKER_TOL),
+                                      fill_holes=cfg.get('fill_holes', False),
+                                      min_hole_px=cfg.get('min_hole_px', MIN_HOLE_PX))
         speck = cfg.get('min_component_frac')   # drop stray fragments from neighbours
-        for cell, name in zip(split_alpha_grid(Image.open(src), rows, cols), names):
+        for cell, name in zip(split_alpha_grid(sheet, rows, cols), names):
             if name is None:
                 continue
             assert cell is not None, f"{src.name}: cell for '{name}' is empty"
@@ -765,7 +1020,8 @@ def handle_single(src: Path, cfg: dict):
     remove_white_bg(Image.open(src), thresh,
                     cfg.get('fill_holes', False),
                     cfg.get('min_hole_px', MIN_HOLE_PX),
-                    cfg.get('fill_holes_region')).save(
+                    cfg.get('fill_holes_region'),
+                    chroma=cfg.get('chroma', 'white')).save(
         out_path(cfg['name']), "PNG")
     print(f"    {cfg['name']}.png")
 

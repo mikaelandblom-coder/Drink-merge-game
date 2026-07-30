@@ -506,6 +506,20 @@ ChatGPT/AI CAN generate a real transparent background; ask for one clean grid,
 generous gaps, and **NO drop shadows** (a shadow bridging a gutter breaks the
 band-count assert in `split_alpha_grid`). Beats the white/magenta-keying path.
 
+**Fake transparency (a grey checkerboard painted into the pixels) is handled
+too**: `chroma:'checker'`. `remove_checker_bg` fits the checker grid (period +
+phase per axis from the border bands) and removes only pixels matching their
+own PREDICTED tile colour, so white/grey items (noodles, bowls) survive where a
+plain threshold would eat them; a tile-level guard plus a residue shave handle
+percolation and sub-tile gutters. Converts the sheet to real alpha, then splits
+like `'alpha'`. Pair it with `min_component_frac` (the keying can leave
+feathered slivers in gutters narrower than one checker tile, ~24px). Caveats:
+sub-tile enclosed holes may keep their checker (fill_holes is tile-grained
+here), and ultra-faint flyaway detail painted OVER the checker (the noodle
+wisps) is genuinely half-lost — comes out as soft fuzz, fine at game scale.
+Worked example: 'new vietnam map' in PIPELINE. A real transparent background is
+still the thing to ask the AI for; this is the rescue path when it fakes one.
+
 ### Spritesheet tip (saves AI generations)
 
 Ask the AI to put a **thin bright magenta (#FF00FF) line** between items
