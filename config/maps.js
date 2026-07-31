@@ -110,6 +110,31 @@ const MAPS = [
     //                small: 'assets/images/farm/bg_small.webp' },
     // defaultSize: 'large',
   },
+  {
+    id:       'cantho',
+    label:    'Cần Thơ',
+    sublabel: 'Floating Market',
+    bg:       'assets/images/cantho/bg_large.webp',
+    bgm:      'assets/audio/Can Tho.mp3',   // TODO: add Suno track (Mekong-morning
+                                            // dan tranh loop). Missing file just 404s — no crash.
+    bgmVol:   0.35,
+    itemsData: null,
+    // The play surface is the BOAT'S PROW DECK: a long deck tapering to a
+    // rounded prow at the far end, unlike any other map's boundary (Saigon,
+    // the other Vietnamese map, is a round tray). Trace it in
+    // tools/hitbox-editor.html — the deck edge where the planks meet the
+    // gunwale is the wall.
+    // Sounds inherit the `default` SOUND_MAP row until the map plays well;
+    // theme them in tools/sound-lab.html then, not here.
+    // TEMP: only the LARGE framing art exists. Omitting `sizes` hides the
+    // "Large table" checkbox and plays `bg` above. defaultSize is intended
+    // 'large', and since the default size keeps the plain map-id key
+    // ('cantho'), the boundary traced NOW is the large boundary and is reused
+    // when sizes is restored. Same shape as farm/melody above.
+    // sizes:       { large: 'assets/images/cantho/bg_large.webp',
+    //                small: 'assets/images/cantho/bg_small.webp' },
+    // defaultSize: 'large',
+  },
 ];
 
 // Wire item sets after items.js has defined them.
@@ -121,6 +146,7 @@ MAPS[4].itemsData = TEDDY_ITEMS;
 MAPS[5].itemsData = MELODY_ITEMS;
 MAPS[6].itemsData = PARIS_ITEMS;
 MAPS[7].itemsData = FARM_ITEMS;
+MAPS[8].itemsData = CANTHO_ITEMS;
 
 // Storage key for a map's boundary in MAP_HITBOXES. Size-variant maps trace a
 // separate boundary per table framing (the tray/heart sits differently in each

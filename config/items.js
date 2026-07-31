@@ -120,6 +120,38 @@ const FARM_ITEMS = [
   { name:'prize pumpkin',  r:71, glass:'#ebd7bf', liq:'#b7701c', sprite:'assets/images/farm/prizepumpkin.png', bodyRatio:0.85, vis:0.82 },
 ];
 
+// Can Tho (floating market). Bun thit nuong, built the way Saigon's chain is:
+// SIX ingredients then THREE plated versions of the finished dish — the arc Mai
+// likes, "make a dish from its ingredients". Where Saigon's last three escalate
+// by SIZE (bowl -> bowl -> pot), these escalate by how lavish the serving is
+// (melamine bowl -> patterned ceramic with prawn and cha gio -> the full lacquer
+// tray with its side saucers), so they differ in silhouette and not just scale.
+//
+// r reuses the proven Paris/Saigon 15->71 ramp. `vis` is area parity
+// (sqrt(0.75/aspect)) measured off the extracted PNGs — every item here is
+// WIDER than the nominal upright sprite, so all nine scale down; without it the
+// heaps and bowls would read a tier bigger than they are. bodyRatio is a
+// STARTING point only (1.08*vis: a circle inscribed in the drawn height, which
+// is the smaller dimension for these) — trace each in tools/hitbox-editor.html.
+// The spring roll is the exception and the one to watch: it is the only TALL
+// item (aspect 0.56), so area parity scales it UP (vis 1.16) rather than down
+// and its bodyRatio is derived from the drawn WIDTH, not the height. At vis 1
+// its physR came out 25 against tier 3's 27 — a tier that merges into a
+// SMALLER body, which reads as a bug. Keep this ramp monotonic if the art
+// changes, and give it a CAPSULE in tools/hitbox-editor.html: it is the one
+// item here a circle genuinely does not fit.
+const CANTHO_ITEMS = [
+  { name:'peanuts',       r:15, glass:'#fbdb92', liq:'#ab540a', sprite:'assets/images/cantho/peanuts.png',      bodyRatio:0.77, vis:0.71 },
+  { name:'herbs',         r:20, glass:'#b1c541', liq:'#284a01', sprite:'assets/images/cantho/herbs.png',        bodyRatio:0.87, vis:0.81 },
+  { name:'do chua',       r:26, glass:'#fbe7ca', liq:'#ec5b08', sprite:'assets/images/cantho/pickles.png',      bodyRatio:0.79, vis:0.73 },
+  { name:'bun noodles',   r:31, glass:'#fbf8f1', liq:'#d7c6b5', sprite:'assets/images/cantho/noodles.png',      bodyRatio:0.81, vis:0.75 },
+  { name:'cha gio',       r:37, glass:'#f4cf94', liq:'#923c06', sprite:'assets/images/cantho/springroll.png',   bodyRatio:0.74, vis:1.16 },
+  { name:'thit nuong',    r:44, glass:'#d48c56', liq:'#651606', sprite:'assets/images/cantho/grilled-pork.png', bodyRatio:0.81, vis:0.75 },
+  { name:'bun thit nuong',r:52, glass:'#e8dbc9', liq:'#6f3d09', sprite:'assets/images/cantho/bowl.png',         bodyRatio:0.84, vis:0.78 },
+  { name:'dac biet',      r:60, glass:'#e5cdaf', liq:'#4e321a', sprite:'assets/images/cantho/bowl-special.png', bodyRatio:0.91, vis:0.84 },
+  { name:'feast tray',    r:71, glass:'#ddc7a6', liq:'#2a1309', sprite:'assets/images/cantho/tray.png',         bodyRatio:0.83, vis:0.77 },
+];
+
 // Happy Hour mode: the receipt merge chain, shared by every map. Serving a
 // customer's order spawns tier 0 (crumpled ball) where the served drink stood;
 // receipts merge among themselves in parallel with the drink chain. The FINAL
@@ -175,7 +207,7 @@ const CUSTOMER_SPRITES = [
 // pick (~1MB). The sprite fetch now happens in loadItemSprites() below, called
 // per map by startGame(). The geometry below stays global — it costs nothing,
 // and every map's physR/cap must exist for the menu and the tools.
-[...HAWAII_ITEMS, ...SAIGON_ITEMS, ...KYOTO_ITEMS, ...MAGE_ITEMS, ...TEDDY_ITEMS, ...MELODY_ITEMS, ...PARIS_ITEMS, ...FARM_ITEMS, ...RECEIPT_ITEMS].forEach(item => {
+[...HAWAII_ITEMS, ...SAIGON_ITEMS, ...KYOTO_ITEMS, ...MAGE_ITEMS, ...TEDDY_ITEMS, ...MELODY_ITEMS, ...PARIS_ITEMS, ...FARM_ITEMS, ...CANTHO_ITEMS, ...RECEIPT_ITEMS].forEach(item => {
   const hb = (typeof ITEM_HITBOXES !== 'undefined') && ITEM_HITBOXES[item.sprite];
   if (hb && hb.bodyRatio) item.bodyRatio = hb.bodyRatio;
   // Collision-circle offset relative to the sprite anchor, in units of r

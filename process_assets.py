@@ -266,12 +266,19 @@ PIPELINE = {
         },
     ],
 
-    'new vietnam map': [
-        # Bun cha tier chain. The AI painted a FAKE transparency checkerboard
-        # into the pixels — chroma:'checker' fits the checker grid and keys it
-        # out (see remove_checker_bg), then splits on the resulting alpha.
-        # NOTE: 'vietnam/...' names are placeholders — settle the map id and
-        # item names when wiring config/items.js, then rerun.
+    'cantho': [
+        # Bun thit nuong tier chain. The AI painted a FAKE transparency
+        # checkerboard into the pixels — chroma:'checker' fits the checker grid
+        # and keys it out (see remove_checker_bg), then splits on the resulting
+        # alpha.
+        #
+        # KNOWN DAMAGE, not a bug to chase: the noodle nest's flyaway strands
+        # were painted OVER the checker at near-zero contrast, so keying them is
+        # ambiguous by construction and they come back as soft fuzz (the caveat
+        # under "Fake transparency" in CLAUDE.md). Every sprite is solid inside
+        # — measured 0% interior holes — so the loss is edge-only. The fix is a
+        # regenerated sheet with TRUE alpha, at which point this entry becomes
+        # chroma:'alpha' and min_component_frac can go.
         {
             'file':   'sprite_sheet.png',
             'type':   'spritesheet',
@@ -281,9 +288,9 @@ PIPELINE = {
                                           # checker key leaves in the two
                                           # sub-tile-width gutters
             'names':  [
-                'vietnam/peanuts',   'vietnam/herbs',           'vietnam/pickles',
-                'vietnam/noodles',   'vietnam/springroll',      'vietnam/grilled-pork',
-                'vietnam/bun-cha',   'vietnam/bun-cha-special', 'vietnam/feast-tray',
+                'cantho/peanuts',  'cantho/herbs',         'cantho/pickles',
+                'cantho/noodles',  'cantho/springroll',    'cantho/grilled-pork',
+                'cantho/bowl',     'cantho/bowl-special',  'cantho/tray',
             ],
         },
     ],
