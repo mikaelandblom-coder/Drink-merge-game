@@ -1558,20 +1558,42 @@ $('pickItemsJs').onclick = async () => {
 
 const CHAINS = {
   HAWAII_ITEMS, SAIGON_ITEMS, KYOTO_ITEMS, MAGE_ITEMS, TEDDY_ITEMS,
-  MELODY_ITEMS, PARIS_ITEMS, FARM_ITEMS, RECEIPT_ITEMS,
+  MELODY_ITEMS, PARIS_ITEMS, FARM_ITEMS, CANTHO_ITEMS, RECEIPT_ITEMS,
 };
 // Which const holds a given map's chain, by IDENTITY rather than by guessing a
-// name off the map id — MAPS[n].itemsData IS one of the arrays above.
+// name off the map id — MAPS[n].itemsData IS one of the arrays above. This list
+// has to be maintained by hand: a const's IDENTIFIER cannot be recovered from
+// its value, and `const` at script scope never lands on `window`, so there is
+// nothing to enumerate.
 const constOf = arr => Object.keys(CHAINS).find(k => CHAINS[k] === arr);
+
+// ...which is why an unregistered map must still be USABLE. This filter used to
+// be `MAPS.filter(m => constOf(m.itemsData))`, so a map missing from CHAINS
+// vanished from the picker with no error anywhere — cantho was invisible here
+// while the hitbox editor and sound lab (both of which read MAPS directly)
+// showed it fine. Now every map appears, and one missing from CHAINS falls back
+// to the naming convention every chain in the game follows, flagged unverified
+// so the status line says the name is a GUESS rather than a fact. That matters:
+// a wrong name doesn't fail on write, it APPENDS a second chain (see the
+// writeItems merge below), which is much harder to notice than a bad picker.
+const derivedName = m => m.id.toUpperCase().replace(/[^A-Z0-9]/g, '') + '_ITEMS';
+{
+  const missing = MAPS.filter(m => m.itemsData && !constOf(m.itemsData));
+  if (missing.length) console.warn(
+    '[sprite-editor] not registered in CHAINS: ' +
+    missing.map(m => `${m.id} -> add ${derivedName(m)}`).join(', '));
+}
 
 // The picker mirrors the hitbox editor's: one row per map (same labels, same
 // order), then the two map-less shared sets, then "new chain". Raw const names
 // and the sprite-path prefix are no longer typed by hand — a map knows both.
 const SETS = [
-  ...MAPS.filter(m => constOf(m.itemsData))
-         .map(m => ({ kind:'chain', id:m.id, name:constOf(m.itemsData),
+  ...MAPS.filter(m => m.itemsData)
+         .map(m => ({ kind:'chain', id:m.id,
+                      name:     constOf(m.itemsData) || derivedName(m),
+                      verified: !!constOf(m.itemsData),
                       label:`${m.label} — ${m.sublabel}`, items:m.itemsData })),
-  { kind:'chain', id:'__receipts', name:'RECEIPT_ITEMS',
+  { kind:'chain', id:'__receipts', name:'RECEIPT_ITEMS', verified:true,
     label:'Happy Hour — Receipts', items:RECEIPT_ITEMS },
   { kind:'cast',  id:'__customers', name:'CUSTOMER_SPRITES',
     label:'Happy Hour — Customers' },
@@ -1628,7 +1650,12 @@ let currentSet = SETS[0];
       });
     }
     await jumpToFolder(currentSet.items[0] && currentSet.items[0].sprite);
-    status(`Loaded ${currentSet.label} (${currentSet.name}) — adjust r / vis / order, then write it back.`);
+    status(currentSet.verified
+      ? `Loaded ${currentSet.label} (${currentSet.name}) — adjust r / vis / order, then write it back.`
+      : `Loaded ${currentSet.label}. WARNING: this map is not in the sprite editor's ` +
+        `CHAINS list, so “${currentSet.name}” is a guess from the map id. Check it ` +
+        `against config/items.js before writing — a wrong name appends a SECOND ` +
+        `chain instead of replacing this one.`);
   };
 }
 
