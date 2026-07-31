@@ -141,49 +141,19 @@ be written relative to the PROJECT ROOT.
 
 ## Art prompts for merge-item grids
 
-**Paris is the bar** — its item art is the best in the game, so its prompt is the
-template for every new map. Goal for all future maps: colourful, inviting,
-appealing. The shipped Paris prompt, and the six slots that made it work:
+The prompt templates live in **[assets/ART-PROMPTS.md](assets/ART-PROMPTS.md)**
+— a FOOD template (Cần Thơ, the most refined), the older Paris template for
+non-food subjects, and the background prompt, each with the reason every clause
+is in it. **Read it before asking an AI for a new item grid or background.**
 
-> A 3×3 sprite grid of 9 French pâtisserie items on a fully transparent
-> background, PNG with alpha. Cute, elegant pastel storybook style: soft rounded
-> plump shapes, gentle glossy highlights, pastel pink / cream / mint / lavender
-> palette, subtle warm outlines. NO drop shadows, NO background, generous empty
-> gaps between items so nothing touches. Row 1: a single sugar cube; a pink
-> macaron; a petit chou cream puff dusted with powdered sugar. Row 2: … Row 3: …
-> All items front-facing, consistent lighting from above, consistent style and
-> level of detail across all nine.
+It is a separate file rather than a section here because a prompt is something
+you copy, paste and fill in, not something you read for context — and most of
+its length is worked examples that would crowd this file out.
 
-1. **Grid + transparency** — proven wording, don't paraphrase.
-2. **Style sentence** — 2–4 adjectives + surface finish + outline treatment.
-3. **Pipeline constraints** — NO drop shadows, NO background, generous gaps.
-   Technical, not taste: a shadow bridging a gutter breaks the band detection in
-   `split_alpha_grid` / the sprite editor's extract tab.
-4. **Row-by-row enumeration, one concrete named item per cell** — specificity is
-   what stops the sheet drifting into mush. Row-major = TIER ORDER, which is also
-   how the sprite editor's tier chain reads the folder.
-5. **Escalating elaboration** across the rows, finale last.
-6. **Consistency clause** — front-facing, light from above, same level of detail.
-
-Three things Paris only got by luck or by a second generation — **bake these into
-prompt #1**:
-- **Plan the colour ladder in the prompt.** Paris pass 1 came back all red/brown/
-  pink because the subject list AND the style line named one palette family; it
-  took a reroll ("more varied colors … its almost all red brown and pink now") to
-  fix. Name a colour per item and spread nine hues around the wheel, with no two
-  ADJACENT tiers in the same family. This is gameplay, not decoration: at r15–r30
-  hue is what tells the player two drinks match. Farm's chain is the worked
-  example (brown→green→red→blue→orange→yellow→purple→orange→gold).
-- **"Compact, front-facing, centred, roughly as tall as it is wide."** Paris got
-  this free (pastries are round). Wide art needs `vis` rescaling and still reads
-  small; non-round art needs capsule hitboxes — the main reason Melody Lane is the
-  least-loved map.
-- **Attach a shipped Paris sprite as a style reference** — locks cross-map
-  consistency better than adjectives.
-
-Reroll policy: a PALETTE nudge is cheap and safe; a whole-FINISH restyle is not
-(it shrinks subjects and simplifies detail — see "AI restyle-regeneration" under
-Known issues). Generations are limited, so nail style + colour spread in pass 1.
+The two rules worth knowing without opening it: **row-major order IS tier
+order**, and **the colour ladder is gameplay** — at r15–r30 hue is what tells
+the player two items match, so name a colour per item and never put two
+adjacent tiers in the same family.
 
 ---
 
