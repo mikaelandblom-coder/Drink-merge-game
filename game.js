@@ -542,6 +542,10 @@ const SUBSTEPS = 3;
 // skip physics + drawing entirely, which hugely cuts battery/heat during the
 // long idle stretches a merge game spends waiting for input.
 let idleFrames = 0;
+// Force one more drawn frame from outside the loop. Art that finishes loading
+// mid-run is the case that needs it: sceneBusy() only knows about MOTION, so a
+// sprite landing on a settled board would not be painted until the next shot.
+function wakeRender() { idleFrames = 0; }
 function sceneBusy() {
   if (showXray) return true;   // keep the diagnostic live while a settled board idles
   if (aiming || !state.canShoot) return true;

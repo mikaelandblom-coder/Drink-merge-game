@@ -154,7 +154,6 @@ The two rules worth knowing without opening it: **row-major order IS tier
 order**, and **the colour ladder is gameplay** — at r15–r30 hue is what tells
 the player two items match, so name a colour per item and never put two
 adjacent tiers in the same family.
-
 ---
 
 ## Menu options — size variants, combos & Happy Hour
@@ -441,6 +440,13 @@ python process_assets.py --map shared
 
 Each map lists its source files. Entry types:
 
+> **Not every map is pipeline-owned.** Farm has NO PIPELINE entry: its shipped
+> sprites were extracted in the sprite editor (from `items 3.png`), with
+> hitboxes/colours tuned to those exact crops — see the farm note in the
+> PIPELINE dict before re-adding one. A full `python process_assets.py` run is
+> expected to be a **no-op** against a clean checkout (verified 2026-07-30);
+> if it dirties git, something is stale — fix the config, don't commit blindly.
+
 | type | use case |
 |------|----------|
 | `single` | one item per file (preferred) |
@@ -711,6 +717,31 @@ Two traps that script now handles, both of which cost real time:
   Verified by measuring the carrier stream with a second AudioContext:
   healthy 0.24 peak → track stopped 0 → old resume+play still 0 → after one
   tap 0.24 again.
+- **iOS drops the decode of Images it hasn't painted lately — BAKE RARELY-DRAWN
+  ART INTO A CANVAS (fixed 2026-07-29)**: Happy Hour customers on Mai's iPad
+  appeared as an order bubble with an empty space under it, flickering in and
+  out. WebKit purges the decoded pixels of an `Image` that is not in the render
+  tree and has not been drawn recently, and `drawImage()` of a purged Image
+  paints NOTHING for the frames the async re-decode takes. The cast is the worst
+  case for that policy: `loadCustomerSprites()` loads 18 faces but only 3 are on
+  screen, so 15 sit cold and an arriving customer is nearly always a face
+  nothing has painted in a minute. Fix: `bakeCustomer()` (render.js) copies each
+  face into an offscreen canvas on load and `drawCustomers` blits THAT —
+  a canvas backing store is a retained buffer, not a purgeable decode cache.
+  Verified by destroying every `CUSTOMER_IMGS` entry and re-rendering all 18
+  faces: unchanged. Item sprites are exempt in practice (drawn every frame, so
+  they stay hot), but **any art drawn rarely wants the same treatment** — this
+  is the same pattern as `SHADOW_SPRITE`. Costs ~5MB resident for the cast.
+  Two things this also fixed, both real on their own: nothing invalidated the
+  idle-frame skip when art finished loading, so a sprite landing on a settled
+  board stayed missing until the next shot (now `wakeRender()` in game.js); and
+  a dropped fetch left a permanently empty slot, so loads get one retry.
+  **Why it looked like the v2026-07-29 deploy caused it:** the 9→18 cast landed
+  on main on 2026-07-26 WITHOUT a cache-buster bump, so every device kept the
+  9-face `config/items.js` at `?v=79` until `?v=80` shipped. Pushing a config
+  change to main without bumping `?v=` doesn't ship it — it arms it for the
+  next deploy, which then gets blamed. Bump `?v=` in the SAME commit as a
+  `config/*.js` change, even when not deploying.
 - **Node.js IS installed** (`C:\Program Files\nodejs\node.exe`) — corrected
   2026-07-29; this line used to claim it wasn't, and that stale fact was
   load-bearing for "what could we build the tools with" questions. Serving is

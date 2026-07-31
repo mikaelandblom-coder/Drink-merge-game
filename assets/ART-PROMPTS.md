@@ -87,7 +87,12 @@ Row 3:
   is the shipped example.
 - **NO drop shadows, generous gaps** — technical, not taste. A shadow bridging a
   gutter breaks the band detection in `split_alpha_grid` and in the sprite
-  editor's extract tab.
+  editor's extract tab. A **glow is the exception and is welcome**: it is a
+  pre-rendered blur the frame loop could never afford, and the sprite editor
+  keeps a baked glow while dropping a baked shadow, splitting the two by colour
+  (see "Strip baked shadow" in tools/README.md). So a sheet arriving with both
+  is fine — but ask for gaps generous enough that the GLOW doesn't bridge them
+  either.
 - **"roughly as tall as it is wide"** — wide art needs `vis` rescaling and still
   reads small; non-round art needs capsule hitboxes, which is the main reason
   Melody Lane is the least-loved map.

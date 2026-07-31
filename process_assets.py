@@ -106,12 +106,16 @@ PIPELINE = {
         # transparent sheet. The frame is consumed as a 9-slice border-image
         # (style.css #xp-bar.h rules) — regenerate slices there if the art
         # ever changes.
+        # The split PNGs are the MASTERS for compress_backgrounds.py (the game
+        # serves the WebP it makes from them), so they land in source/chrome/
+        # with the other chrome masters — NOT in assets/images/, which holds
+        # only served files.
         {
             'file':   'xp_bar.png',
             'type':   'spritesheet',
             'grid':   (2, 1),
             'chroma': 'alpha',
-            'names':  ['xp-bar-frame', 'xp-medal'],
+            'names':  ['../source/chrome/xp-bar-frame', '../source/chrome/xp-medal'],
         },
     ],
 
@@ -248,23 +252,15 @@ PIPELINE = {
         },
     ],
 
-    'farm': [
-        # Combined sheet assembled in-session from two AI gens ("items 1.png" +
-        # "items 2.png"): sheet 1 as the base, purple cabbage swapped in from
-        # sheet 2, tail reordered. Already a clean transparent grid with wide
-        # gutters, so split_alpha_grid separates the 9 cells directly.
-        {
-            'file':   'items_combined.png',
-            'type':   'spritesheet',
-            'grid':   (3, 3),
-            'chroma': 'alpha',        # real transparent background
-            'names':  [
-                'farm/seed',       'farm/sprout',      'farm/strawberry',
-                'farm/blueberry',  'farm/pepper',      'farm/cabbage',
-                'farm/watermelon', 'farm/cauliflower', 'farm/prizepumpkin',
-            ],
-        },
-    ],
+    # 'farm' has NO entry on purpose: its shipped art is owned by
+    # tools/sprite-editor.html, not this script. The nine sprites in
+    # assets/images/farm/ were extracted from "items 3.png" in the sprite
+    # editor (commit 27ceb7d), which also tuned ITEM_HITBOXES, bodyRatio and
+    # glass/liq to exactly those crops; prizepumpkin was later replaced via
+    # the editor's downscale-on-save (76f968c). The old items_combined.png
+    # sheet this map used to build from is superseded ART, not just different
+    # crops — regenerating from it here would silently swap the whole set
+    # back and detach that tuning. It now lives in assets/source/_archive/farm/.
 
     'cantho': [
         # Bun thit nuong tier chain. The AI painted a FAKE transparency
@@ -829,8 +825,8 @@ def _alpha_bands(mask: np.ndarray, axis: int,
 
 def out_path(name: str) -> Path:
     """Output file for an item name, creating its map folder if needed.
-    Names carry their folder ('farm/seed', 'shared/coin'), mirroring the
-    map-based layout of assets/images/."""
+    Names carry their folder ('shared/coin'), mirroring the map-based layout
+    of assets/images/; master-only outputs escape it ('../source/chrome/…')."""
     p = OUTPUT_DIR / f"{name}.png"
     p.parent.mkdir(parents=True, exist_ok=True)
     return p
