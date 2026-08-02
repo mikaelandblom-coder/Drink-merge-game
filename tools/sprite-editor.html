@@ -270,6 +270,11 @@
       <div class="hint">Write replaces just this one <code>const … = [ … ]</code>
         block (or appends a new chain + registers it), leaving the rest of
         items.js alone. Then reload the game tab.</div>
+      <div class="alert" id="wrongFile" hidden>
+        <strong>Wrong file?</strong>
+        <span id="wrongFileMsg"></span>
+        <button class="ghost" id="repickFile">Forget it — pick again</button>
+      </div>
     </fieldset>
   </div>
 </div>
@@ -1536,8 +1541,36 @@ $('writeItems').onclick = async () => {
     const w = await itemsHandle.createWritable();
     await w.write(text); await w.close();
     authoredCache = null;          // the file changed — re-read it next time
-    status(`${note} in config/items.js. Reload the game tab to see it.`);
+    // WHICH config/items.js, though? The guards above only prove the picked file
+    // looks like items.js — every checkout's copy does. Only the server can say
+    // whether it is the one the game here loads (ToolHandles.checkServed).
+    // Read-modify-write makes a mis-picked handle quietly self-consistent: it
+    // reads and rewrites the same wrong file, so the edit keeps "working" while
+    // the game never changes.
+    const where = await ToolHandles.checkServed(itemsHandle, 'config/items.js', text);
+    if (where === 'different') {
+      showWrongFile(`${note}, but in a config/items.js that this server (${location.origin}) does not serve — `
+        + `most likely another checkout or a git worktree. The game here will not see it. `
+        + `Re-pick the file and write again.`);
+      return status(`Wrote to the WRONG config/items.js — see the warning under Output.`);
+    }
+    hideWrongFile();
+    status(`${note} in config/items.js${where === 'same' ? ' (verified against the server)' : ''}. `
+         + `Reload the game tab to see it.`);
   } catch (err) { if (err.name !== 'AbortError') status('Write failed: ' + err.message); }
+};
+
+function showWrongFile(msg) {
+  document.getElementById('wrongFileMsg').textContent = msg;
+  document.getElementById('wrongFile').hidden = false;
+}
+function hideWrongFile() { document.getElementById('wrongFile').hidden = true; }
+document.getElementById('repickFile').onclick = async () => {
+  await forgetHandle('itemsJs');
+  itemsHandle = null;
+  authoredCache = null;
+  hideWrongFile();
+  status('Forgotten. The next write will ask for the file — pick this checkout’s config/items.js.');
 };
 
 // ── load an existing chain to tweak ───────────────────────────────────────

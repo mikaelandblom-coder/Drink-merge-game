@@ -247,6 +247,52 @@ picker TRUNCATES its target the moment it is dismissed (see the trap below).
 Harmless for these two — they never read, they always write a complete file from
 memory — but fewer invocations is strictly safer.
 
+### Every save is checked against the server (the wrong-checkout trap)
+
+A remembered handle points at a FILE, and a file has no allegiance to the
+checkout you are working in. On 2026-08-02 the hitbox editor's handle was
+pointing into `.claude/worktrees/<branch>/config/hitboxes.js`: two boundaries
+were traced, Save reported success, and the main checkout's file never changed.
+Nothing was wrong with the write — only with which file it wrote.
+
+Nothing in the API can prevent that, and it is worth knowing why, because the
+obvious fixes are all dead ends. **A handle exposes no path** — the picker
+gesture IS the grant, and a path would leak the shape of your disk — so a tool
+cannot compare its handle to `config/hitboxes.js`, cannot derive a handle from
+that relative URL, and therefore **can never auto-select the right file**.
+`.name` is only the basename, identical in every checkout, which is exactly why
+the Save tooltip ("Overwrites hitboxes.js") read as reassuring while pointing
+somewhere else.
+
+What a tool CAN do is ask the server. `ToolHandles.checkServed(handle, url,
+text?)` fetches `url` over the tool's own origin — by definition the copy the
+game next door loads — and compares bytes. Both moments are wired up in all
+three tools:
+
+- **At load**, when permission is already granted: a mismatch raises the
+  **Wrong file?** banner *before* you spend an hour tracing.
+- **After every write**, comparing what was just written against what the server
+  now returns. This is the one with no meaningful false negative — if it says
+  verified, the save is live where the game reads it.
+
+On a mismatch the tools refuse to look successful: the hitbox editor leaves the
+unsaved pill lit (so the `beforeunload` guard still fires), the sound lab **keeps
+its localStorage draft** instead of clearing it (that draft is then the only safe
+copy of your picks), and each offers **Forget it — pick again**. Comparison is
+exact, with no line-ending normalisation, because two checkouts of this repo
+differ in EOL alone — git leaves the main checkout CRLF and a worktree LF — and
+that difference is signal.
+
+`'unknown'` is a non-answer and stays silent: from `file://` there is no server
+to ask, and at load Chromium may not have re-granted read permission yet. The
+handle keys are also namespaced per ORIGIN now, so two checkouts served on
+different ports can never share one. That namespace orphaned every handle
+remembered before 2026-08-02 — each tool asks for its file once more, which is
+the intended cost.
+
+Recovering a save that already went astray is a copy, not a re-trace — see
+CLAUDE.md, "Preview servers & PARALLEL SESSIONS", for how to find it.
+
 Pick which PNG is which tier, drag to reorder, then write
 `config/items.js`. `r` belongs to the SLOT, not the item, so a drag re-assigns
 the chain's existing r values smallest→largest — a hand-tuned ladder survives a

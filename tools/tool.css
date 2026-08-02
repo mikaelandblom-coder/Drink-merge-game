@@ -129,6 +129,21 @@ code {
 }
 .dirty.clean { background: #1d3324; color: var(--ok); border-color: #2c5137; }
 
+/* ---- wrong-file alert (any tool that writes through a remembered handle) ----
+   Shown when ToolHandles.checkServed says the picked file is not the one this
+   origin serves. The explicit [hidden] rule is load-bearing: [hidden] is a UA
+   rule of class specificity, so the `display:block` here would otherwise win and
+   the banner would show on every load (the exact bug the sound lab's restored-
+   picks banner had). See CLAUDE.md, "hidden loses to any author display rule". */
+.alert {
+  display: block; font-size: 12px; line-height: 1.45; margin-top: 8px;
+  padding: 8px 10px; border-radius: 7px;
+  background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-ln);
+}
+.alert[hidden] { display: none; }
+.alert strong { display: block; margin-bottom: 3px; }
+.alert button { margin-top: 7px; }
+
 /* ---- tool switcher (injected by tool-nav.js) ---- */
 .toolnav { display: flex; gap: 5px; flex-wrap: wrap; }
 .toolnav a {

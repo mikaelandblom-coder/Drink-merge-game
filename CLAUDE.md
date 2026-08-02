@@ -329,8 +329,39 @@ keyed by ORIGIN rather than by directory: `localhost:5500` has ONE localStorage
 bucket, so high-score boards (`mm_s_*`) and XP (`mm_xp_v1`) are shared by every
 session pointed at it — use `?test=1`, which stubs score saves and disables XP
 persistence. And the File System Access handles the tools hold are to the file
-you PICKED, which is the main checkout's `config/hitboxes.js` even if the tool is
-open on a worktree's port; re-pick after switching.
+you PICKED — a specific file on disk, with no relationship to the port the tool
+is served from. It cuts BOTH ways, and the tool cannot tell: a handle to the main
+checkout's `config/hitboxes.js` while the tool runs on a worktree's port, or (the
+one that actually bit us, 2026-08-02) a handle to a WORKTREE's copy while you are
+working in main. **Re-pick after switching checkouts.**
+
+The second direction is nastier because it is SILENT: the editor saves through the
+remembered handle, reports success, and the trace lands in
+`.claude/worktrees/<branch>/config/hitboxes.js` — a real save, to a file nothing
+in the main session reads. It looks exactly like "the tool didn't save".
+
+**All three tools now detect this themselves** (added 2026-08-02): each verifies
+its handle against the copy its own origin serves, at load and after every write,
+and raises a "Wrong file?" banner instead of reporting success — see "Every save
+is checked against the server" in tools/README.md for how, and for why
+auto-selecting the right file is impossible rather than merely unimplemented. The
+manual checks below still matter for a save made BEFORE that existed, or from
+`file://` where there is no server to ask. In that order:
+
+1. `git status` in the main checkout — if `config/hitboxes.js` is not modified,
+   nothing was written HERE.
+2. Search for the real write:
+   `Get-ChildItem E:\Projekt -Filter hitboxes*.js -Recurse | Sort LastWriteTime -Desc`
+   The newest hit is where the work went.
+
+Recovering is a copy, not a re-trace — but the worktree copy is LF while the main
+checkout's is CRLF, so convert on the way in or the whole file shows as changed
+and the real diff is unreadable. The `Save` button's tooltip is no help here and
+is part of why this hides: it reports the handle's `.name` ("Overwrites
+hitboxes.js"), which reads identically for the main checkout and every worktree —
+the API exposes no path at all. The handle keys are namespaced per tool
+(`hitbox:file`) in `tools/tool-handles.js`, so clearing one tool's memory does
+not disturb the others.
 
 ### Running the tools from disk (`file://`)
 

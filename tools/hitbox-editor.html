@@ -110,6 +110,11 @@
       <button class="ghost" id="dlBtn">Download</button>
     </div>
     <div class="hint">“Save to…” asks once for the file, then overwrites it on every save (Chrome/Edge). Reload the game tab to see changes.</div>
+    <div class="alert" id="wrongFile" hidden>
+      <strong>Wrong file?</strong>
+      <span id="wrongFileMsg"></span>
+      <button class="ghost" id="repickFile">Forget it — pick again</button>
+    </div>
   </fieldset>
 </div>
 
@@ -1027,27 +1032,76 @@ async function ensureSaveFile() {
   return fileHandle;
 }
 
+// The path THIS tool's origin serves. <base href="../"> makes it project-root
+// relative, so it resolves to the same config/hitboxes.js the game next door
+// loads — which is exactly what a remembered handle needs to be checked against.
+const SERVED = 'config/hitboxes.js';
+
+function showWrongFile(msg) {
+  document.getElementById('wrongFileMsg').textContent = msg;
+  document.getElementById('wrongFile').hidden = false;
+}
+function hideWrongFile() { document.getElementById('wrongFile').hidden = true; }
+
+document.getElementById('repickFile').onclick = async () => {
+  await ToolHandles.forget(HKEY);
+  fileHandle = null;
+  hideWrongFile();
+  status('Forgotten. The next “Save to…” will ask for the file — pick this checkout’s config/hitboxes.js.');
+};
+
 document.getElementById('saveDisk').onclick = async () => {
   const text = serialize();
   if (!window.showSaveFilePicker) return status('File System API unavailable — use Download or Copy.');
   try {
     const h = await ensureSaveFile();
     const w = await h.createWritable(); await w.write(text); await w.close();
-    markExported();
-    status('Saved. Reload the game tab to play with the new hitbox.');
+    // The write SUCCEEDED — that was never in doubt on 2026-08-02, and is why
+    // that save looked fine. The open question is which file it succeeded into,
+    // and only the server can answer it.
+    const where = await ToolHandles.checkServed(h, SERVED, text);
+    if (where === 'different') {
+      // Deliberately NOT markExported(): the trace is on disk somewhere, but not
+      // where the game reads, so the unsaved pill and the beforeunload guard
+      // both stay armed. Per the guard's own note, a false "you have changes"
+      // costs a click and the reverse costs a traced spline.
+      showWrongFile(`Your save was written, but NOT to the config/hitboxes.js this server (${location.origin}) `
+        + `is serving — most likely another checkout or a git worktree. The game here will not see it. `
+        + `Re-pick the file, then save again.`);
+      status('Saved to the WRONG file — see the warning under Save.');
+    } else {
+      hideWrongFile();
+      markExported();
+      status(where === 'same'
+        ? 'Saved and verified against the server. Reload the game tab to play with the new hitbox.'
+        : 'Saved (from file:// the server copy cannot be checked — confirm it landed in the right checkout).');
+    }
   } catch (err) { if (err.name !== 'AbortError') status('Save failed: ' + err.message); }
 };
 
 // Say so at load, so it is obvious BEFORE clicking Save that the tool already
 // knows where it writes — and, when permission lapsed, that the click costs one
 // prompt rather than a trip through the file picker.
+//
+// The same pass catches a stale handle BEFORE an hour of tracing rather than
+// after: `.name` is only ever "hitboxes.js", so the tooltip alone can't tell a
+// worktree's copy from this one. Silent when permission hasn't been re-granted
+// yet (Chromium drops it on restart, and asking needs a gesture) — the
+// post-save check is the backstop that always runs.
 (async () => {
   const h = await ToolHandles.recall(HKEY);
   if (!h) return;
   const btn = document.getElementById('saveDisk');
-  btn.title = await ToolHandles.ready(h, 'readwrite', false)
+  const usable = await ToolHandles.ready(h, 'readwrite', false);
+  btn.title = usable
     ? `Overwrites ${h.name} — remembered from last time, no picker.`
     : `Overwrites ${h.name} — remembered, but the browser will ask once to re-grant access.`;
+  if (!usable) return;
+  if (await ToolHandles.checkServed(h, SERVED) === 'different') {
+    showWrongFile(`The remembered file does not match the config/hitboxes.js this server (${location.origin}) `
+      + `is serving, so saving would write somewhere the game here never reads — most likely another checkout `
+      + `or a git worktree. Re-pick before you trace anything.`);
+  }
 })();
 document.getElementById('copyBtn').onclick = async () => {
   // A rejected clipboard write (denied permission, non-secure context) used to

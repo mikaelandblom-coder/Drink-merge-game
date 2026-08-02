@@ -106,6 +106,12 @@
     <button class="tiny ghost" id="discard-draft">Discard them</button>
   </div>
 
+  <div class="alert" id="wrongFile" hidden>
+    <strong>Wrong file?</strong>
+    <span id="wrongFileMsg"></span>
+    <button class="tiny ghost" id="repickFile">Forget it — pick again</button>
+  </div>
+
   <h2 class="section">Wiring board — which sound each map plays</h2>
   <p class="section-sub">Every map × every event. Pick a sound from the dropdown to hear it
   immediately; <strong>▶</strong> replays it the way the game fires it (a merge plays the map's whole
@@ -526,26 +532,67 @@ document.getElementById('save').onclick = async () => {
       status('This browser has no file picker — copy the text below instead.', true); return;
     }
     const h = await ensureSaveFile();
+    const text = fileText();
     const w = await h.createWritable();
-    await w.write(fileText());
+    await w.write(text);
     await w.close();
+    // Which file did that succeed into? Only the server can say — see
+    // ToolHandles.checkServed. This matters more here than the message suggests:
+    // clearing the draft below is what makes a wrong-file save unrecoverable,
+    // since the picks would then exist ONLY in a checkout nothing here reads.
+    const where = await ToolHandles.checkServed(h, SERVED, text);
+    if (where === 'different') {
+      showWrongFile(`Your save was written, but NOT to the config/soundmap.js this server (${location.origin}) `
+        + `is serving — most likely another checkout or a git worktree. Your picks are kept as a draft here. `
+        + `Re-pick the file, then save again.`);
+      status('Saved to the WRONG file — see the warning below. Draft kept.', true);
+      return;                       // keep DRAFT_KEY: it is now the only safe copy
+    }
+    hideWrongFile();
     localStorage.removeItem(DRAFT_KEY);
-    status('Saved. Reload the game tab — and bump the ?v= in index.html before deploying.');
+    status(where === 'same'
+      ? 'Saved and verified against the server. Reload the game tab — and bump the ?v= in index.html before deploying.'
+      : 'Saved (from file:// the server copy cannot be checked). Reload the game tab — and bump the ?v= in index.html before deploying.');
   } catch (e) {
     if (e && e.name === 'AbortError') return;
     status('Save failed: ' + e, true);
   }
 };
+
+// The path THIS tool's origin serves — <base href="../"> makes it project-root
+// relative, so it is the same config/soundmap.js the game next door loads.
+const SERVED = 'config/soundmap.js';
+function showWrongFile(msg) {
+  document.getElementById('wrongFileMsg').textContent = msg;
+  document.getElementById('wrongFile').hidden = false;
+}
+function hideWrongFile() { document.getElementById('wrongFile').hidden = true; }
+document.getElementById('repickFile').onclick = async () => {
+  await ToolHandles.forget(SKEY);
+  fileHandle = null;
+  hideWrongFile();
+  status('Forgotten. The next Save will ask for the file — pick this checkout’s config/soundmap.js.');
+};
+
 // Say so at load, so it is obvious BEFORE clicking Save that the tool already
 // knows where it writes — and, when permission lapsed, that the click costs one
-// prompt rather than a trip through the file picker.
+// prompt rather than a trip through the file picker. The same pass catches a
+// handle pointing into another checkout before any work is done: `.name` is only
+// ever "soundmap.js", so the tooltip alone cannot tell them apart.
 (async () => {
   const h = await ToolHandles.recall(SKEY);
   if (!h) return;
   const btn = document.getElementById('save');
-  btn.title = await ToolHandles.ready(h, 'readwrite', false)
+  const usable = await ToolHandles.ready(h, 'readwrite', false);
+  btn.title = usable
     ? `Overwrites ${h.name} — remembered from last time, no picker.`
     : `Overwrites ${h.name} — remembered, but the browser will ask once to re-grant access.`;
+  if (!usable) return;
+  if (await ToolHandles.checkServed(h, SERVED) === 'different') {
+    showWrongFile(`The remembered file does not match the config/soundmap.js this server (${location.origin}) `
+      + `is serving, so saving would write somewhere the game here never reads — most likely another checkout `
+      + `or a git worktree. Re-pick before you wire anything up.`);
+  }
 })();
 
 document.getElementById('copy').onclick = async () => {
