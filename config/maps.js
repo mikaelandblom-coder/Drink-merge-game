@@ -114,7 +114,7 @@ const MAPS = [
     id:       'cantho',
     label:    'Cần Thơ',
     sublabel: 'Floating Market',
-    bg:       'assets/images/cantho/bg_large.webp',
+    bg:       'assets/images/cantho/bg_small.webp',
     bgm:      'assets/audio/Can Tho.mp3',   // TODO: add Suno track (Mekong-morning
                                             // dan tranh loop). Missing file just 404s — no crash.
     bgmVol:   0.35,
@@ -126,14 +126,16 @@ const MAPS = [
     // gunwale is the wall.
     // Sounds inherit the `default` SOUND_MAP row until the map plays well;
     // theme them in tools/sound-lab.html then, not here.
-    // TEMP: only the LARGE framing art exists. Omitting `sizes` hides the
-    // "Large table" checkbox and plays `bg` above. defaultSize is intended
-    // 'large', and since the default size keeps the plain map-id key
-    // ('cantho'), the boundary traced NOW is the large boundary and is reused
-    // when sizes is restored. Same shape as farm/melody above.
-    // sizes:       { large: 'assets/images/cantho/bg_large.webp',
-    //                small: 'assets/images/cantho/bg_small.webp' },
-    // defaultSize: 'large',
+    // defaultSize is 'small' — the ORIGINAL framing, which is the one that
+    // shipped and the one Mai has been playing. Keeping it the default is what
+    // makes both her `mm_s_cantho` scores and the already-traced `cantho`
+    // boundary carry over untouched (scoreKey/hitboxKey give the default size
+    // the plain map id). 'large' is the WIDER re-framing added 2026-08-02
+    // because the original deck tapers so hard at the prow that the endgame
+    // gets cramped; it traces its own boundary under `cantho__large`.
+    sizes:       { large: 'assets/images/cantho/bg_large.webp',
+                   small: 'assets/images/cantho/bg_small.webp' },
+    defaultSize: 'small',
   },
 ];
 

@@ -48,6 +48,7 @@ TARGETS = [
     ('assets/source/paris/bg_large.png',              'assets/images/paris/bg_large.webp',  BACKDROP_Q),
     ('assets/source/paris/bg_small.png',              'assets/images/paris/bg_small.webp',  BACKDROP_Q),
     ('assets/source/farm/bg_large.png',               'assets/images/farm/bg_large.webp',   BACKDROP_Q),
+    ('assets/source/cantho/bg_small.png',             'assets/images/cantho/bg_small.webp', BACKDROP_Q),
     ('assets/source/cantho/bg_large.png',             'assets/images/cantho/bg_large.webp', BACKDROP_Q),
     # Art that does not exist yet (the framings CLAUDE.md lists as pending) is
     # skipped with a note rather than failing -- drop the PNG in and re-run.
