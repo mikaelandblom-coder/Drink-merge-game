@@ -1,15 +1,15 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Mixology Merge</title>
 <!-- PNG icons: iOS Safari ignores SVG/data-URI favicons, so a real apple-touch-icon is required -->
-<link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png?v=83">
-<link rel="icon" type="image/png" sizes="192x192" href="assets/images/icon-192.png?v=83">
-<link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=83">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png?v=84">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/images/icon-192.png?v=84">
+<link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=84">
 <meta name="apple-mobile-web-app-title" content="Mixology Merge">
-<link rel="stylesheet" href="style.css?v=83">
+<link rel="stylesheet" href="style.css?v=84">
 </head>
 <body>
 
@@ -153,6 +153,17 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/></svg>
       </button>
     </div>
+    <!-- Volume slider: press and hold the sound or music HUD button and this
+         slides out under it (ui.js wireSoundBtn). One popover serves both
+         buttons; #vol-kind says which is being adjusted. NOTE the explicit
+         [hidden] rule in style.css — a UA `hidden` loses to the author
+         display:flex here and the panel would never hide. -->
+    <div id="vol-pop" hidden>
+      <span id="vol-kind">Music</span>
+      <input id="vol-range" type="range" min="0" max="100" step="1" value="100"
+             aria-label="Volume">
+      <span id="vol-pct">100%</span>
+    </div>
     <!-- Bug report: the 🐞 HUD button fills the textarea with an MMB1. code
          (buglog.js) holding the last shots + board states, for copy/paste. -->
     <div id="bug-panel">
@@ -190,23 +201,23 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
-<script src="config/constants.js?v=83"></script>
-<script src="config/hitboxes.js?v=83"></script>
-<script src="config/items.js?v=83"></script>
-<script src="config/maps.js?v=83"></script>
+<script src="config/constants.js?v=84"></script>
+<script src="config/hitboxes.js?v=84"></script>
+<script src="config/items.js?v=84"></script>
+<script src="config/maps.js?v=84"></script>
 <!-- Sound library + the map/event -> sound wiring (both shared with
      tools/sound-lab.html, so auditions there are what the game plays) -->
-<script src="config/sounds.js?v=83"></script>
-<script src="config/soundmap.js?v=83"></script>
-<script src="scores.js?v=83"></script>
-<script src="buglog.js?v=83"></script>
-<script src="progress.js?v=83"></script>
-<script src="audio.js?v=83"></script>
-<script src="render.js?v=83"></script>
-<script src="ui.js?v=83"></script>
-<script src="welcome.js?v=83"></script>
-<script src="game.js?v=83"></script>
+<script src="config/sounds.js?v=84"></script>
+<script src="config/soundmap.js?v=84"></script>
+<script src="scores.js?v=84"></script>
+<script src="buglog.js?v=84"></script>
+<script src="progress.js?v=84"></script>
+<script src="audio.js?v=84"></script>
+<script src="render.js?v=84"></script>
+<script src="ui.js?v=84"></script>
+<script src="welcome.js?v=84"></script>
+<script src="game.js?v=84"></script>
 <!-- Dev-only test harness: inert unless the URL has ?test (see test.js) -->
-<script src="test.js?v=83"></script>
+<script src="test.js?v=84"></script>
 </body>
 </html>

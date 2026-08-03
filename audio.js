@@ -94,6 +94,7 @@ function ac() {
       if (!document.hidden) resumeCtx();
     };
     sfxBus = actx.createGain();
+    applySfxVol();   // the bus is new — re-apply the user's level (see "volume")
     routeSfx();
   }
   return actx;
@@ -188,7 +189,8 @@ let bgmEl = null;
 
 function initMusic(audioEl, volume, src) {
   bgmEl = audioEl;
-  bgmEl.volume = volume;
+  mapBgmVol = volume;
+  applyMusicVol();   // map level x the user's slider (see "volume")
   if (src && bgmEl.getAttribute('src') !== src) {
     bgmEl.pause();
     bgmEl.setAttribute('src', src);
@@ -217,19 +219,73 @@ function resumeMusicAfterHide() {
 }
 
 function toggleMusic(btn) {
-  if (!musicStarted) { startMusic(); setToggleBtn(btn, true); return; }
-  musicOn = !musicOn;
+  // Before the track has started, the first press IS "turn it on" (autoplay
+  // needs a gesture) — it must never read as a toggle-off. This still goes
+  // through setSoundEnabled so the zero-volume restore applies here too: the
+  // branch used to force the icon on while leaving musicOn false and the
+  // slider at 0, i.e. an "on" button playing nothing.
+  setSoundEnabled('music', musicStarted ? !musicOn : true);
+  startMusic();   // no-op once started
   setToggleBtn(btn, musicOn);
-  if (musicOn) bgmEl.play().catch(() => {}); else bgmEl.pause();
 }
 
 function toggleMute(btn) {
-  muted = !muted;
+  setSoundEnabled('sfx', muted);
   setToggleBtn(btn, !muted);
-  // Give SFX the same off/on escape hatch the music button has: turning sound
-  // back on force-rebuilds the iOS route, so a stuck-silent context can be
-  // fixed mid-run with two taps instead of a run-destroying page reload.
-  if (!muted) repairAudio();
+}
+
+// ---------- volume ----------
+// Two user multipliers, remembered forever (Mai likes the BGM but it drowns the
+// game, 2026-08-03). Deliberately NOT a mute replacement: the buttons still
+// toggle, and a long-press on either opens its slider (ui.js).
+//
+// Music is a multiplier over the map's authored `bgmVol` (config/maps.js) so
+// per-map mixing survives — a track balanced quieter stays quieter relative to
+// the others. SFX is the master bus gain, which is why applySfxVol() has to run
+// again every time the bus is rebuilt (hardResetAudio -> ac()).
+const VOL_KEYS = { music: 'mm_vol_music_v1', sfx: 'mm_vol_sfx_v1' };
+const VOL_RESUME = 0.5;   // level a toggle-back-on returns to when the slider sits at 0
+
+let musicVol = loadVol('music'), sfxVol = loadVol('sfx');
+let mapBgmVol = 0.35;     // the active map's authored level; set by initMusic()
+
+function loadVol(kind) {
+  try {
+    const v = parseFloat(localStorage.getItem(VOL_KEYS[kind]));
+    return (v >= 0 && v <= 1) ? v : 1;   // NaN fails both comparisons -> full
+  } catch { return 1; }
+}
+
+function getVolume(kind) { return kind === 'music' ? musicVol : sfxVol; }
+
+function setVolume(kind, v) {
+  v = Math.max(0, Math.min(1, v));
+  if (kind === 'music') { musicVol = v; applyMusicVol(); }
+  else { sfxVol = v; applySfxVol(); }
+  try { localStorage.setItem(VOL_KEYS[kind], String(v)); } catch {}
+}
+
+function applyMusicVol() { if (bgmEl) bgmEl.volume = mapBgmVol * musicVol; }
+function applySfxVol()   { if (sfxBus) sfxBus.gain.value = sfxVol; }
+
+// The single door for "is this channel on", used by BOTH the toggle buttons and
+// the sliders — a slider dragged to zero is off, and the icon must say so, or it
+// claims sound is on while nothing can be heard.
+function isSoundEnabled(kind) { return kind === 'music' ? musicOn : !muted; }
+
+function setSoundEnabled(kind, on) {
+  // Coming back on at zero would be a silent "on" — restore something audible.
+  if (on && getVolume(kind) === 0) setVolume(kind, VOL_RESUME);
+  if (kind === 'music') {
+    musicOn = on;
+    if (bgmEl) { if (on) bgmEl.play().catch(() => {}); else bgmEl.pause(); }
+  } else {
+    muted = !on;
+    // Turning sound back on force-rebuilds the iOS route, so a stuck-silent
+    // context can be fixed mid-run with two taps instead of a run-destroying
+    // page reload.
+    if (on) repairAudio();
+  }
 }
 
 // Unconditional repair, for the manual escape hatches (sound button, bug

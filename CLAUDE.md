@@ -35,7 +35,8 @@ config/soundmap.js    — SOUND_MAP: WHICH voice each map plays for each event
                          `default` row every map inherits. Pure data, generated
                          by tools/sound-lab.html — see tools/README.md.
 audio.js              — Audio PLUMBING only: output routing (incl. the iOS
-                         workarounds), mute/music toggles, BGM, and a thin
+                         workarounds), mute/music toggles + the two remembered
+                         volume levels (see "Volume"), BGM, and a thin
                          dispatch from a game event to the active map's voice
                          (pop/clink/coinTick/shoot/fanfare/levelUp/gameOver all
                          one-liners over `playSound`). No synthesis lives here.
@@ -270,6 +271,44 @@ It's a toggle (touch-friendly for Mai), glows cyan when active (`.hud-btn.active
 in style.css), and forces the render loop to stay live while on (`sceneBusy`
 returns true for `showXray`, so a settled board still repaints the overlay).
 Distinct from the dev-only `drawHitboxes` (the `h`-key / `?hitbox` overlay).
+
+## Volume (press-and-hold the sound buttons)
+
+Mai's ask, 2026-08-03: she likes the BGM but it drowns the game. **Tap** either
+HUD sound button and it toggles exactly as it always did; **hold** it ~380ms and
+a slider slides out under the HUD row (`#vol-pop`, wired by `wireSoundBtn` in
+ui.js). It auto-dismisses after ~3.2s idle, or on the next tap anywhere else —
+including the table, where the tap is SWALLOWED so putting the slider away can
+never cost a shot.
+
+- Levels live in audio.js (`getVolume`/`setVolume`), persisted in localStorage
+  as `mm_vol_music_v1` / `mm_vol_sfx_v1`. Independent of the score/XP blobs, so
+  they are deliberately NOT in a backup code — a per-device mix should stay
+  per-device.
+- **Music is a MULTIPLIER over the map's authored `bgmVol`** (config/maps.js),
+  never a replacement: a track balanced quieter stays quieter relative to the
+  others, so per-map mixing survives. `initMusic()` stores the map level in
+  `mapBgmVol` and `applyMusicVol()` combines them.
+- **SFX is the master `sfxBus` gain**, which is why `applySfxVol()` runs inside
+  `ac()` — the bus is rebuilt from scratch by `hardResetAudio()` on the iOS
+  recovery path, and a fresh GainNode defaults to 1.0 (verified: level survives
+  a hard reset).
+- **Zero IS off, in both directions.** A slider at 0 flips the button to its
+  off icon, and toggling back on from 0 restores `VOL_RESUME` (0.5) — otherwise
+  the icon would claim sound is on while nothing can be heard, and the button
+  would look like a no-op. Both paths go through `setSoundEnabled(kind, on)`,
+  which is the only place that writes `muted`/`musicOn`.
+- The effects slider auditions with a `clink(6)` per drag step (throttled 140ms;
+  impact 6 saturates every collide voice's volume curve, so she hears a
+  full-strength hit at the level she just picked). Music needs no audition — it
+  is already playing.
+- The popover is **right-aligned to the HUD row**, not centred on the button:
+  `#stage` is sized from its height, so on a narrow screen it overflows the
+  viewport and a centre-anchor hangs off the edge. Sharing the row's alignment
+  makes the slider exactly as reachable as the buttons. The label says which
+  channel it is.
+- `#vol-pop` needs its explicit `[hidden]{display:none}` in style.css — see the
+  `hidden`-vs-author-`display` trap under "Known issues".
 
 ## High scores
 

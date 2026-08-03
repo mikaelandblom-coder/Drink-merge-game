@@ -21,6 +21,9 @@ function updateAim(p, nextTier) {
 
 function wireInput(canvas, state) {
   canvas.addEventListener('pointerdown', e => {
+    // A tap on the table while a volume slider is open just dismisses it —
+    // putting the slider away must never cost a shot.
+    if (hideVolPop()) return;
     if (state.gameOver) return;
     initAudio();
     startMusic();
@@ -65,9 +68,10 @@ function wireInput(canvas, state) {
 }
 
 function wireHUD(state) {
+  // Tap toggles, press-and-hold opens the volume slider (see wireSoundBtn).
+  wireSoundBtn('mute', 'sfx');
+  wireSoundBtn('musicBtn', 'music');
   // currentTarget, not target: clicks can land on the buttons' SVG icons.
-  document.getElementById('mute').onclick     = e => toggleMute(e.currentTarget);
-  document.getElementById('musicBtn').onclick = e => toggleMusic(e.currentTarget);
   document.getElementById('xrayBtn').onclick  = e => toggleXray(e.currentTarget);
 
   const over = document.getElementById('over');
@@ -143,6 +147,113 @@ function wireHUD(state) {
   };
   document.getElementById('bug-close').onclick = () => {
     bugPanel.style.display = 'none';
+  };
+
+  document.getElementById('vol-range').addEventListener('input', onVolInput);
+  // Anything else the player touches puts the slider away. The canvas is
+  // excluded on purpose: its own handler dismisses it (and swallows the tap),
+  // and closing from here first would let that same tap fire a shot.
+  document.addEventListener('pointerdown', e => {
+    if (!volPopOpen()) return;
+    if (e.target.closest && e.target.closest('#vol-pop, #mute, #musicBtn, #c')) return;
+    hideVolPop();
+  }, true);
+}
+
+// ---------- volume sliders (press-and-hold a sound HUD button) ----------
+// Mai's ask (2026-08-03): she likes the BGM but it drowns the game. A tap on the
+// sound / music button still does exactly what it always did — hold one for
+// VOL_HOLD_MS and its slider slides out underneath. The levels themselves live
+// in audio.js (getVolume/setVolume) and persist in localStorage.
+const VOL_HOLD_MS = 380;    // comfortably longer than a deliberate tap
+const VOL_IDLE_MS = 3200;   // auto-dismiss, so there is no close button to find
+let volKind = null, volBtn = null, volIdleTimer = 0, volAuditionMs = 0;
+
+function volPopOpen() { return !document.getElementById('vol-pop').hidden; }
+
+// Returns whether it actually closed something, so callers can swallow the tap.
+function hideVolPop() {
+  const pop = document.getElementById('vol-pop');
+  if (pop.hidden) return false;
+  pop.hidden = true;
+  clearTimeout(volIdleTimer); volIdleTimer = 0;
+  volKind = null; volBtn = null;
+  return true;
+}
+
+function volIdleReset() {
+  clearTimeout(volIdleTimer);
+  volIdleTimer = setTimeout(hideVolPop, VOL_IDLE_MS);
+}
+
+function showVolPop(btn, kind) {
+  const pop = document.getElementById('vol-pop');
+  const range = document.getElementById('vol-range');
+  volKind = kind; volBtn = btn;
+  document.getElementById('vol-kind').textContent = kind === 'music' ? 'Music' : 'Effects';
+  range.value = Math.round(getVolume(kind) * 100);
+  setVolPct(+range.value);
+  pop.hidden = false;
+  // Right-aligned under the HUD row (which sits at right:8px), NOT centred on
+  // the button: #stage is sized from its height, so on a narrow screen it
+  // overflows the viewport and a centre-anchor would hang off the edge. Sharing
+  // the row's alignment makes the slider exactly as reachable as the buttons
+  // themselves. Which channel it is comes from the label, not the position.
+  const sr = document.getElementById('stage').getBoundingClientRect();
+  pop.style.top = (btn.getBoundingClientRect().bottom - sr.top + 8) + 'px';
+  // We are inside the hold gesture, so this is the moment the effects slider is
+  // allowed to build/repair the AudioContext it needs to audition into.
+  if (kind === 'sfx') initAudio();
+  volIdleReset();
+}
+
+function setVolPct(pct) {
+  document.getElementById('vol-pct').textContent = pct + '%';
+}
+
+function onVolInput(e) {
+  if (!volKind) return;
+  const pct = +e.target.value, v = pct / 100;
+  setVolume(volKind, v);
+  setVolPct(pct);
+  // Zero IS off, in both directions — otherwise the icon claims sound is on
+  // while nothing can be heard, and the mute button becomes a no-op.
+  if (isSoundEnabled(volKind) !== (v > 0)) {
+    setSoundEnabled(volKind, v > 0);
+    setToggleBtn(volBtn, v > 0);
+  }
+  // Music auditions itself (it's playing); effects need a sample to judge.
+  // impact 6 saturates every collide voice's volume curve, so what she hears is
+  // a full-strength hit at the level she just picked.
+  if (volKind === 'sfx' && v > 0) {
+    const now = performance.now();
+    if (now - volAuditionMs > 140) { volAuditionMs = now; clink(6); }
+  }
+  volIdleReset();
+}
+
+function wireSoundBtn(id, kind) {
+  const btn = document.getElementById(id);
+  let holdTimer = 0, held = false;
+
+  btn.addEventListener('pointerdown', () => {
+    held = false;
+    clearTimeout(holdTimer);
+    holdTimer = setTimeout(() => { held = true; showVolPop(btn, kind); }, VOL_HOLD_MS);
+  });
+  const dropHold = () => { clearTimeout(holdTimer); holdTimer = 0; };
+  btn.addEventListener('pointerup', dropHold);
+  btn.addEventListener('pointerleave', dropHold);
+  btn.addEventListener('pointercancel', () => { dropHold(); held = false; });
+  // Android pops a context menu on a long press, which would cancel the gesture
+  // and land a menu on top of the slider.
+  btn.addEventListener('contextmenu', e => e.preventDefault());
+
+  // currentTarget, not target: clicks can land on the buttons' SVG icons.
+  btn.onclick = e => {
+    if (held) { held = false; return; }   // the hold already opened the slider
+    hideVolPop();
+    if (kind === 'music') toggleMusic(e.currentTarget); else toggleMute(e.currentTarget);
   };
 }
 
