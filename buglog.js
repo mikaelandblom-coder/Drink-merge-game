@@ -38,6 +38,9 @@ const BUGLOG = (() => {
 
   // One body -> compact tuple [tier, receipt?, ghost?, x, y, vx?, vy?].
   // Velocity is omitted at rest (the usual case) to keep codes small.
+  // Exposed as BUGLOG.snapDrink because suspend.js parks a run with the SAME
+  // tuple — one serializer, so a bug-report replay and a resumed run can never
+  // disagree about what a board looks like.
   function snapDrink(d) {
     const p = d.plugin;
     const t = [p.tier, p.kind === 'receipt' ? 1 : 0, p.ghost ? 1 : 0,
@@ -48,6 +51,8 @@ const BUGLOG = (() => {
   }
 
   return {
+    snapDrink,
+
     // New run: stamp the run's settings and clear the buffers. Called from
     // resetState() so "Play again" starts a fresh log too.
     run() {

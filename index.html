@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Mixology Merge</title>
 <!-- PNG icons: iOS Safari ignores SVG/data-URI favicons, so a real apple-touch-icon is required -->
-<link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png?v=84">
-<link rel="icon" type="image/png" sizes="192x192" href="assets/images/icon-192.png?v=84">
-<link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=84">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png?v=85">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/images/icon-192.png?v=85">
+<link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=85">
 <meta name="apple-mobile-web-app-title" content="Mixology Merge">
-<link rel="stylesheet" href="style.css?v=84">
+<link rel="stylesheet" href="style.css?v=85">
 </head>
 <body>
 
@@ -88,6 +88,18 @@
         <a href="tools/sprite-editor.html" target="_blank" rel="noopener">🖼️ Sprites</a>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Discard-confirm for "New run" on a map that has a suspended run parked
+     (suspend.js). Fixed overlay rather than a child of #welcome so it doesn't
+     have to fight that screen's scrolling layout; wired in welcome.js. -->
+<div id="confirm-new">
+  <p class="confirm-title">Start over?</p>
+  <p class="confirm-sub" id="confirm-new-sub"></p>
+  <div class="confirm-btns">
+    <button id="confirm-new-yes">Yes, start fresh</button>
+    <button id="confirm-new-no">Keep my run</button>
   </div>
 </div>
 
@@ -191,7 +203,7 @@
     </div>
     <div id="confirm-menu">
       <p class="confirm-title">Return to menu?</p>
-      <p class="confirm-sub">Your current run will be lost.</p>
+      <p class="confirm-sub">Your run is saved &mdash; continue it from the menu whenever you like.</p>
       <div class="confirm-btns">
         <button id="confirm-yes">Yes, quit</button>
         <button id="confirm-no">Keep playing</button>
@@ -201,23 +213,26 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
-<script src="config/constants.js?v=84"></script>
-<script src="config/hitboxes.js?v=84"></script>
-<script src="config/items.js?v=84"></script>
-<script src="config/maps.js?v=84"></script>
+<script src="config/constants.js?v=85"></script>
+<script src="config/hitboxes.js?v=85"></script>
+<script src="config/items.js?v=85"></script>
+<script src="config/maps.js?v=85"></script>
 <!-- Sound library + the map/event -> sound wiring (both shared with
      tools/sound-lab.html, so auditions there are what the game plays) -->
-<script src="config/sounds.js?v=84"></script>
-<script src="config/soundmap.js?v=84"></script>
-<script src="scores.js?v=84"></script>
-<script src="buglog.js?v=84"></script>
-<script src="progress.js?v=84"></script>
-<script src="audio.js?v=84"></script>
-<script src="render.js?v=84"></script>
-<script src="ui.js?v=84"></script>
-<script src="welcome.js?v=84"></script>
-<script src="game.js?v=84"></script>
+<script src="config/sounds.js?v=85"></script>
+<script src="config/soundmap.js?v=85"></script>
+<script src="scores.js?v=85"></script>
+<script src="buglog.js?v=85"></script>
+<!-- Suspended runs (menu "Continue"). After buglog.js — it serializes boards
+     with BUGLOG.snapDrink so the two can't drift apart. -->
+<script src="suspend.js?v=85"></script>
+<script src="progress.js?v=85"></script>
+<script src="audio.js?v=85"></script>
+<script src="render.js?v=85"></script>
+<script src="ui.js?v=85"></script>
+<script src="welcome.js?v=85"></script>
+<script src="game.js?v=85"></script>
 <!-- Dev-only test harness: inert unless the URL has ?test (see test.js) -->
-<script src="test.js?v=84"></script>
+<script src="test.js?v=85"></script>
 </body>
 </html>

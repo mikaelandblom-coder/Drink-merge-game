@@ -46,6 +46,12 @@ if (/[?&]test\b/.test(location.search)) {
   Progress.persistEnabled = false;
   Progress._data.maps = {};
 
+  // Suspended runs (suspend.js): same rule again. This gates CLEARS as well as
+  // writes — startGame() clears the map's parked run on every start, so without
+  // it merely loading ?test=1 and calling TT.start would delete a real one.
+  // Reads stay live, so TT can still exercise the restore path.
+  SUSPEND.persistEnabled = false;
+
   const TT = {};
 
   // ---- run control -------------------------------------------------------

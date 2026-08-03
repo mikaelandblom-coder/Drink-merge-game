@@ -25,6 +25,10 @@ buglog.js             — Bug-report capture: rolling ring of the last 10 shots
                          (each with the pre-shot board) + game-over events →
                          copyable MMB1. code via the 🐞 HUD button. Replay a
                          code with TT.bug / TT.bugLoad in test mode.
+suspend.js            — Suspended runs: quitting or backgrounding a map parks the
+                         whole board in localStorage (one per map) so the menu can
+                         offer "Continue". Built on BUGLOG.snapDrink + the same
+                         rebuild TT.bugLoad does — see "Suspended runs" below.
 config/sounds.js      — SOUND_LIB: every synth voice in the game, one entry each
                          (`play(a, out, opts)`) — the single source of truth for
                          HOW a sound is made. A voice renders into the `out` node
@@ -49,7 +53,7 @@ game.js               — Physics engine, state object, merge logic, render loop
 style.css             — All CSS
 index.html            — Shell: loads scripts in order (constants → hitboxes →
                          items → maps → sounds → soundmap → scores → buglog →
-                         audio → render → ui → welcome → game)
+                         suspend → progress → audio → render → ui → welcome → game)
 process_assets.py     — Asset pipeline: source images → game-ready PNGs
 compress_backgrounds.py — Background/chrome PNG → WebP (~-91%). Separate from
                          process_assets.py because backgrounds need no keying,
@@ -322,6 +326,43 @@ at once (no names — local scores), highlighting the current selection. Game ov
 saves under the played variant and shows a `fanfare()` + banner when the best is
 beaten. NOTE: key identity is coupled to a map's current `defaultSize`/`combos`
 defaults — changing a default would re-point the legacy key.
+
+## Suspended runs — leaving a map keeps the board (suspend.js)
+
+Quitting to the menu, or backgrounding the page, parks the whole run in
+localStorage; the map's card then offers **Continue** and **New run** instead of
+Play, with a line saying what's waiting ("Run in progress · Small · Happy Hour ·
+1,240 coins"). New run asks before discarding.
+
+**It is deliberately not a second board format.** Bodies are serialized with
+`BUGLOG.snapDrink` (buglog.js — exported for exactly this) and rebuilt the way
+`TT.bugLoad` rebuilds a bug report, so a replayed bug and a resumed run can never
+disagree about what a board is. suspend.js only adds what a bug report has no use
+for: score, upcoming tiers, the Happy Hour queue, and the save lifecycle.
+
+- **One save per map** (`mm_run_<mapId>`, ~300 bytes), carrying the VARIANT it
+  was played on. Continue replays that variant and ignores the checkboxes — the
+  parked board was traced against that framing's boundary, and its receipts and
+  customers only exist in Happy Hour. The checkboxes describe a NEW run only.
+- **`d.plugin.born -= 10000` on restore is what keeps quitting honest.** The
+  game-over grace is measured from `born`, so backdating it means a resumed board
+  is judged immediately — parking a run with a drink sitting over the danger line
+  can't reset the 1.5s countdown. (Same line, same reason, as in `TT.bugLoad`.)
+- **The backgrounding save is the one that matters**, not the menu button: iOS
+  discards backgrounded tabs without warning. It hangs off the existing
+  `visibilitychange` handler in game.js.
+- Cleared on game over (checkOver) and at the start of any run on that map — so
+  a crash mid-run can't leave a parked board older than the one being played.
+- **Load validates TIER INDICES, not `GAME_VERSION`.** A version check would
+  throw parked runs away on every deploy; what actually breaks a restore is an
+  item chain that shrank under the save (`makeDrink` indexing past `ITEMS`).
+- `state.combo` is deliberately not saved (the window is 1.4s), and coins still
+  flying to the bag are folded into the saved score exactly as `checkOver` does.
+- XP needs nothing: `xpOnShot` commits per shot, so suspending can neither lose
+  nor double-count it. `runXp` is restored only for the game-over recap line.
+- **`SUSPEND.persistEnabled = false` in test mode gates CLEARS as well as
+  writes** — startGame clears on every start, so without that guard merely
+  loading `?test=1` and calling `TT.start` would delete a real parked run.
 
 ---
 

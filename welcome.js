@@ -84,6 +84,18 @@ function refreshScoreList(map) {
   if (el) el.innerHTML = buildScoreRows(map);
 }
 
+// One line describing a parked run, so Continue is never a blind choice: the
+// variant it was played on (which the checkboxes below no longer control) and
+// the score it stands at.
+function savedRunLabel(map, s) {
+  const bits = [];
+  if (map.sizes && s.size) bits.push(s.size === 'large' ? 'Large' : 'Small');
+  if (s.happyHour) bits.push('Happy Hour');
+  else if (s.combos) bits.push('Combo');
+  bits.push((s.score || 0).toLocaleString() + ' coins');
+  return bits.join(' · ');
+}
+
 function buildWelcomeCards() {
   return MAPS.map(map => {
     if (map.locked) {
@@ -112,14 +124,29 @@ function buildWelcomeCards() {
                 ${getMapHH(map) ? 'checked' : ''}>
          <span>Happy Hour</span>
        </label>`;
+    // A parked run (suspend.js) turns the single Play button into Continue +
+    // New run, and adds a line saying what is waiting. There is one save per
+    // map, and it remembers its own variant — so the option checkboxes below
+    // describe a NEW run only, and Continue ignores them.
+    const saved   = SUSPEND.load(map.id);
+    const savedRow = saved
+      ? `<div class="map-saved">Run in progress · ${savedRunLabel(map, saved)}</div>`
+      : '';
+    const playBtns = saved
+      ? `<div class="play-stack">
+           <button class="play-btn" data-id="${map.id}" data-resume="1">Continue</button>
+           <button class="play-btn ghost" data-id="${map.id}">New run</button>
+         </div>`
+      : `<button class="play-btn" data-id="${map.id}">Play</button>`;
     return `<div class="map-card" data-map="${map.id}">
       <div class="map-header">
         <div>
           <div class="map-name">${map.label}<span class="map-level">Lv ${Progress.level(map.id)}</span></div>
           <div class="map-sub">${map.sublabel || ''}</div>
         </div>
-        <button class="play-btn" data-id="${map.id}">Play</button>
+        ${playBtns}
       </div>
+      ${savedRow}
       <div class="map-options">${sizeToggle}${comboToggle}${hhToggle}</div>
       <div class="card-scores">
         <div class="card-scores-header">
@@ -170,12 +197,43 @@ function wireWelcomeEvents() {
     btn.onclick = () => {
       const map = MAPS.find(m => m.id === btn.dataset.id);
       if (!map) return;
-      document.getElementById('welcome').style.display = 'none';
-      document.getElementById('wrap').style.display = 'flex';
-      startGame(map, { size: getMapSize(map), combos: getMapCombos(map),
-                       happyHour: getMapHH(map) });
+      if (btn.dataset.resume) { launchMap(map, SUSPEND.load(map.id)); return; }
+      // Starting fresh throws away a parked run, so it asks first — one mistap
+      // on a card should never cost a board someone was mid-way through.
+      const saved = SUSPEND.load(map.id);
+      if (saved) confirmNewRun(map, saved); else launchMap(map, null);
     };
   });
+}
+
+// resume: a payload from SUSPEND.load, or null for a fresh run.
+function launchMap(map, resume) {
+  document.getElementById('welcome').style.display = 'none';
+  document.getElementById('wrap').style.display = 'flex';
+  // A resumed run replays the variant it was SAVED on, not whatever the
+  // checkboxes read now: the parked board was traced against that framing's
+  // boundary, and its receipts/customers only exist in Happy Hour.
+  const opts = resume
+    ? { size: resume.size, combos: !!resume.combos, happyHour: !!resume.happyHour, resume }
+    : { size: getMapSize(map), combos: getMapCombos(map), happyHour: getMapHH(map) };
+  startGame(map, opts);
+}
+
+// Discard-confirm for New run. Static markup outside #map-cards (like the
+// backup panel), so it survives showWelcome()'s rebuild and is wired once.
+function confirmNewRun(map, saved) {
+  const panel = document.getElementById('confirm-new');
+  document.getElementById('confirm-new-sub').textContent =
+    `Your run on ${map.label} (${savedRunLabel(map, saved)}) will be lost.`;
+  panel.style.display = 'flex';
+  document.getElementById('confirm-new-yes').onclick = () => {
+    panel.style.display = 'none';
+    SUSPEND.clear(map.id);
+    launchMap(map, null);
+  };
+  document.getElementById('confirm-new-no').onclick = () => {
+    panel.style.display = 'none';
+  };
 }
 
 function showWelcome() {

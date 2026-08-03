@@ -129,6 +129,20 @@ html, body {
 .play-btn:hover { filter: brightness(1.12); }
 .play-btn:focus-visible { outline: 3px solid var(--neon); outline-offset: 2px; }
 
+/* A map with a suspended run (suspend.js) shows Continue + New run in the same
+   slot the single Play button occupies, stacked so the card width is unchanged. */
+.play-stack { flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; }
+.play-stack .play-btn { padding: 8px 20px; font-size: 14px; }
+/* New run is the secondary action — it throws the parked board away. */
+.play-btn.ghost {
+  background: transparent; border: 1px solid #5a4630; color: var(--brass);
+  font-weight: normal;
+}
+.map-saved {
+  font-size: 12px; color: var(--neon); letter-spacing: .04em;
+  opacity: .85;
+}
+
 /* Per-map option toggles (table size, combo multipliers) */
 .map-options { display: flex; flex-wrap: wrap; gap: 8px 20px; }
 .map-opt-toggle {
@@ -284,7 +298,18 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
   font-family: inherit; font-size: 15px; font-weight: bold;
   padding: 9px 22px; border-radius: 999px; cursor: pointer;
 }
-#confirm-no { background: transparent; border: 1px solid #5a4630; color: var(--brass); }
+#confirm-no,
+#confirm-new-no { background: transparent; border: 1px solid #5a4630; color: var(--brass); }
+
+/* Discard-confirm for "New run" on the welcome screen. Same look as
+   #confirm-menu, but FIXED to the viewport: it sits outside #welcome (which
+   scrolls), so it stays centred over a long list of map cards. */
+#confirm-new {
+  position: fixed; inset: 0; display: none;
+  flex-direction: column; align-items: center; justify-content: center;
+  background: rgba(15, 9, 6, .92); color: var(--foam);
+  text-align: center; gap: 12px; padding: 32px; z-index: 20;
+}
 .confirm-btns button:focus-visible { outline: 3px solid var(--neon); outline-offset: 2px; }
 
 .hud-btn {

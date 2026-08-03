@@ -437,6 +437,9 @@ function checkOver() {
     const speed = Math.hypot(d.velocity.x, d.velocity.y);
     if (d.position.y + d.plugin.item.physR > DANGER_WY && speed < 0.15) {
       state.gameOver = true;
+      // The run is over, so its parked copy (if any) is dead — drop it before
+      // anything can offer to "continue" a board that just lost.
+      SUSPEND.clear(ACTIVE_MAP.id);
       // Bug-report ring: which drink ended the run, and where it sat.
       BUGLOG.event('gameover', {
         tier: d.plugin.tier, kind: d.plugin.kind,
@@ -666,6 +669,9 @@ function stepPhysics() {
 document.addEventListener('visibilitychange', () => {
   const onGameScreen = document.getElementById('wrap').style.display !== 'none';
   if (document.hidden) {
+    // Park the run before anything else: iOS discards backgrounded tabs without
+    // warning, so this — not the menu button — is the save that usually matters.
+    if (onGameScreen) SUSPEND.save();
     running = false;
     pauseMusicForHide();
     markAudioInterrupted();  // iOS kills the SFX carrier while backgrounded
@@ -722,6 +728,12 @@ function startGame(map, opts = {}) {
   setMapSounds(ACTIVE_MAP.id);
   initMusic(document.getElementById('bgm'), ACTIVE_MAP.bgmVol, ACTIVE_MAP.bgm);
   resetState();
+  // Whatever was parked for this map is superseded the moment a run starts on
+  // it — including a resume, whose payload is already in hand. Clearing here
+  // (rather than at the menu) means a crash mid-run can't leave a stale board
+  // that is older than the one being played.
+  SUSPEND.clear(map.id);
+  if (opts.resume) SUSPEND.apply(opts.resume);
   idleFrames = 0;
   if (!running) {
     running = true;
@@ -730,7 +742,11 @@ function startGame(map, opts = {}) {
   }
 }
 
+// Both callers (the game-over overlay's Menu button and the in-game ✕ confirm)
+// come through here, so the suspend lives here rather than in ui.js. A finished
+// run has nothing to park and SUSPEND.save() bails on state.gameOver by itself.
 function returnToMenu() {
+  SUSPEND.save();
   running = false;
   if (bgmEl) { bgmEl.pause(); bgmEl.currentTime = 0; }
   showWelcome();
