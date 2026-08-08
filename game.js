@@ -21,6 +21,9 @@ function fitCanvas() {
   const disp   = Math.min(availW / W, availH / H, MAX_SCALE);
   canvas.style.width  = (W * disp) + 'px';
   canvas.style.height = (H * disp) + 'px';
+  // The ambient fx layer (fx.js) is authored in px against the 420x620 world,
+  // so it needs the same display scale the canvas just took.
+  fxSetScale(disp);
 
   const pr = Math.min(dpr, MAX_PR);
   canvas.width  = Math.round(W * disp * pr);

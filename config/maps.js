@@ -32,6 +32,15 @@ const MAPS = [
     sizes:       { large: 'assets/images/kyoto/bg_large.webp',
                    small: 'assets/images/kyoto/bg_small.webp' },
     defaultSize: 'large',
+    // TEMP-OFF: drifting sakura (fx.js). Mikael tried it 2026-08-08 and found
+    // it DISTRACTING here — at the time the layer covered the WHOLE stage, and
+    // Kyoto is the worst case for that: pale petals crossing a big, dark,
+    // near-empty lacquer tray are the highest-contrast moving thing on screen,
+    // exactly where you're aiming.
+    // fx.js has since been clipped to the horizon band, which removes that
+    // specific problem — so this may well be fine now. It stays off because
+    // turning it back on is HIS call, not a cleanup: ask before uncommenting.
+    // fx: 'sakura',
   },
   {
     id:       'mage',
