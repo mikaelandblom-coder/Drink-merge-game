@@ -796,6 +796,18 @@ Two traps that script now handles, both of which cost real time:
   cool mode (30fps), rate-limit `clink()` node creation.
 - **Collision sounds**: synthesised via Web Audio API (no files). This is intentional —
   instant, zero-size, procedurally variable by tier.
+- **A GainNode defaults to 1.0, so set `.value` as well as `setValueAtTime`**
+  (fixed in `sfxNoise`, config/sounds.js, 2026-08-08). A param event only takes
+  effect FROM its time `t`; a source started at the same `t` can have its first
+  sample rendered a hair earlier, at the default gain — i.e. one full-scale
+  sample, a broadband click. Voices call `sfxNoise` with `when = a.currentTime`,
+  which is never sample-aligned, so this fired at random: bursts intended to
+  peak at 0.013 measured 0.84. **Measure new voices by rendering them through
+  an `OfflineAudioContext`** and comparing peak AND rms against the existing
+  ones — it catches this class of bug, and levelling by ear through a hidden
+  preview tab is not possible anyway. Match rms, not peak: short bright
+  transients (the coin-metal family) need a much higher peak than a bell to sit
+  at the same loudness.
 - **iOS SFX routing (diagnosed on Mai's iPad 2026-07-20, fix confirmed)**: iOS
   puts Web Audio's `ctx.destination` on the RINGER/alerts volume channel —
   with that channel at zero, all synth SFX are silent while `<audio>` music

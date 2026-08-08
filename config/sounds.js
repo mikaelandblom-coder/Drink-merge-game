@@ -41,7 +41,14 @@ function sfxNoise(a, out, o) {
   const p = o.shape === undefined ? 1 : o.shape;
   for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, p);
   const src = a.createBufferSource(); src.buffer = buf;
-  const g = a.createGain(); g.gain.setValueAtTime(o.vol, t);
+  const g = a.createGain();
+  // `.value` FIRST, not just setValueAtTime(vol, t): a GainNode defaults to 1,
+  // and the param event only takes effect from t. When the source's first
+  // sample lands a hair before t (o.when is a.currentTime — essentially never
+  // sample-aligned), that one sample renders at gain 1.0, i.e. a full-scale
+  // click. Measured offline: bursts intended to peak at 0.013 hit 0.84.
+  g.gain.value = o.vol;
+  g.gain.setValueAtTime(o.vol, t);
   if (o.type) {
     const f = a.createBiquadFilter();
     f.type = o.type; f.frequency.value = o.freq;
@@ -58,6 +65,28 @@ function sfxNoise(a, out, o) {
 // and pentatonic keeps even chaotic simultaneous merges consonant.
 const PENT = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21];
 const pentFreq = (root, i) => root * Math.pow(2, PENT[Math.min(i, PENT.length - 1)] / 12);
+
+// One struck-metal-disc "clink" — the shared body of every coin-* voice that
+// aims at real money rather than a musical tick. What makes a coin read as a
+// coin is INHARMONIC partials (no octaves or fifths: a real disc rings at ugly
+// ratios), a decay under ~120ms, and a fresh pitch per strike, so a shower
+// sounds like many coins instead of one sample retriggered.
+// [ratio, level, decay]; `amp` scales the whole family, `st` is the start time.
+// Levelled by rendering a 10-coin shower offline and matching RMS to the older
+// coin voices (~0.006): these decay far faster than a bell, so matching peaks
+// instead would have left them inaudible under a busy board.
+const COIN_METAL = [[1, 0.045, 0.10], [1.71, 0.026, 0.07], [2.43, 0.017, 0.05], [3.86, 0.011, 0.035]];
+function coinStrike(a, out, st, f, amp) {
+  COIN_METAL.forEach(([m, vol, dec]) => {
+    const os = a.createOscillator(), g = a.createGain();
+    os.type = 'sine'; os.frequency.setValueAtTime(f * m, st);
+    g.gain.setValueAtTime(0.0001, st);
+    g.gain.exponentialRampToValueAtTime(vol * amp, st + 0.003);
+    g.gain.exponentialRampToValueAtTime(0.0001, st + dec);
+    os.connect(g).connect(out); os.start(st); os.stop(st + dec + 0.02);
+  });
+  sfxNoise(a, out, { when: st, dur: 0.006, vol: 0.03 * amp, type: 'highpass', freq: 5000, shape: 2 });
+}
 
 // The events a map can assign a sound to. Order drives the sound lab's columns.
 const SOUND_EVENTS = [
@@ -577,6 +606,143 @@ const SOUND_LIB = {
   }
 },
 
+// The six below were added for Cần Thơ (floating market: bamboo, ceramic bowls,
+// clay pots, boat hulls, river water) but nothing ties them to that map —
+// they are just the "satisfying but not glass" end of the collision shelf.
+// Roughly ordered bright/dry -> deep/wet.
+
+'collide-bamboo': {
+  kind: 'collide', label: 'Bamboo clack',
+  desc: 'Dry hollow bamboo knocking together: crisp attack, almost no tail. The brightest non-glass option — cuts through a busy board.',
+  play(a, out, o) {
+    const t = o.when;
+    const vol = Math.min(0.19, o.impact * 0.042);
+    if (vol < 0.013) return;
+    const base = 620 + Math.random() * 320;
+    [[1, 1, 0.075], [2.94, 0.34, 0.035], [6.1, 0.11, 0.018]].forEach(([m, amp, dec]) => {
+      const os = a.createOscillator(), g = a.createGain();
+      os.type = 'sine';
+      os.frequency.setValueAtTime(base * m, t);
+      os.frequency.exponentialRampToValueAtTime(base * m * 0.94, t + dec);   // the woody "drop"
+      g.gain.setValueAtTime(vol * amp, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
+      os.connect(g).connect(out); os.start(t); os.stop(t + dec + 0.02);
+    });
+    sfxNoise(a, out, { when: t, dur: 0.008, vol: vol * 0.55, type: 'highpass', freq: 3000, shape: 2 });
+  }
+},
+
+'collide-ceramic-bowl': {
+  kind: 'collide', label: 'Ceramic bowl tap',
+  desc: 'Glazed stoneware rim: warmer and rounder than the glass clink, with a real hum under it. The ring is what makes it satisfying.',
+  play(a, out, o) {
+    const t = o.when;
+    const vol = Math.min(0.16, o.impact * 0.036);
+    if (vol < 0.012) return;
+    const base = 900 + Math.random() * 420;
+    [[1, 1, 0.26], [2.76, 0.4, 0.14], [5.4, 0.13, 0.07]].forEach(([m, amp, dec]) => {
+      const os = a.createOscillator(), g = a.createGain();
+      os.type = 'sine';
+      os.frequency.setValueAtTime(base * m, t);
+      os.frequency.exponentialRampToValueAtTime(base * m * 0.993, t + dec);
+      g.gain.setValueAtTime(vol * amp, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
+      os.connect(g).connect(out); os.start(t); os.stop(t + dec + 0.02);
+    });
+    sfxNoise(a, out, { when: t, dur: 0.012, vol: vol * 0.45, type: 'bandpass', freq: 2600, q: 1.2 });
+  }
+},
+
+'collide-coconut': {
+  kind: 'collide', label: 'Coconut knock',
+  desc: 'Rounded hollow shell — the mid-weight pick: fuller than bamboo, drier than ceramic.',
+  play(a, out, o) {
+    const t = o.when;
+    const vol = Math.min(0.2, o.impact * 0.045);
+    if (vol < 0.014) return;
+    const base = 300 + Math.random() * 130;
+    [[1, 1, 0.12], [1.87, 0.38, 0.06], [3.4, 0.12, 0.03]].forEach(([m, amp, dec]) => {
+      const os = a.createOscillator(), g = a.createGain();
+      os.type = 'sine';
+      os.frequency.setValueAtTime(base * m, t);
+      os.frequency.exponentialRampToValueAtTime(base * m * 0.9, t + dec);
+      g.gain.setValueAtTime(vol * amp, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
+      os.connect(g).connect(out); os.start(t); os.stop(t + dec + 0.02);
+    });
+    sfxNoise(a, out, { when: t, dur: 0.018, vol: vol * 0.5, type: 'bandpass', freq: 1400, q: 1 });
+  }
+},
+
+'collide-clay-pot': {
+  kind: 'collide', label: 'Clay pot thonk',
+  desc: 'Unglazed earthenware: a dull thonk with just enough ring to feel solid. Quieter and heavier than the bowl.',
+  play(a, out, o) {
+    const t = o.when;
+    const vol = Math.min(0.22, o.impact * 0.05);
+    if (vol < 0.015) return;
+    const base = 230 + Math.random() * 100;
+    [[1, 1, 0.15], [2.32, 0.28, 0.07]].forEach(([m, amp, dec]) => {
+      const os = a.createOscillator(), g = a.createGain();
+      os.type = 'sine';
+      os.frequency.setValueAtTime(base * m, t);
+      os.frequency.exponentialRampToValueAtTime(base * m * 0.86, t + dec);
+      g.gain.setValueAtTime(vol * amp, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
+      os.connect(g).connect(out); os.start(t); os.stop(t + dec + 0.02);
+    });
+    sfxNoise(a, out, { when: t, dur: 0.03, vol: vol * 0.55, type: 'lowpass', freq: 800, shape: 1.8 });
+  }
+},
+
+'collide-hull-bump': {
+  kind: 'collide', label: 'Boat hull bump',
+  desc: 'Two hulls nudging alongside: a deep wooden boom with a plank knock riding on top. The heaviest option in the game.',
+  play(a, out, o) {
+    const t = o.when;
+    const vol = Math.min(0.28, o.impact * 0.062);
+    if (vol < 0.017) return;
+    const low = 80 + Math.random() * 40;
+    const os = a.createOscillator(), g = a.createGain();
+    os.type = 'sine';
+    os.frequency.setValueAtTime(low, t);
+    os.frequency.exponentialRampToValueAtTime(low * 0.6, t + 0.16);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+    os.connect(g).connect(out); os.start(t); os.stop(t + 0.22);
+
+    const knock = 260 + Math.random() * 120;                 // the plank on top of the boom
+    const o2 = a.createOscillator(), g2 = a.createGain();
+    o2.type = 'triangle'; o2.frequency.setValueAtTime(knock, t);
+    o2.frequency.exponentialRampToValueAtTime(knock * 0.85, t + 0.05);
+    g2.gain.setValueAtTime(vol * 0.45, t);
+    g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+    o2.connect(g2).connect(out); o2.start(t); o2.stop(t + 0.08);
+
+    sfxNoise(a, out, { when: t, dur: 0.05, vol: vol * 0.5, type: 'lowpass', freq: 600, shape: 1.6 });
+  }
+},
+
+'collide-water-plop': {
+  kind: 'collide', label: 'River plop',
+  desc: 'Something dropping into the water alongside: a quick upward bloop with a wet splash tail. The odd one out — playful rather than percussive.',
+  play(a, out, o) {
+    const t = o.when;
+    const vol = Math.min(0.3, o.impact * 0.07);
+    if (vol < 0.02) return;
+    const base = 380 + Math.random() * 220;
+    const os = a.createOscillator(), g = a.createGain();
+    os.type = 'sine';
+    os.frequency.setValueAtTime(base * 0.5, t);
+    os.frequency.exponentialRampToValueAtTime(base * 1.6, t + 0.055);   // the rising "bloop"
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
+    os.connect(g).connect(out); os.start(t); os.stop(t + 0.12);
+    sfxNoise(a, out, { when: t, dur: 0.05, vol: vol * 0.45, type: 'bandpass', freq: 1600, q: 0.8 });
+  }
+},
+
 // ============================ COIN ============================
 // Coin voices get `index` — the coin's position in the CURRENT payout shower.
 // audio.js restarts the count when a gap opens (see coinTick), so a voice can
@@ -691,6 +857,67 @@ const SOUND_LIB = {
       g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
       os.connect(g).connect(out); os.start(t); os.stop(t + dec + 0.02);
     });
+  }
+},
+
+// The five below chase actual METAL rather than a musical tick, and share
+// `coinStrike` (see the helpers at the top) so they stay a family.
+
+'coin-metal-clink': {
+  kind: 'coin', label: 'Metal coin clink',
+  desc: 'A real coin hitting a hard counter: inharmonic metal partials, fast decay, a new pitch every coin. The most literally "coiny" option.',
+  play(a, out, o) {
+    coinStrike(a, out, o.when, 3000 * (1 + (Math.random() - 0.5) * 0.14), 1);
+  }
+},
+
+'coin-bounce': {
+  kind: 'coin', label: 'Coin bounce',
+  desc: 'The clink plus its two rebounds — a coin that lands and settles instead of just ticking. The most satisfying single coin; a fast shower turns into a pile.',
+  play(a, out, o) {
+    const t = o.when;
+    const f = 2900 * (1 + (Math.random() - 0.5) * 0.12);
+    coinStrike(a, out, t, f, 1);
+    coinStrike(a, out, t + 0.055, f * 1.02, 0.42);
+    coinStrike(a, out, t + 0.091, f * 1.04, 0.18);
+  }
+},
+
+'coin-purse-jingle': {
+  kind: 'coin', label: 'Purse jingle',
+  desc: 'Three coins jostling inside one tick — a handful of change rather than a single piece. The busiest of the metal set.',
+  play(a, out, o) {
+    const t = o.when;
+    [[0, 1], [0.012, 0.7], [0.026, 0.5]].forEach(([dt, amp]) => {
+      coinStrike(a, out, t + dt, 2700 * (1 + (Math.random() - 0.5) * 0.3), amp * 0.75);
+    });
+  }
+},
+
+'coin-tip-jar': {
+  kind: 'coin', label: 'Into the tip jar',
+  desc: 'A clink with a glass jar resonating under it, so each coin lands with weight. The heaviest coin sound.',
+  play(a, out, o) {
+    const t = o.when;
+    coinStrike(a, out, t, 3100 * (1 + (Math.random() - 0.5) * 0.12), 0.85);
+    const body = 400 + Math.random() * 90;               // the jar itself answering
+    [[1, 0.05, 0.2], [2.7, 0.018, 0.1]].forEach(([m, vol, dec]) => {
+      const os = a.createOscillator(), g = a.createGain();
+      os.type = 'sine'; os.frequency.setValueAtTime(body * m, t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t + 0.006);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
+      os.connect(g).connect(out); os.start(t); os.stop(t + dec + 0.02);
+    });
+  }
+},
+
+'coin-stacking-gold': {
+  kind: 'coin', label: 'Stacking gold',
+  desc: 'The metal clink, stepping up a little per coin and flattening out after eight — a long payout audibly piles up without running off the top.',
+  play(a, out, o) {
+    const step = Math.pow(1.055, Math.min(o.index, 8));
+    coinStrike(a, out, o.when, 2500 * step * (1 + (Math.random() - 0.5) * 0.04), 1);
   }
 },
 
