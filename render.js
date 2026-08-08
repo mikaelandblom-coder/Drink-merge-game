@@ -21,6 +21,9 @@ function loadMapAssets(map, bgSrc) {
   // (e.g. Melody Lane's note-coin + instrument-case bag). Falls back to shared.
   COIN_IMG.src = map.coin || 'assets/images/shared/coin.png';
   BAG_IMG.src  = map.bag  || 'assets/images/shared/moneybag.png';
+  // Ambient drift layer (fx.js) — rebuilt per map, and cleared for maps with
+  // no `fx:` so the previous map's petals never linger.
+  setMapFx(map);
 }
 
 function drawDangerLine(dangerWY) {

@@ -205,6 +205,98 @@ html, body {
   background-repeat: no-repeat;
 }
 
+/* Ambient background motion (fx.js): drifting details over the map art, built
+   only for maps that declare `fx:` in config/maps.js.
+   Stacked ABOVE #stage-bg (same z-index, later in the DOM) so petals cross the
+   table art, and BELOW the canvas (z1) so drinks always sit in front of them.
+   Everything below animates transform/opacity ONLY — it must stay on the
+   compositor, because the point of this layer is that the render loop (which
+   parks itself after 20 idle frames) never sees it. Never animate width/left/
+   background-position here. */
+/* Height is set by setMapFx() to the map's horizon, so the layer covers only
+   the BACKDROP — top/left/right rather than inset:0, or the height would have
+   nothing to do. Motion across the play surface competes with the drinks (tried
+   on Kyoto, rejected); keep it up here. */
+#stage-fx {
+  position: absolute; top: 0; left: 0; right: 0; height: 100%; z-index: 0;
+  border-radius: 14px 14px 0 0; overflow: hidden;
+  pointer-events: none;                 /* the canvas above owns every tap */
+  contain: layout paint;
+  --fx-k: 1;                            /* stage scale, set by fxSetScale() */
+}
+/* Transform percentages resolve against the element's OWN box, so the box has
+   to span the band along the axis of travel. It stays ZERO on the other axis,
+   which keeps each particle's painted area down to the sprite itself. */
+#stage-fx.y .fx-p, #stage-fx.y .fx-f { width: 0;    height: 100%; }
+#stage-fx.x .fx-p, #stage-fx.x .fx-f { width: 100%; height: 0;    }
+#stage-fx .fx-p, #stage-fx .fx-f { position: absolute; }
+/* Pivot the static wind tilt at the START of the path, so a particle's entry
+   point is exactly where it was placed and its exit is entry + travel. */
+#stage-fx .fx-p { transform-origin: 0 0; }
+#stage-fx .fx-f { top: 0; left: 0; animation: linear infinite; }
+#stage-fx.y .fx-f { animation-name: fx-fall; }
+#stage-fx.x .fx-f { animation-name: fx-fly; }
+#stage-fx .fx-s {
+  position: absolute; top: 0; left: 0;
+  animation: ease-in-out infinite alternate;
+}
+#stage-fx.y .fx-s { animation-name: fx-sway; }   /* across a fall */
+#stage-fx.x .fx-s { animation-name: fx-bob;  }   /* under a crosswind */
+#stage-fx i {
+  position: absolute; top: 0; left: 0;           /* centred by inline margins */
+  background: center / contain no-repeat;
+  animation: linear infinite;                    /* name set per preset */
+}
+
+/* The opacity stops fade each particle in and out at the ends of its path, so
+   nothing pops at the band's edges — and they are SYMMETRIC so a reversed wind
+   (dir:-1) looks identical. transform is only keyed at 0/100%, so it still
+   interpolates linearly across the whole pass. Fading here rather than masking
+   #stage-fx keeps every particle independently composited. */
+/* Deliberately ASYMMETRIC, unlike fx-fly. A fall's two ends are not alike: the
+   top of the band is the top of the stage — a real frame edge, where fading in
+   over a clip is invisible — while the bottom is the HORIZON, an invisible line
+   in open art where a half-faded sprite is visibly sliced. So the fade-out
+   finishes well before the sprite gets there. (Measured: with a symmetric
+   fade, petals were still ~25% opaque as they crossed the horizon.) */
+@keyframes fx-fall {
+  0%   { transform: translateY(-12%); opacity: 0; }
+  10%  { opacity: 1; }
+  68%  { opacity: 1; }
+  86%  { opacity: 0; }
+  100% { transform: translateY(112%); opacity: 0; }
+}
+@keyframes fx-fly {
+  0%   { transform: translateX(-15%); opacity: 0; }
+  14%, 86% { opacity: 1; }
+  100% { transform: translateX(115%); opacity: 0; }
+}
+@keyframes fx-sway {
+  from { transform: translateX(calc(var(--fx-wob) * var(--fx-k) * -1)); }
+  to   { transform: translateX(calc(var(--fx-wob) * var(--fx-k))); }
+}
+@keyframes fx-bob {
+  from { transform: translateY(calc(var(--fx-wob) * var(--fx-k) * -1)); }
+  to   { transform: translateY(calc(var(--fx-wob) * var(--fx-k))); }
+}
+/* rotate3d, not a flat rotate: a 2D spin reads as a pinwheel, while tumbling
+   about a tilted axis makes the sprite go edge-on and near-invisible twice a
+   turn — which is what actually looks like falling blossom or blown paper.
+   `tumble` leads with the horizontal axis (a petal turning over), `twist`
+   with the vertical one (a note flipping as it flies). */
+@keyframes fx-tumble {
+  from { transform: rotate3d(1, .7, .25, 0deg); }
+  to   { transform: rotate3d(1, .7, .25, 360deg); }
+}
+@keyframes fx-twist {
+  from { transform: rotate3d(.25, 1, .12, 0deg); }
+  to   { transform: rotate3d(.25, 1, .12, 360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #stage-fx { display: none; }
+}
+
 canvas { display: block; position: relative; z-index: 1; touch-action: none; border-radius: 14px; }
 
 #over {
