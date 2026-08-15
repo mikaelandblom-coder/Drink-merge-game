@@ -338,8 +338,11 @@ Two halves, and the passive one is the one that answers the question:
 
 - **A second pill under the coin count** — `2,150 to beat`, counting down as
   coins land, flipping to a gold `🏆 new best` the moment it's overtaken (which
-  also pops a `NEW BEST!` text and plays the `best` voice — minutes before the
-  game-over fanfare, so they never collide). Drawn by `drawBag` in render.js
+  also pops a `NEW BEST!` text — but makes NO sound: Mikael's call, 2026-08-15,
+  since the run is still going and anything audible talks over the shot being
+  lined up. The game-over `fanfare()` stays the one moment a record is heard. If
+  a discrete cue is ever wanted, it needs its own `SOUND_MAP` event added in the
+  sound lab, not a second caller of `best`). Drawn by `drawBag` in render.js
   from `bestToBeatLine()` in game.js, which caches per score value rather than
   rebuilding a string every frame. `state.bestToBeat` is read ONCE per run in
   `resetState` — a run's target cannot change while it's being played, and

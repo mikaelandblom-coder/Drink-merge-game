@@ -238,14 +238,14 @@ function bestToBeatLine() {
 }
 
 // Overtaking the record is worth marking WHEN IT HAPPENS — at game over the run
-// is already finished. Same 'best' voice as the game-over fanfare (audio.js):
-// the two are minutes apart, so they never overlap, and this is the moment the
-// pill under the bag flips to gold.
+// is already finished. Marked SILENTLY, on purpose (Mikael, 2026-08-15): the
+// pill flipping to gold and the pop are enough, and the run is still going, so
+// anything louder would talk over the shot the player is lining up. The
+// game-over fanfare stays the one moment a record gets a sound.
 function checkNewBest() {
   if (state.beatBest || !state.bestToBeat || state.coinCount <= state.bestToBeat) return;
   state.beatBest = true;
   spawnTextPop(BAG_POS.x + 62, BAG_POS.y + 90, 'NEW BEST!', '#ffd35c', state.textPops);
-  fanfare();
 }
 
 // Combo tint escalates like RPG loot rarity: blue → purple → magenta → gold.
