@@ -123,6 +123,11 @@ const SUSPEND = (() => {
         if (b.length > 5) Body.setVelocity(d, { x: b[5], y: b[6] });
       }
       state.coinCount  = p.score || 0;
+      // The record is overtaken by coins LANDING in the bag, and a resumed score
+      // never lands — without this a run that was already ahead would re-announce
+      // "NEW BEST!" on its next coin. (bestToBeat itself is right already:
+      // resetState read it for this same variant a moment ago.)
+      state.beatBest   = state.coinCount > state.bestToBeat;
       state.nextTier   = p.next;
       state.queuedTier = p.queued;
       state.runXp      = p.xp || 0;

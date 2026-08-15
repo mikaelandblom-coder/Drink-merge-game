@@ -407,6 +407,24 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
   color: #c8a870;
 }
 
+/* In-game score panel (tap the coin bag): the variant's whole board, with the
+   live run slotted in at the place it currently stands. Same overlay pattern as
+   #confirm-menu; the run is frozen behind it (setPaused in game.js). */
+#score-panel {
+  position: absolute; inset: 0; display: none;
+  flex-direction: column; align-items: center; justify-content: center;
+  background: rgba(15, 9, 6, .92); color: var(--foam);
+  text-align: center; gap: 10px; padding: 28px;
+  border-radius: 14px; z-index: 4;
+}
+#sp-variant { font-size: 12px; letter-spacing: .04em; }
+#sp-gap { font-size: 15px; color: var(--foam); }
+#sp-gap strong { color: var(--neon); }
+#sp-gap.ahead { color: var(--brass); }
+#sp-gap.ahead strong { color: var(--brass); }
+#sp-foot { font-size: 12px; color: var(--brass); opacity: .8; }
+#sp-foot:empty { display: none; }
+
 /* Close (✕) on the game-over overlay: hides the results so the final pile can
    be inspected; #over-peek brings them back. Top-LEFT because the top-right
    corner is covered by #hud-btns (z3, above the overlay since b0b96d9). */
