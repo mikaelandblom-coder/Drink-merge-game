@@ -928,7 +928,11 @@ Two traps that script now handles, both of which cost real time:
   `GET /_dev/ls` + `POST /_dev/write`. That closes the one thing the browser
   genuinely cannot do — DIRECTORY LISTING, the only reason the sprite editor
   needs a directory handle at all — in ~40 lines, with no build step and no
-  second artifact. It is NOT free, though, and this is the part to think about
+  second artifact. (Since 2026-08-16 the sprite editor no longer needs a handle
+  merely to SHOW the library: with none picked it browses the paths named in
+  config instead — see "no folder picked" in tools/README.md. A handle is still
+  the only way to see art that no map references yet, so the argument above
+  stands, just with less urgency.) It is NOT free, though, and this is the part to think about
   before building it: a standing write API has ambient authority (any page open
   in the browser can POST to it — note `shot-receiver.py` sets
   `Access-Control-Allow-Origin: *` with no origin check, fine for a one-shot
