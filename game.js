@@ -95,6 +95,11 @@ const GHOST_STEER    = 0.7;       // px/frame of velocity bent toward the centro
 let FREE_WY = Infinity;           // physics y of the free line (Infinity = off)
 let COMBOS_ENABLED = false;       // cascade-merge multipliers (set per run in startGame)
 let HAPPY_HOUR = false;           // orders mode (set per run in startGame; forces combos off)
+let SPIN_ENABLED = false;         // draw items at their real body angle (map.spin, set in startGame)
+// Dev preview: ?spin=1 forces rotation on for ANY map, ?spin=0 forces it off —
+// so a candidate map's art can be judged before committing `spin:` to config.
+const SPIN_PARAM = /[?&]spin=0/.test(location.search) ? false
+                 : /[?&]spin/.test(location.search)   ? true : null;
 let ACTIVE_SIZE = null;           // table-size variant of the current run (for score keys)
 let trayWalls = [];               // just the traced boundary bodies
 let trayPoly  = [];               // boundary polygon (physics coords) for the inside test
@@ -544,7 +549,11 @@ function render(dt) {
     const born   = (performance.now() - d.plugin.born) / 200;
     const growth = Math.min(1, 0.6 + born * 0.4);
     const p      = persp(d.position.x, d.position.y);
-    drawDrink(p.x, p.y, d.plugin.item, p.s * growth, wob + d.id);
+    // CAPSULE items are excluded on purpose: makeDrink locks their inertia so
+    // the horizontal sprite can never drift off its stadium hitbox, and their
+    // shadow is baked at the authored cap.rot. Spin is a circle-only feature.
+    const spin = (SPIN_ENABLED && !d.plugin.item.cap) ? d.angle : undefined;
+    drawDrink(p.x, p.y, d.plugin.item, p.s * growth, wob + d.id, spin);
   }
 
   if (!state.gameOver) {
@@ -610,6 +619,13 @@ function sceneBusy() {
   }
   for (const d of state.drinks) {
     if (Math.hypot(d.velocity.x, d.velocity.y) > 0.08) return true;
+    // A body can be linearly still while it is STILL TURNING, and on a spin map
+    // that rotation is drawn — so without this an item would freeze mid-turn
+    // when the board settles and then jump on the next wake. Gated on the flag
+    // so every other map's idle behaviour is bit-for-bit what it was.
+    // 0.0015 rad/step: at the measured ~0.97/step decay that leaves under 3
+    // degrees of un-drawn rotation, which is invisible.
+    if (SPIN_ENABLED && Math.abs(d.angularVelocity) > 0.0015) return true;
   }
   return false;
 }
@@ -789,6 +805,10 @@ function startGame(map, opts = {}) {
   // Combo multipliers: per-run override from the menu, else the map's default.
   COMBOS_ENABLED = HAPPY_HOUR ? false
     : (opts.combos !== undefined) ? !!opts.combos : !!map.combos;
+  // Rotating items: a per-MAP property, not a menu option — it belongs to the
+  // art (radially symmetric subjects only), not to how a player wants to play.
+  // Purely visual: the bodies already rotate, this only draws it.
+  SPIN_ENABLED = (SPIN_PARAM !== null) ? SPIN_PARAM : !!map.spin;
   // Apply the active size variant's traced boundary (each framing has its own).
   // Falls back to the map's base boundary if this size wasn't traced yet.
   if (typeof MAP_HITBOXES !== 'undefined') {

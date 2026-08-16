@@ -286,6 +286,45 @@ in style.css), and forces the render loop to stay live while on (`sceneBusy`
 returns true for `showXray`, so a settled board still repaints the overlay).
 Distinct from the dev-only `drawHitboxes` (the `h`-key / `?hitbox` overlay).
 
+## Rotating items (`spin:`) — OPT-IN PER MAP, off everywhere today
+
+A map can set `spin: true` in config/maps.js to have its items drawn at their
+real physics angle instead of the tiny idle wobble. **No map sets it** — it was
+built 2026-08-16 for a planned PIZZA map, whose subjects are radially symmetric.
+
+**It is purely cosmetic and cannot change gameplay.** The circle bodies have
+always rotated — Matter gives them default inertia and collisions impart angular
+velocity. All this does is decide whether `drawDrink` reads `body.angle` or
+throws it away. Physics, scores and seeded runs are untouched by the flag.
+Verified by pixel-diffing a rendered board against a reimplementation of the old
+`drawDrink`: **0 differing subpixels** across kyoto/melody/hawaii/teddy/cantho.
+
+- **Rotation comes from the accumulated ANGLE, not from spin speed.** Measured on
+  a 14-shot board: instantaneous `angularVelocity` peaks around 0.008 rad/step
+  (~0.07 turns/sec — nothing visibly spins like a top), but the *accumulated*
+  angle reaches 276° with a mean of ~48°. So items gradually turn as they get
+  shoved around, which is what a top-down table should look like. No gain or
+  fudge factor is applied, and none is needed — don't add one.
+- **Circle items ONLY.** `makeDrink` locks capsule inertia (`Body.setInertia`
+  `Infinity`) so a horizontal sprite can never drift off its stadium hitbox, and
+  the capsule shadow is baked at the authored `cap.rot`. The render call site
+  passes `undefined` for any item with `.cap`, so a spin map may mix shapes
+  safely — the capsules just won't turn. Don't "fix" this by unlocking them.
+- **The shadow never spins.** It keeps the idle wobble it always had but sits in
+  its own `save`/`restore` outside the rotation: the light is overhead, so a
+  squashed shadow ellipse turning with the item reads as the lamp orbiting the
+  table. This restructuring is what the pixel-diff above was verifying.
+- **`sceneBusy()` gained an `angularVelocity` test, gated on the flag.** A body
+  can be linearly still while still turning; without this it would freeze
+  mid-turn when the board settles and jump on the next wake. The threshold
+  (0.0015 rad/step) leaves under 3° of un-drawn rotation at the measured
+  ~0.97/step decay. Gated so every other map's idle behaviour is unchanged.
+- **`?spin=1` forces it on for any map, `?spin=0` off** — for judging a
+  candidate map's art before committing `spin:` to config. Worth doing: tried on
+  Cần Thơ, the upright rice-paper rolls tilt like they're falling over. Rotation
+  needs radially symmetric subjects (pizzas, plates, wheels, records), which is
+  exactly why this is a per-MAP art property and not a menu option.
+
 ## Ambient background motion (fx.js)
 
 A map can declare `fx:` in config/maps.js to get a few drifting details over its
@@ -796,7 +835,9 @@ toggle (drop the extra background master in `assets/source/<map>/`, add it to
 `.webp`, then trace each size's boundary in the hitbox editor); `coin:` /
 `bag:` to override the
 shared coin/money-bag art with map-specific PNGs (omit to use the shared art);
-`fx:` to add drifting ambient detail (see "Ambient background motion").
+`fx:` to add drifting ambient detail (see "Ambient background motion");
+`spin: true` to draw items at their real physics angle (see "Rotating items" —
+radially symmetric art only).
 To theme the map's sounds, add a `SOUND_MAP` entry for it in the sound lab (see
 tools/README.md) — a new map with no entry just inherits the default set, so
 this can wait until the map plays well. Melody Lane (music shop) is the worked

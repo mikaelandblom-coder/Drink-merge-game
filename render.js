@@ -98,10 +98,16 @@ function makeCapsuleShadowSprite(hw, hh) {
 
 // item is the full item object (from ITEMS or RECEIPT_ITEMS) — bodies carry
 // theirs on plugin.item, so drinks and Happy Hour receipts share this path.
-function drawDrink(sx, sy, item, scale, wobble) {
+//
+// `spin` (radians) is the body's real physics angle, passed ONLY by maps that
+// set `spin: true` in config/maps.js — see "Rotating items" in CLAUDE.md. When
+// it is undefined every map behaves exactly as it always did: the item carries
+// the tiny idle wobble and nothing else. Nothing here changes physics; the
+// bodies have always rotated, this only decides whether that is drawn.
+function drawDrink(sx, sy, item, scale, wobble, spin) {
   const r = item.r * scale;
+  const idle = Math.sin(wobble) * 0.02;
   ctx.save(); ctx.translate(sx, sy);
-  ctx.rotate(Math.sin(wobble) * 0.02);
 
   // Shadow drawn ON the collision circle (origin = body centre here), sized to
   // physR — so it reads as grounded at its actual hitbox instead of floating
@@ -109,8 +115,13 @@ function drawDrink(sx, sy, item, scale, wobble) {
   // Nudged down a little so it peeks out beneath the item (light-from-above
   // grounding cue); same physR fraction for circles and capsules so every map
   // gets the identical treatment.
+  // It keeps the idle wobble but NEVER the spin: the light is overhead, so a
+  // squashed shadow ellipse that turned with the item would read as the lamp
+  // orbiting the table. Hence its own save/restore rather than the shared
+  // rotation this function used to open with.
   const pr = item.physR * scale;
   ctx.save();
+  ctx.rotate(idle);
   ctx.translate(0, pr * SHADOW_DROP);
   ctx.scale(1, 0.82);
   if (item.cap) {
@@ -126,6 +137,12 @@ function drawDrink(sx, sy, item, scale, wobble) {
     ctx.drawImage(SHADOW_SPRITE, -pr, -pr, pr * 2, pr * 2);
   }
   ctx.restore();
+
+  // Art only. `spin` replaces the idle wobble rather than adding to it, so a
+  // spinning item doesn't also jitter. The hitbox offset below is applied
+  // INSIDE this rotation, which is what keeps the sprite rigidly attached to
+  // its body instead of orbiting the centre.
+  ctx.rotate(spin === undefined ? idle : spin);
 
   // The collision circle may be offset from the sprite anchor (set in the
   // hitbox editor); the body IS the circle, so shift the art the other way.
