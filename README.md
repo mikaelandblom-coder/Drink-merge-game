@@ -32,6 +32,9 @@ sound theme:
 | Mage Tower | Arcane Sanctum |
 | Plushie Factory | Made for Mai |
 | Melody Lane | Music Shop |
+| Paris | Le Petit Café |
+| Farm | Sprout Valley |
+| Cần Thơ | Floating Market |
 
 ## Game modes
 
@@ -68,10 +71,12 @@ anywhere, iPad included.
 No build step — it's vanilla JS served as static files:
 
 ```
-python -m http.server 5500
+python serve.py
 ```
 
-Then open http://localhost:5500.
+Then open http://localhost:5500. (`serve.py` is a plain static server plus a
+`Cache-Control: no-cache` header — without it the browser happily serves a
+stale `config/*.js`, which looks exactly like an edit that didn't work.)
 
 ## Tech
 
