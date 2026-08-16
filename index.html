@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Mixology Merge</title>
 <!-- PNG icons: iOS Safari ignores SVG/data-URI favicons, so a real apple-touch-icon is required -->
-<link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png?v=85">
-<link rel="icon" type="image/png" sizes="192x192" href="assets/images/icon-192.png?v=85">
-<link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=85">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png?v=86">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/images/icon-192.png?v=86">
+<link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=86">
 <meta name="apple-mobile-web-app-title" content="Mixology Merge">
-<link rel="stylesheet" href="style.css?v=85">
+<link rel="stylesheet" href="style.css?v=86">
 </head>
 <body>
 
@@ -201,6 +201,19 @@
       </div>
       <div id="bug-audio-diag"></div>
     </div>
+    <!-- High scores mid-run: tapping the coin bag opens this (ui.js
+         showScorePanel). The run is FROZEN while it's up — reading the board
+         you're chasing must never cost you the run (setPaused in game.js). -->
+    <div id="score-panel">
+      <p class="confirm-title">Top scores</p>
+      <p class="confirm-sub" id="sp-variant"></p>
+      <p id="sp-gap"></p>
+      <div class="score-list" id="sp-list"></div>
+      <p id="sp-foot"></p>
+      <div class="confirm-btns">
+        <button id="sp-close">Back to the table</button>
+      </div>
+    </div>
     <div id="confirm-menu">
       <p class="confirm-title">Return to menu?</p>
       <p class="confirm-sub">Your run is saved &mdash; continue it from the menu whenever you like.</p>
@@ -213,26 +226,26 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
-<script src="config/constants.js?v=85"></script>
-<script src="config/hitboxes.js?v=85"></script>
-<script src="config/items.js?v=85"></script>
-<script src="config/maps.js?v=85"></script>
+<script src="config/constants.js?v=86"></script>
+<script src="config/hitboxes.js?v=86"></script>
+<script src="config/items.js?v=86"></script>
+<script src="config/maps.js?v=86"></script>
 <!-- Sound library + the map/event -> sound wiring (both shared with
      tools/sound-lab.html, so auditions there are what the game plays) -->
-<script src="config/sounds.js?v=85"></script>
-<script src="config/soundmap.js?v=85"></script>
-<script src="scores.js?v=85"></script>
-<script src="buglog.js?v=85"></script>
+<script src="config/sounds.js?v=86"></script>
+<script src="config/soundmap.js?v=86"></script>
+<script src="scores.js?v=86"></script>
+<script src="buglog.js?v=86"></script>
 <!-- Suspended runs (menu "Continue"). After buglog.js — it serializes boards
      with BUGLOG.snapDrink so the two can't drift apart. -->
-<script src="suspend.js?v=85"></script>
-<script src="progress.js?v=85"></script>
-<script src="audio.js?v=85"></script>
-<script src="render.js?v=85"></script>
-<script src="ui.js?v=85"></script>
-<script src="welcome.js?v=85"></script>
-<script src="game.js?v=85"></script>
+<script src="suspend.js?v=86"></script>
+<script src="progress.js?v=86"></script>
+<script src="audio.js?v=86"></script>
+<script src="render.js?v=86"></script>
+<script src="ui.js?v=86"></script>
+<script src="welcome.js?v=86"></script>
+<script src="game.js?v=86"></script>
 <!-- Dev-only test harness: inert unless the URL has ?test (see test.js) -->
-<script src="test.js?v=85"></script>
+<script src="test.js?v=86"></script>
 </body>
 </html>

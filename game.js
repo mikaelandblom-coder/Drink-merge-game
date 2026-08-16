@@ -210,7 +210,43 @@ const state = {
   // XP earned this run (1/shot; committed to storage per shot by progress.js —
   // this counter only feeds the game-over "+N XP" recap)
   runXp: 0,
+  // Score to chase: this variant's standing record, read once per run (see
+  // resetState) — it can't change while a run is being played. 0 = empty board.
+  bestToBeat: 0,
+  beatBest: false,   // already overtaken it this run (so the pop fires once)
 };
+
+// The high-score board this run counts toward. Variant identity (size × combos ×
+// Happy Hour) is decided at startGame, so this is stable for the whole run — the
+// game-over save, the in-game readout and the score panel must all agree on it.
+function currentScoreKey() {
+  return scoreKey(ACTIVE_MAP, ACTIVE_SIZE, COMBOS_ENABLED, HAPPY_HOUR);
+}
+
+// The line under the coin pill: how far this run is from the record. Rebuilt
+// only when the score actually changes — render() asks for it every frame.
+let bestLine = null, bestLineFor = -1;
+function bestToBeatLine() {
+  if (!state.bestToBeat) return null;   // nothing on this board yet — nothing to chase
+  if (bestLineFor === state.coinCount) return bestLine;
+  bestLineFor = state.coinCount;
+  const gap = state.bestToBeat - state.coinCount;
+  bestLine = (gap > 0)
+    ? { text: gap.toLocaleString() + ' to beat', ahead: false }
+    : { text: '🏆 new best', ahead: true };
+  return bestLine;
+}
+
+// Overtaking the record is worth marking WHEN IT HAPPENS — at game over the run
+// is already finished. Marked SILENTLY, on purpose (Mikael, 2026-08-15): the
+// pill flipping to gold and the pop are enough, and the run is still going, so
+// anything louder would talk over the shot the player is lining up. The
+// game-over fanfare stays the one moment a record gets a sound.
+function checkNewBest() {
+  if (state.beatBest || !state.bestToBeat || state.coinCount <= state.bestToBeat) return;
+  state.beatBest = true;
+  spawnTextPop(BAG_POS.x + 62, BAG_POS.y + 90, 'NEW BEST!', '#ffd35c', state.textPops);
+}
 
 // Combo tint escalates like RPG loot rarity: blue → purple → magenta → gold.
 function comboColor(m) {
@@ -288,6 +324,12 @@ function resetState() {
   state.gameOver = false; state.canShoot = true;
   state.customers = []; state.shotsFired = 0; state.nextCustomerAtShot = HH_FIRST_SHOT;
   state.runXp = 0;
+  // Re-read the board here rather than in startGame: "Play again" comes straight
+  // back through resetState, and by then the run that just ended has been saved
+  // — so a record set last run is the target this run.
+  state.bestToBeat = getScores(currentScoreKey())[0]?.score ?? 0;
+  state.beatBest = false;
+  bestLineFor = -1;
   LAUNCH.x = W / 2;
   rollFreshTiers();
   BUGLOG.run();    // fresh bug-report ring for the new run (buglog.js)
@@ -452,7 +494,7 @@ function checkOver() {
       // while the recorded high score is short by 10 per in-flight coin).
       state.coinCount += state.coins.length * 10;
       state.coins = [];
-      showGameOver(state, scoreKey(ACTIVE_MAP, ACTIVE_SIZE, COMBOS_ENABLED, HAPPY_HOUR));
+      showGameOver(state, currentScoreKey());
     }
   }
 }
@@ -518,10 +560,11 @@ function render(dt) {
 
   drawNextPreview(state.queuedTier);
 
-  drawBag(state.coinCount, dt);
+  drawBag(state.coinCount, dt, bestToBeatLine());
   state.coins = updateCoins(state.coins, dt, () => {
     state.coinCount += 10;
     coinTick();
+    checkNewBest();   // coins landing in the bag is the only way the score rises
   });
   drawCoins(state.coins);
 }
@@ -568,9 +611,41 @@ function sceneBusy() {
   return false;
 }
 
+// ---------- freeze (score panel) ----------
+// The score panel is opened MID-RUN, on purpose, possibly often — so unlike the
+// bug panel and the quit confirm (rare / terminal) it cannot leave the game
+// running underneath. checkOver keeps counting the 1.5s danger-line grace even
+// when nothing is drawn, so without this, checking what you need to beat could
+// cost you the run — the exact opposite of the feature.
+let paused = false, pausedAt = 0;
+
+function setPaused(on) {
+  if (on === paused) return;
+  if (on) { paused = true; pausedAt = performance.now(); return; }
+  // Everything time-based is stamped with performance.now(), which kept running
+  // while we were frozen. Push those stamps forward by the frozen duration so
+  // the board resumes at the age it was parked at — a drink halfway through its
+  // game-over grace keeps the other half, and a merge mid-grow-in finishes its
+  // animation instead of snapping to full size. (Same idea as the deliberate
+  // BACKDATING in SUSPEND.apply, pointed the other way.)
+  const held = performance.now() - pausedAt;
+  for (const d of state.drinks) d.plugin.born += held;
+  for (const c of state.customers) {
+    c.bornAt += held;
+    if (c.leaveAt) c.leaveAt += held;
+  }
+  if (state.lastMergeAt) state.lastMergeAt += held;
+  paused = false;
+  lastTs = 0;      // don't bill the frozen stretch to the next frame's dt
+  idleFrames = 0;  // the board may have settled — force one frame back on screen
+}
+
 function loop(ts) {
   if (!running) return;
   requestAnimationFrame(loop);
+  // Frozen: no physics, no render, and above all no checkOver. The canvas keeps
+  // its last frame, so the board stays visible behind the panel.
+  if (paused) return;
   // Cap to ~60fps (30 in cool mode): on 120Hz phones rAF fires twice as often,
   // so skip the extra frames rather than doing double the physics + drawing
   // work (heat).
@@ -669,6 +744,10 @@ function stepPhysics() {
 document.addEventListener('visibilitychange', () => {
   const onGameScreen = document.getElementById('wrap').style.display !== 'none';
   if (document.hidden) {
+    // Close the score panel first: its freeze is measured from a wall-clock
+    // stamp, and backgrounding for an hour with it open would hand the board an
+    // hour of "age" back on return. Unfreezing here keeps that window to nothing.
+    hideScorePanel();
     // Park the run before anything else: iOS discards backgrounded tabs without
     // warning, so this — not the menu button — is the save that usually matters.
     if (onGameScreen) SUSPEND.save();
@@ -686,6 +765,10 @@ function startGame(map, opts = {}) {
   // Cool mode is shelved for now (checkbox commented out in index.html) —
   // pinned off here so a stale saved pref can't half-rate anyone's game.
   coolMode = false;  // was: localStorage.getItem('mm_cool') === '1'
+  // A run can only start from the menu, where no panel is open — but a stuck
+  // `paused` would freeze the new run's loop the instant it started, so never
+  // take that on trust.
+  hideScorePanel();
   ACTIVE_MAP = map;
   ITEMS = ACTIVE_MAP.itemsData;
   // Fetch only THIS map's sprite chain (see the bandwidth note in items.js) —

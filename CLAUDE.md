@@ -47,7 +47,8 @@ audio.js              — Audio PLUMBING only: output routing (incl. the iOS
 render.js             — All canvas drawing (bg, drinks, coins, bag, particles,
                          aim); `drawXray` is the player-facing X-ray diagnostic
                          (see "X-ray" below), separate from the dev `drawHitboxes`
-ui.js                 — Pointer input, HUD buttons, game-over overlay, LAUNCH pos
+ui.js                 — Pointer input, HUD buttons, game-over overlay, LAUNCH pos,
+                         the in-game score panel (tap the coin bag)
 welcome.js            — Main menu: map cards, size/combo checkboxes, score lists
 game.js               — Physics engine, state object, merge logic, render loop
 style.css             — All CSS
@@ -326,6 +327,57 @@ at once (no names — local scores), highlighting the current selection. Game ov
 saves under the played variant and shows a `fanfare()` + banner when the best is
 beaten. NOTE: key identity is coupled to a map's current `defaultSize`/`combos`
 defaults — changing a default would re-point the legacy key.
+
+`currentScoreKey()` (game.js) is the single expression of "the board this run
+counts toward" — the game-over save, the in-game readout and the score panel all
+call it, so they cannot disagree about which variant is being played.
+
+### Knowing what you're chasing, mid-run (Mikael's ask, 2026-08-15)
+
+Two halves, and the passive one is the one that answers the question:
+
+- **A second pill under the coin count** — `2,150 to beat`, counting down as
+  coins land, flipping to a gold `🏆 new best` the moment it's overtaken (which
+  also pops a `NEW BEST!` text — but makes NO sound: Mikael's call, 2026-08-15,
+  since the run is still going and anything audible talks over the shot being
+  lined up. The game-over `fanfare()` stays the one moment a record is heard. If
+  a discrete cue is ever wanted, it needs its own `SOUND_MAP` event added in the
+  sound lab, not a second caller of `best`). Drawn by `drawBag` in render.js
+  from `bestToBeatLine()` in game.js, which caches per score value rather than
+  rebuilding a string every frame. `state.bestToBeat` is read ONCE per run in
+  `resetState` — a run's target cannot change while it's being played, and
+  coming back through "Play again" re-reads it, so a record set last run is the
+  target this run. An empty board draws nothing: there's nothing to chase.
+- **Tapping that readout opens the full board** (`showScorePanel` in ui.js,
+  `#score-panel`): this variant's top 8 with the live run slotted in at the rank
+  it currently stands, and the gap spelled out. Variant labels are reused from
+  welcome.js `mapVariants` so the menu and the panel can't describe the same run
+  differently.
+
+Two things about it that are load-bearing:
+
+- **The run FREEZES while the panel is open** (`setPaused` in game.js), which no
+  other overlay in this game does. The bug panel and quit-confirm are rare or
+  terminal; this one is opened mid-run, repeatedly, and `checkOver` keeps
+  counting the 1.5s danger-line grace whether or not anything is being drawn —
+  so without the freeze, checking what you need to beat could cost you the run.
+  Resuming pushes every `performance.now()` stamp (`plugin.born`, customer
+  `bornAt`/`leaveAt`, `lastMergeAt`) forward by the frozen duration, so the
+  board comes back at the age it was parked at — the same trick as
+  `SUSPEND.apply`'s deliberate backdating, pointed the other way. Backgrounding
+  closes the panel first (`visibilitychange`), so that window can't grow to an
+  hour, and `startGame` closes it defensively — a stuck `paused` would freeze
+  the next run's loop at birth.
+- **The tap must not steal a shot.** The coin corner is a legal aim direction
+  (tap-to-shoot is a supported gesture), so ui.js claims a press in `bagHit`
+  (render.js) only while it stays within `BAG_TAP_SLOP`; travel further and it
+  becomes a normal aim, picked up from where the finger is. Nothing calls
+  `updateAim` on the initial press either, or LAUNCH would visibly slide toward
+  the corner just from touching the score. In Happy Hour the customer frames are
+  hit-tested FIRST: the leftmost order bubble genuinely overlaps the readout's
+  box on Hawaii, Kyoto, Plushie and Farm (measured), and a tap there means
+  "serve" — the readout keeps the rest of the box, and a drag off it inside the
+  strip still fires nothing, so the no-aim-above-the-horizon rule is intact.
 
 ## Suspended runs — leaving a map keeps the board (suspend.js)
 

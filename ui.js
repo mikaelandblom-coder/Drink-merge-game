@@ -19,6 +19,13 @@ function updateAim(p, nextTier) {
   LAUNCH.x += (Math.max(margin, Math.min(W - margin, p.x)) - LAUNCH.x) * 0.35;
 }
 
+// A press that STARTED on the coin readout and hasn't travelled far enough to
+// be a drag. The score sits in a corner that is also a legal aim direction, so
+// the panel is claimed by a tap only: move past the slop and this clears, the
+// aim starts from where the finger is, and the shot fires as it always did.
+let bagTap = null;
+const BAG_TAP_SLOP = 12;   // screen px (world units) before a tap becomes a drag
+
 function wireInput(canvas, state) {
   canvas.addEventListener('pointerdown', e => {
     // A tap on the table while a volume slider is open just dismisses it —
@@ -32,20 +39,42 @@ function wireInput(canvas, state) {
     // tap there serves a lit order (or does nothing) but NEVER starts an aim,
     // so serving can't accidentally fire a shot. Drags that start on the field
     // and cross the line still aim normally (pointermove is untouched).
-    if (HAPPY_HOUR && p.y < HORIZON) {
+    const inStrip = HAPPY_HOUR && p.y < HORIZON;
+    // An order frame is tested BEFORE the coin readout: on a deep-horizon map
+    // (Hawaii, Kyoto, Plushie, Farm) the leftmost bubble overlaps the readout's
+    // box, and serving the customer is unambiguously what a tap there means.
+    if (inStrip) {
       const c = customerFrameHit(state.customers, p);
-      if (c && orderAvailable(c.tier)) tryServeCustomer(c);
-      return;
+      if (c) {
+        if (orderAvailable(c.tier)) tryServeCustomer(c);
+        return;
+      }
     }
+    // No updateAim here: LAUNCH would visibly slide toward the corner just from
+    // touching the score. A drag out of the box picks the aim up on the way —
+    // except inside the strip, where nothing may ever start an aim.
+    if (bagHit(p)) { bagTap = { x: p.x, y: p.y, strip: inStrip }; return; }
+    if (inStrip) return;
     aiming = true;
     updateAim(p, state.nextTier);
   });
 
   canvas.addEventListener('pointermove', e => {
-    if (aiming) updateAim(ptr(e, canvas), state.nextTier);
+    const p = ptr(e, canvas);
+    if (bagTap) {
+      if (Math.hypot(p.x - bagTap.x, p.y - bagTap.y) < BAG_TAP_SLOP) return;
+      // Travelled: this was an aim that started on the readout — unless it
+      // started inside the Happy Hour strip, which never yields a shot.
+      const strip = bagTap.strip;
+      bagTap = null;
+      if (strip) return;
+      aiming = true;
+    }
+    if (aiming) updateAim(p, state.nextTier);
   });
 
   canvas.addEventListener('pointerup', e => {
+    if (bagTap) { bagTap = null; showScorePanel(state); return; }
     if (!aiming) return;
     aiming = false;
     if (state.gameOver || !state.canShoot) return;
@@ -64,7 +93,71 @@ function wireInput(canvas, state) {
     setTimeout(() => { rollNext(); state.canShoot = true; }, 500);
   });
 
-  canvas.addEventListener('pointercancel', () => { aiming = false; });
+  canvas.addEventListener('pointercancel', () => { aiming = false; bagTap = null; });
+}
+
+// ---------- in-game score panel (tap the coin bag) ----------
+// Mikael's ask, 2026-08-15: mid-run there was no way to know what score you were
+// chasing. The gap itself lives permanently under the coin pill (render.js
+// drawBag); this panel is the full board behind a tap on that readout.
+//
+// The run FREEZES while it is open (setPaused in game.js) — see the comment
+// there for why that is not optional.
+function showScorePanel(state) {
+  const key    = currentScoreKey();
+  const scores = getScores(key);
+  const best   = scores[0]?.score ?? 0;
+  const score  = state.coinCount;
+  // Ties rank BELOW the sitting entry, matching how saveScore() sorts a new
+  // score in — so the rank shown here is the one this run would actually get.
+  const rank   = scores.filter(e => e.score >= score).length + 1;
+
+  // Which board this is. Reuses the menu's own variant labels so the two can't
+  // describe the same run differently (welcome.js is loaded by the time any
+  // panel can open).
+  const variant = mapVariants(ACTIVE_MAP).find(v => v.key === key);
+  document.getElementById('sp-variant').textContent =
+    ACTIVE_MAP.label + (variant ? ' · ' + variant.label : '');
+
+  const gapEl = document.getElementById('sp-gap');
+  if (!best) {
+    gapEl.className = '';
+    gapEl.textContent = 'No score on this board yet — whatever you bank sets the record.';
+  } else if (score > best) {
+    gapEl.className = 'ahead';
+    gapEl.innerHTML = `🏆 You're <strong>${(score - best).toLocaleString()}</strong> past the record`;
+  } else {
+    gapEl.className = '';
+    gapEl.innerHTML = `<strong>${(best - score).toLocaleString()}</strong> more to beat
+      ${best.toLocaleString()}`;
+  }
+
+  // The live run is shown as a row IN the board, at the place it currently
+  // stands — "you'd be 4th" is the thing a bare list can't say. Past the bottom
+  // of the board it becomes a footer line instead of silently vanishing.
+  const rows = scores.map(e => ({ name: e.name, score: e.score }));
+  const onBoard = rank <= SCORE_MAX;
+  if (onBoard) rows.splice(rank - 1, 0, { name: 'this run', score, live: true });
+  const rowsHtml = rows.slice(0, SCORE_MAX).map((e, i) => `
+    <div class="score-row${e.live ? ' this-round' : ''}">
+      <span class="sr-rank">${i + 1}</span>
+      <span class="sr-name">${e.name}</span>
+      <span class="sr-val">${e.score.toLocaleString()}</span>
+    </div>`).join('');
+
+  document.getElementById('sp-list').innerHTML = rowsHtml;
+  document.getElementById('sp-foot').textContent = onBoard
+    ? '' : 'This run: ' + score.toLocaleString() + ' — not on the board yet';
+
+  setPaused(true);
+  document.getElementById('score-panel').style.display = 'flex';
+}
+
+// Safe to call at any time — game.js leans on that (backgrounding, startGame).
+function hideScorePanel() {
+  const el = document.getElementById('score-panel');
+  if (el) el.style.display = 'none';
+  setPaused(false);
 }
 
 function wireHUD(state) {
@@ -98,6 +191,15 @@ function wireHUD(state) {
     peek.style.display = 'none';
     over.style.display = 'flex';
   };
+
+  // Score panel (tap the coin bag). Closing also unfreezes the run, so both
+  // routes out go through hideScorePanel — the button and the backdrop, since
+  // the panel covers the HUD and there is nothing else to reach.
+  const scorePanel = document.getElementById('score-panel');
+  document.getElementById('sp-close').onclick = hideScorePanel;
+  scorePanel.addEventListener('pointerdown', e => {
+    if (e.target === scorePanel) hideScorePanel();
+  });
 
   const confirmOverlay = document.getElementById('confirm-menu');
   document.getElementById('menuBtn').onclick = () => {
