@@ -110,7 +110,13 @@ tools/
   shot-receiver.py    — Local POST receiver for canvas screenshots from the
                          (often hidden) preview tab — see "Known issues".
 assets/
+  ART-PROMPTS.md      — Prompt templates for item grids + backgrounds, with the
+                         reason every clause is in them. Read before generating art.
+  MAP-DESIGN.md       — The per-map DESIGN.md convention: sections, what belongs
+                         in one, what belongs in CLAUDE.md instead.
   source/             — Raw AI-generated images (white background). NEVER edit these.
+                         Also each map's DESIGN.md (see MAP-DESIGN.md above), which
+                         lives beside the art masters it describes.
                          Backgrounds live here as the ~2.5MB PNG masters, but are
                          NOT served: compress_backgrounds.py emits a ~200KB WebP
                          into images/<map>/ and config/maps.js `bg:` points there
@@ -169,6 +175,30 @@ The two rules worth knowing without opening it: **row-major order IS tier
 order**, and **the colour ladder is gameplay** — at r15–r30 hue is what tells
 the player two items match, so name a colour per item and never put two
 adjacent tiers in the same family.
+
+A third, learned on Napoli: **the item prompt and the background prompt are ONE
+decision.** Asking for straight-down item art and a 45° room produces flat items
+that read as propped-up plates, and costs a background generation to find out.
+The camera angle is not a taste call — `persp()` (game.js) narrows the far edge
+of the field to 74% of the near width and `drawDrink` squashes the ground shadow
+by `ctx.scale(1, 0.82)`, i.e. a camera ~35° off vertical. Write that angle into
+both prompts.
+
+## Per-map design documents
+
+Every map added from 2026-08-16 on carries
+`assets/source/<map-id>/DESIGN.md`: what the map is, the tier chain's reasoning,
+the boundary, the engine flags it turns on, the art prompts as sent, and — the
+section that justifies the file — the problems hit and how they were diagnosed.
+The convention, the section list and the rules about what does NOT belong in one
+are in **[assets/MAP-DESIGN.md](assets/MAP-DESIGN.md)**. Napoli is the worked
+example.
+
+The rule that keeps them from rotting: **anything that generalises to all maps
+belongs HERE (or in ART-PROMPTS.md), and the map doc links to it.** A map doc
+should be almost entirely things true of that map alone — otherwise the set
+slowly becomes N copies of the same advice, drifting apart.
+
 ---
 
 ## Menu options — size variants, combos & Happy Hour
@@ -820,6 +850,15 @@ The background stays white as normal; only the separator line changes.
 ---
 
 ## Adding a new map
+
+**0. Start `assets/source/<mapname>/DESIGN.md` before anything else** — every map
+from 2026-08-16 on has one. What it must cover and why is in
+**[assets/MAP-DESIGN.md](assets/MAP-DESIGN.md)**; Napoli
+(`assets/source/pizza/DESIGN.md`) is the worked example. It is started at the
+BEGINNING of a map, not written up at the end: its most valuable section is the
+record of problems hit and how they were diagnosed, and that is precisely the
+part nobody can reconstruct once the map ships. Older maps don't have one and
+aren't owed one retroactively.
 
 1. Create `assets/source/<mapname>/` and drop in AI images
 2. Add entries to `PIPELINE` in `process_assets.py`
