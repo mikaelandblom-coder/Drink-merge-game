@@ -42,6 +42,27 @@ sound theme:
 - **Large table** — some maps offer a bigger play area with its own high-score
   board.
 
+## The toolkit behind it
+
+The game ships with the three browser editors it was built with — no install,
+no build step, they just run. Each one loads the game's *own* config and code,
+so what they show is exactly what the game plays:
+
+| Tool | What it does |
+|---|---|
+| [🎯 Hitbox editor](https://mikaelandblom-coder.github.io/Drink-merge-game/tools/hitbox-editor.html) | Trace a table's boundary, then shoot balls at it in real Matter.js physics |
+| [🎛️ Sound lab](https://mikaelandblom-coder.github.io/Drink-merge-game/tools/sound-lab.html) | Every sound in the game, synthesised live — audition them and rewire which map plays what |
+| [🖼️ Sprite editor](https://mikaelandblom-coder.github.io/Drink-merge-game/tools/sprite-editor.html) | Cut an AI-generated art sheet into individual drinks and tune the tier chain |
+
+Or see them from inside the game:
+[**?dev=1**](https://mikaelandblom-coder.github.io/Drink-merge-game/?dev=1)
+adds a Dev tools row to the main menu, and
+[**?hitbox**](https://mikaelandblom-coder.github.io/Drink-merge-game/?hitbox)
+draws the collision shapes over a real run.
+
+Saving changes back to disk needs a desktop browser; everything else works
+anywhere, iPad included.
+
 ## Running locally
 
 No build step — it's vanilla JS served as static files:
