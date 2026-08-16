@@ -499,6 +499,24 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
   color: #c8a870;
 }
 
+/* In-game score panel (tap the coin bag): the variant's whole board, with the
+   live run slotted in at the place it currently stands. Same overlay pattern as
+   #confirm-menu; the run is frozen behind it (setPaused in game.js). */
+#score-panel {
+  position: absolute; inset: 0; display: none;
+  flex-direction: column; align-items: center; justify-content: center;
+  background: rgba(15, 9, 6, .92); color: var(--foam);
+  text-align: center; gap: 10px; padding: 28px;
+  border-radius: 14px; z-index: 4;
+}
+#sp-variant { font-size: 12px; letter-spacing: .04em; }
+#sp-gap { font-size: 15px; color: var(--foam); }
+#sp-gap strong { color: var(--neon); }
+#sp-gap.ahead { color: var(--brass); }
+#sp-gap.ahead strong { color: var(--brass); }
+#sp-foot { font-size: 12px; color: var(--brass); opacity: .8; }
+#sp-foot:empty { display: none; }
+
 /* Close (✕) on the game-over overlay: hides the results so the final pile can
    be inspected; #over-peek brings them back. Top-LEFT because the top-right
    corner is covered by #hud-btns (z3, above the overlay since b0b96d9). */
@@ -653,23 +671,30 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
 }
 #devtools-box[hidden] { display: none; }
 .devtools-label {
-  font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #6d5637;
+  font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #a08658;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, .9);
 }
 .devtools-links { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 .devtools-links a {
   text-decoration: none; font-size: 12px; padding: 6px 14px; border-radius: 999px;
-  border: 1px solid #3d2d1a; color: #9a7a52;
+  /* Same opaque card backing as .map-card: these sit over #welcome-art, and a
+     transparent pill with a dim border was unreadable against the art. */
+  background: rgba(10, 6, 3, .82);
+  border: 1px solid #6b512e; color: var(--brass);
 }
-.devtools-links a:hover { color: var(--brass); border-color: #5a4630; }
+.devtools-links a:hover { color: var(--foam); border-color: #8a6a3c; }
 
 /* Backup & transfer panel on the welcome screen */
 #backup-box, #credits-box { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+/* Opaque backing (matching .map-card) rather than `background:none`: these
+   toggles sit over #welcome-art, where a transparent pill with a dim border and
+   dim text was effectively invisible against the busier parts of the art. */
 #backup-toggle, #credits-toggle {
-  background: none; border: 1px solid #3d2d1a; color: #9a7a52;
+  background: rgba(10, 6, 3, .82); border: 1px solid #6b512e; color: var(--brass);
   font-family: inherit; font-size: 12px; letter-spacing: .05em;
   padding: 7px 18px; border-radius: 999px; cursor: pointer;
 }
-#backup-toggle:hover, #credits-toggle:hover { color: var(--brass); border-color: #5a4630; }
+#backup-toggle:hover, #credits-toggle:hover { color: var(--foam); border-color: #8a6a3c; }
 #backup-panel {
   width: 100%; display: flex; flex-direction: column; gap: 10px;
   background: rgba(10, 6, 3, .82); border: 1px solid #3d2d1a;
@@ -692,7 +717,7 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
   font-family: inherit; font-size: 13px; font-weight: bold;
   padding: 8px 0; border-radius: 999px; cursor: pointer;
 }
-#backup-import { background: transparent; border: 1px solid #5a4630; color: var(--brass); }
+#backup-import { background: transparent; border: 1px solid #8a6a3c; color: var(--brass); }
 #backup-status { font-size: 11px; min-height: 14px; color: var(--brass); }
 #backup-status.err { color: #ff8a8a; }
 

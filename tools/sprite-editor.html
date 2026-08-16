@@ -866,6 +866,11 @@ $('dlCells').onclick = async () => {
 const SPRITE_ROOT = 'assets/images/';
 
 let libRoot = null, libCur = null, libPath = [], libDirs = [], libFiles = [];
+// Set of paths relative to SPRITE_ROOT, browsed when there is no handle at all;
+// null whenever libRoot holds one. Declared up here with the rest of the library
+// state rather than beside buildCatalog() below, so adoptLibRoot() can clear it
+// without depending on the two being evaluated in a particular order.
+let libCatalog = null;
 // Thumbnails are read through the DIRECTORY HANDLE (blob URLs), never fetched
 // from `sprite path` + name. The URL guess is only right when the picked root
 // really is the served assets/images/, so picking a MAP folder by mistake used
@@ -883,6 +888,7 @@ async function adoptLibRoot(interactive) {
   const h = await recallHandle('libRoot');
   if (!await handleReady(h, 'read', interactive)) return false;
   libRoot = h;
+  libCatalog = null;                    // a real folder always wins over the catalog
   await resolveRootPrefix();            // before any path is built from it
   await libGoto([]);
   return true;
@@ -900,13 +906,64 @@ $('pickLib').onclick = async () => {
     // `id` makes Chromium reopen the picker where it was last used for this
     // same id, so even a fresh pick starts in the right place.
     libRoot = await window.showDirectoryPicker({ mode:'read', id:'mmSpriteRoot' });
+    libCatalog = null;
     await resolveRootPrefix();
     await libGoto([]);
     await keepHandle('libRoot', libRoot);
   } catch (err) { if (err.name !== 'AbortError') status('Could not open folder: ' + err.message); }
 };
 
+// ── the catalog: browsing with no folder handle at all ────────────────────
+// A static host cannot list a directory, so on the DEPLOYED site the library
+// column sat permanently at "No folder chosen" — which takes the whole tier-
+// chain half of the tool with it. Same on iPad, where Safari has no File
+// System Access API and the picker simply does not exist.
+//
+// No listing is actually needed to show the game's own art, though: every
+// sprite the game draws is NAMED in config, which this tool has already
+// loaded in order to build SETS. Measured against the repo that is 107 of the
+// 112 PNGs under assets/images/ — the five it misses are the three site
+// favicons plus coin and moneybag, none of which are item art. So with no
+// handle we browse a virtual tree derived from those paths, and thumbnails
+// come from the served URL, which thumbSrc already falls back to.
+//
+// This is NOT a replacement for the picker, and a real folder always wins:
+// only a handle can see a PNG that was just extracted and is not referenced
+// by any map yet, which is exactly the local authoring case.
+// (`libCatalog` itself is declared with the other library state above.)
+
+function buildCatalog() {
+  const paths = new Set();
+  const add = sp => { if (typeof sp === 'string' && sp) paths.add(stripRoot(sp)); };
+  for (const s of SETS) (s.items || []).forEach(it => add(it.sprite));
+  CUSTOMER_SPRITES.forEach(add);
+  MAPS.forEach(m => { add(m.coin); add(m.bag); });   // per-map overrides, when a map has them
+  return paths;
+}
+
+// One level of that virtual tree: the immediate subfolders and PNGs at pathArr.
+function catalogAt(pathArr) {
+  const prefix = pathArr.length ? pathArr.join('/') + '/' : '';
+  const dirs = new Set(), files = [];
+  for (const p of libCatalog) {
+    if (!p.startsWith(prefix)) continue;
+    const rest = p.slice(prefix.length);
+    const cut = rest.indexOf('/');
+    if (cut < 0) files.push(rest);
+    else dirs.add(rest.slice(0, cut));
+  }
+  return { dirs:[...dirs].sort(), files:files.sort() };
+}
+
 async function libGoto(pathArr) {
+  if (libCatalog) {                       // no handle — walk the config-derived tree
+    libPath = pathArr;
+    libHandles = new Map();               // no bytes to hand out; thumbSrc uses the URL
+    ({ dirs:libDirs, files:libFiles } = catalogAt(pathArr));
+    renderLib();
+    return status(`${libDirs.length} folders, ${libFiles.length} sprites in ` +
+                  (SPRITE_ROOT + pathArr.join('/')) + ' — listed from config.');
+  }
   if (!libRoot) return;
   try {
     let h = libRoot;
@@ -1024,6 +1081,10 @@ async function resolveRootPrefix() {
 }
 
 function rootNote() {
+  if (libCatalog)
+    return { text:`No folder picked — showing the ${libCatalog.size} sprites named in config. ` +
+                  `Pick assets/images/ to browse everything on disk, including art no map uses yet.`,
+             warn:false };
   if (!libRoot || rootState === 'ok') return null;
   if (rootState === 'fixed')
     return { text:`“${libRoot.name}/” sits under ${SPRITE_ROOT} — emitting paths as ` +
@@ -1067,7 +1128,7 @@ const relPath = name => libRootPrefix + [...libPath, name].join('/');
 function renderCrumbs() {
   const host = $('crumbs');
   host.innerHTML = '';
-  if (!libRoot) { host.textContent = 'no folder chosen'; return; }
+  if (!libRoot && !libCatalog) { host.textContent = 'no folder chosen'; return; }
   const add = (label, arr) => {
     const a = document.createElement('a');
     a.textContent = label;
@@ -1098,7 +1159,7 @@ function renderLib() {
   host.innerHTML = '';
   host.className = '';
   host.style.padding = '6px';
-  if (!libRoot) {
+  if (!libRoot && !libCatalog) {
     host.className = 'hint'; host.style.padding = '12px';
     host.textContent = 'No folder chosen.';
     return;
@@ -1747,7 +1808,7 @@ const stripRoot = sprite => sprite.startsWith(SPRITE_ROOT)
 // Selecting a set jumps the library into that set's folder, the way the hitbox
 // editor's map picker loads that map's art. No-op until a root is picked.
 async function jumpToFolder(sprite) {
-  if (!libRoot || !sprite) return;
+  if ((!libRoot && !libCatalog) || !sprite) return;
   let rel = stripRoot(sprite);
   // libPath is relative to the PICKED root, so drop the part of the path that
   // is the root itself (picking assets/images/farm/ makes libRootPrefix 'farm/').
@@ -1800,6 +1861,10 @@ status('Load an AI sheet to start, or jump to “Tier chain” to retune a map o
 (async () => {
   const adopted = await adoptLibRoot(false);       // silent: no gesture at load
   if (!adopted) {
+    // Nothing to browse from disk, so fall back to the sprites config names.
+    // Must be in place BEFORE the set loads below, because that calls
+    // jumpToFolder and the library has to have a tree to jump into.
+    libCatalog = buildCatalog();
     // Distinguish "never picked" from "picked before, just needs a click" —
     // the second is one button press, and saying so is the whole point of
     // remembering the handle at all.
@@ -1818,6 +1883,9 @@ status('Load an AI sheet to start, or jump to “Tier chain” to retune a map o
   if (adopted)
     status(`${libFiles.length} PNGs in ${SPRITE_ROOT}${libRootPrefix}${libPath.join('/')} — ` +
            `folder restored from last time. ${currentSet.label} loaded.`);
+  else
+    status(`${currentSet.label} loaded. Library is listing the ${libCatalog.size} sprites named ` +
+           `in config — pick assets/images/ to browse the folder itself.`);
 })();
 </script>
 </body>

@@ -552,7 +552,22 @@ function drawCoins(coins) {
   }
 }
 
-function drawBag(coinCount, dt) {
+// Tap target for the coin readout — the bag, its coin pill and the
+// best-to-beat line under it (ui.js opens the score panel on a tap here).
+// Screen coords, like everything drawBag lays out.
+//
+// This corner IS a legal aim direction, so ui.js only claims a tap that never
+// turns into a drag: a shot aimed up-left still works, it just has to be a drag
+// rather than a poke. Keeping the box to the art itself (no generous padding)
+// is the other half of that bargain.
+function bagHit(p) {
+  return p.x >= BAG_POS.x - 34 && p.x <= BAG_POS.x + 94 &&
+         p.y >= BAG_POS.y - 30 && p.y <= BAG_POS.y + 34;
+}
+
+// `best` (game.js bestToBeatLine) is null when this variant's board is empty —
+// there is nothing to chase, so nothing is drawn.
+function drawBag(coinCount, dt, best) {
   coinPop *= Math.pow(0.85, dt);
   const s2 = 1 + coinPop;
   const d = 64;
@@ -568,4 +583,16 @@ function drawBag(coinCount, dt) {
   ctx.fillStyle = '#ffe9a8'; ctx.font = 'bold 15px Georgia';
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   ctx.fillText(coinCount, BAG_POS.x + 34, BAG_POS.y + 1);
+
+  // Second pill: the standing record's remaining gap, counting down as coins
+  // land, flipping to gold the moment it's overtaken. It sits here rather than
+  // behind a tap because "what do I need?" is a question the player has
+  // continuously — the panel (bagHit above) is for the full board.
+  if (!best) return;
+  ctx.font = 'bold 11px Georgia';
+  const w = ctx.measureText(best.text).width + 18;
+  ctx.fillStyle = best.ahead ? 'rgba(92,52,8,.66)' : 'rgba(20,12,6,.5)';
+  ctx.beginPath(); ctx.roundRect(BAG_POS.x + 24, BAG_POS.y + 15, w, 17, 8.5); ctx.fill();
+  ctx.fillStyle = best.ahead ? '#ffd35c' : '#d3b489';
+  ctx.fillText(best.text, BAG_POS.x + 33, BAG_POS.y + 24);
 }
