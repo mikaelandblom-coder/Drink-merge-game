@@ -150,8 +150,16 @@ const MAPS = [
     id:       'pizza',
     label:    'Napoli',
     sublabel: 'Pizzeria',
-    bg:       'assets/images/pizza/bg_1.webp',   // A/B in progress: bg_1 = low camera,
-                                                 // bg_2 = steeper. Winner becomes bg.webp.
+    // TEMP PLACEHOLDER so the map is playable. Both oven backdrops generated on
+    // 2026-08-16 sit at ~45-55 degrees off vertical, and the item art is drawn
+    // straight down, so flat discs read as propped-up plates. The engine's own
+    // camera is much steeper — persp() narrows the far edge to 74% and drawDrink
+    // squashes the ground shadow to 0.82, i.e. ~35 degrees off vertical — so the
+    // replacement wants that angle, a pale surface (tier 0 is a near-black olive)
+    // and a horizon at world y >= ~235 for Happy Hour's cast. The full spec and
+    // prompt are in assets/source/pizza/PROMPT.md. Point this at bg.webp when the
+    // new art lands and archive the two ovens.
+    bg:       'assets/images/pizza/bg_2.webp',
     bgm:      'assets/audio/Napoli.mp3',   // TODO: add Suno track (sunny mandolin
                                            // trattoria loop). Missing file just 404s — no crash.
     bgmVol:   0.35,

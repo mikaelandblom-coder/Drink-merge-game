@@ -54,10 +54,11 @@ TARGETS = [
     # skipped with a note rather than failing -- drop the PNG in and re-run.
     ('assets/source/melody/bg_large.png',             'assets/images/melody/bg_large.webp', BACKDROP_Q),
     ('assets/source/farm/bg_small.png',               'assets/images/farm/bg_small.webp',   BACKDROP_Q),
-    # Napoli: TWO candidate camera heights are in flight (bg_1 = low/shallow,
-    # bg_2 = steeper/more overhead). Both are built so they can be A/B'd with
-    # the real board on them; the loser gets deleted and the winner renamed to
-    # bg.png / bg.webp once the call is made.
+    # Napoli. bg.png is the real one and does not exist yet -- see
+    # assets/source/pizza/PROMPT.md for the camera angle it has to hit (the first
+    # pass missed it). bg_1/bg_2 are that superseded wood-fired-oven pass, kept
+    # only because bg_2.webp is wired up as the placeholder meanwhile.
+    ('assets/source/pizza/bg.png',                     'assets/images/pizza/bg.webp',        BACKDROP_Q),
     ('assets/source/pizza/bg_1.png',                   'assets/images/pizza/bg_1.webp',      BACKDROP_Q),
     ('assets/source/pizza/bg_2.png',                   'assets/images/pizza/bg_2.webp',      BACKDROP_Q),
 

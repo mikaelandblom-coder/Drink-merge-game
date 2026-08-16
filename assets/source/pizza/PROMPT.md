@@ -147,32 +147,73 @@ noodle nest still carries.
 The play surface is the **floor of a wood-fired oven** — a boundary shape no
 other map has (Saigon is a round tray, Cần Thơ a tapering boat deck, everything
 else is a table). It changes how the pile behaves, so the map plays different
-and not just looks different. The far edge curving up into the dome is the wall
-you will trace in `tools/hitbox-editor.html`.
+and not just looks different.
+
+### The camera angle is the whole problem — get it from the engine, not by eye
+
+**Pass 1 got this wrong and it is worth understanding why.** Two wood-fired-oven
+backdrops were generated (`bg_1.png` low camera, `bg_2.png` steeper — both still
+in this folder) at roughly 45–55° off vertical, and against straight-down item
+art they read as propped-up plates on a receding floor. The prompt asked for
+top-down items and an oblique room, which cannot agree. `bg_2.webp` is wired up
+as a placeholder so the map is playable meanwhile.
+
+The engine already states the answer, in two places:
+
+- `persp()` (game.js) is **fixed and global for every map**: the far edge of the
+  field is **74%** of the near width and items draw at **55%** scale at the back.
+- `drawDrink` squashes the ground shadow by `ctx.scale(1, 0.82)` — the ground
+  plane foreshortened, i.e. `cos θ = 0.82`, i.e. a camera about **35° off
+  vertical**.
+
+So the target is a **steep three-quarter view, ~30–35° off vertical**. Not 45°,
+and NOT fully overhead either: the engine still draws a receding trapezoid, so a
+surface with parallel edges would fight it — the far edge must still narrow to
+roughly three quarters of the near edge.
+
+### The other three constraints
+
+- **Portrait 2:3** — the stage is 420x620.
+- **Play surface fills the lower ~60%, leaving a real backdrop band above it.**
+  Happy Hour customers stand ON the horizon at `min(108, HORIZON*0.46)` px tall
+  (`customerLayout`, render.js), so `HORIZON` wants to be ≥ ~235 of 620 for
+  full-size faces. A surface creeping higher than that shrinks the whole cast.
+- **Nothing resting on the play surface.** It gets traced as the physics
+  boundary, so anything painted on it sits *under* the field and reads as an
+  obstacle that is not there.
+- **Keep it pale.** Tier 0 (black olive) and the tier-8 slate stone are the two
+  darkest things in the chain, and on dark brick they disappeared. A light
+  surface is a legibility requirement here, not a mood preference — and any
+  bright feature in the backdrop belongs OFF TO ONE SIDE, never dead centre
+  where it competes with the aim line (the mistake sakura made on Kyoto).
+
+### Prompt — sunlit marble prep counter
 
 ```
-Portrait 2:3 illustration, warm storybook style, looking straight into the
-mouth of a Neapolitan wood-fired pizza oven. The flat firebrick hearth fills
-the lower two thirds of the frame: pale sooty brick, completely empty and
-unobstructed, stretching away from the viewer and curving up at the far end
-where it meets the low domed brick ceiling, so the floor reads as a broad
-rounded arch. Beyond and above, the glowing orange mouth of the fire off to
-one side, dark soot-blackened dome bricks, a warm ember glow. Deep warm
-oranges and browns, soft firelight, no people, and absolutely nothing resting
-on the near hearth - no pizzas, no peels, no tools, no logs on the floor.
+Portrait 2:3 illustration, bright warm storybook style, looking down at a
+pizzaiolo's marble prep counter in a sunlit Italian pizzeria.
+
+The camera is high and steep, looking down at the counter from about 30
+degrees off vertical - almost a top-down view, but with just enough angle
+that the counter still recedes: its far edge is about three quarters as
+wide as its near edge.
+
+The pale cream marble counter fills the lower 60% of the frame: dusted with
+flour, softly veined, completely empty and unobstructed, its near edge
+running off the bottom of the frame and its far edge a gently curved lip.
+Nothing rests on it at all - no pizzas, no dough, no peels, no bowls, no
+tools, no hands.
+
+Above and beyond the counter, a shallow band of warm pizzeria backdrop:
+terracotta wall, wooden shelves of tomato tins and basil pots, strings of
+garlic, and the arched mouth of a wood-fired oven glowing softly off to ONE
+SIDE rather than in the centre. Bright morning sunlight from a window, soft
+shadows, cheerful and appetizing. Warm creams, terracotta and soft greens.
+No people.
 ```
 
-Two clauses in there are load-bearing and neither is taste:
-
-- **Portrait 2:3, play surface in the lower two thirds** — the stage is
-  420x620.
-- **Nothing painted on the hearth.** It gets traced as the physics boundary, so
-  anything resting on it sits *under* the field and reads as an obstacle that
-  is not there.
-
-The fire glow being **off to one side** is deliberate too: a bright symmetric
-blaze dead centre behind the horizon competes with the aim line, which is the
-same mistake the sakura effect made on Kyoto.
+Swap the subject freely — the four constraints above are what matter, not the
+marble. A scrubbed-wood trattoria table on a sunny terrace works the same way.
 
 ---
 
@@ -182,10 +223,13 @@ same mistake the sakura effect made on Kyoto.
    below-half-nominal-area warning from `config/items.js`. If a sprite comes
    back wider than tall, give it `vis = sqrt(0.75/aspect)`.
 2. `python compress_backgrounds.py`.
-3. Trace the hearth boundary + horizon + danger line in
-   `tools/hitbox-editor.html` (saves to `config/hitboxes.js`).
-4. Tune each item's collision circle in the same editor — `bodyRatio: 0.90` in
-   `config/items.js` is a starting guess, not a measurement.
+3. Trace the surface boundary + horizon + danger line in
+   `tools/hitbox-editor.html` (saves to `config/hitboxes.js`). Put the horizon
+   on the far edge of the counter and check it lands at world y >= ~235, or
+   Happy Hour's customers draw undersized.
+4. Tune each item's collision circle in the same editor. The `bodyRatio` values
+   in `config/items.js` are MEASURED off the shipped PNGs (disc diameter over
+   sprite height), so they are already close — this is a check, not a rescue.
 5. Play it with `?spin=0` and `?spin=1` back to back to confirm the rotation is
    actually earning its place on the finished art.
 6. Suno track to `assets/audio/Napoli.mp3`, then `python compress_audio.py`.
