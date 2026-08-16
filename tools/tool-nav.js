@@ -18,8 +18,12 @@ const TOOLS = [
     title: 'Hitbox editor — map boundaries and item collision shapes' },
   { id: 'sprite', href: 'tools/sprite-editor.html', icon: '🖼️', label: 'Sprites',
     title: 'Sprite editor — extract an AI sheet, build a tier chain' },
-  { id: 'game',   href: 'index.html',                icon: '🎮', label: 'Game',
-    title: 'Open the game in a new tab', ext: true },
+  // `?dev=1` because anyone reaching the game FROM a tool is by definition a
+  // dev: it unhides the welcome screen's Dev tools row (welcome.js), so the trip
+  // back to a tool is one click instead of a retyped URL. It only ever adds that
+  // link row, so it is harmless even when the tool is served from the live site.
+  { id: 'game',   href: 'index.html?dev=1',          icon: '🎮', label: 'Game',
+    title: 'Open the game (dev mode) in a new tab', ext: true },
 ];
 
 // Stamp the tab icon from the SAME table that draws the pills, so a tool's

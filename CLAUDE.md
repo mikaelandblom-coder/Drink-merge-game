@@ -98,6 +98,9 @@ tools/
                          PROJECT ROOT because every tool sets <base href="../">.
                          Data-URI favicons are fine here but NOT for the game —
                          iOS Safari ignores them (see index.html's icon note).
+                         The Game pill points at `index.html?dev=1`: anyone
+                         arriving from a tool is a dev, so the welcome screen's
+                         Dev tools row is already there for the trip back.
   shot-receiver.py    — Local POST receiver for canvas screenshots from the
                          (often hidden) preview tab — see "Known issues".
 assets/
