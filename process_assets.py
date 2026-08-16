@@ -862,19 +862,28 @@ def split_alpha_grid(img: Image.Image, rows: int, cols: int) -> list:
     img  = img.convert("RGBA")
     data = np.array(img)
     mask = data[:, :, 3] > 32          # solid content only; faint streaks ignored
-    col_bands = _alpha_bands(mask, axis=0)
-    row_bands = _alpha_bands(mask, axis=1)
-    # A genuine gutter narrower than merge_gap gets merged away on tight
-    # sheets — retry with minimal merging before giving up.
-    if len(col_bands) != cols:
-        retry = _alpha_bands(mask, axis=0, merge_gap=4)
-        if len(retry) == cols: col_bands = retry
-    if len(row_bands) != rows:
-        retry = _alpha_bands(mask, axis=1, merge_gap=4)
-        if len(retry) == rows: row_bands = retry
+    # A genuine gutter narrower than merge_gap gets merged away on tight sheets,
+    # so walk a LADDER of gaps and take the first that yields exactly the
+    # expected band count. Widest first, because a wide gap is the most tolerant
+    # of stray glow specks: the narrow rungs are only reached once the wide ones
+    # have demonstrably merged a real gutter away, and a rung is accepted only on
+    # an exact count match — so a sheet that already split correctly cannot come
+    # out differently than it did before the ladder existed.
+    # (Napoli's pizza sheet is why it goes below 4: its column gutters measured
+    # 5px and 2px, the items very nearly touching.)
+    def bands_for(axis, want):
+        widest = None
+        for gap in (14, 8, 4, 2, 1):
+            b = _alpha_bands(mask, axis=axis, merge_gap=gap)
+            if widest is None: widest = b
+            if len(b) == want: return b
+        return widest          # report the default's result in the assert below
+    col_bands = bands_for(0, cols)
+    row_bands = bands_for(1, rows)
     assert len(col_bands) == cols and len(row_bands) == rows, (
         f"expected {cols}x{rows} content bands, found {len(col_bands)}x{len(row_bands)} "
-        f"(cols {col_bands}, rows {row_bands}) -> glow may be bridging a gutter")
+        f"(cols {col_bands}, rows {row_bands}) -> a glow or a stray speck is "
+        f"bridging a gutter (no merge_gap from 14 down to 1 separated them)")
     # pad bands so soft glow (below the solid threshold) is kept with its item —
     # but never further than halfway into the gap to the neighbouring band,
     # or a tight gutter would hand a cell a big slab of its neighbour

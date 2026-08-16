@@ -176,23 +176,32 @@ const CANTHO_ITEMS = [
 //   -> slate. The two creams sit five tiers and 30px of radius apart.
 //
 // r reuses the proven Paris/Farm 15->71 ramp. `vis` is deliberately ABSENT: the
-// art prompt asks for square sprites and a disc IS square, so every item should
-// come back at area parity already. If any sprite lands noticeably wider than
-// tall, give it vis = sqrt(0.75/aspect) — items.js warns at load when an item
-// draws below half its tier's nominal area, so check the console after adding
-// the art. bodyRatio 0.90 is a STARTING point, higher than Farm's 0.85 because
-// these are top-down discs that fill their frame rather than produce with stems
-// — trace each one in tools/hitbox-editor.html before shipping.
+// extracted sprites measured aspect 0.88-1.01, i.e. square, so they already draw
+// at parity — items.js warns at load if that ever stops being true.
+//
+// bodyRatio is MEASURED off the shipped PNGs, not guessed: disc diameter over
+// sprite height (2*fx*aspect), which is exactly what the hitbox editor would
+// trace. It runs 0.87-0.97 rather than the 0.85 other maps use because a
+// top-down disc genuinely fills its frame where a bottle or a bowl does not.
+// The usual 0.88 fudge in physR still applies on top, so items overlap in a
+// pile here by the same fraction as everywhere else.
+//
+// KNOWN, AND A PLAY-TEST QUESTION: because those ratios are higher, physR at a
+// given r is ~13% larger than other maps' at the LOW tiers and only ~4% at the
+// finale, so the size ramp is slightly compressed. That may well be fine (small
+// items are less fiddly) — but if the endgame feels cramped, the fix is to
+// scale the whole r ramp down by ~0.89, NOT to shrink bodyRatio, which would
+// just detach the collision circles from the art again.
 const PIZZA_ITEMS = [
-  { name:'olive slice',     r:15, glass:'#8a7a95', liq:'#2a1d33', sprite:'assets/images/pizza/olive.png',       bodyRatio:0.90 },
-  { name:'mozzarella',      r:18, glass:'#fffdf6', liq:'#ded2b8', sprite:'assets/images/pizza/mozzarella.png',  bodyRatio:0.90 },
-  { name:'cherry tomato',   r:22, glass:'#ff9d87', liq:'#cf1f13', sprite:'assets/images/pizza/tomato.png',      bodyRatio:0.90 },
-  { name:'pepper ring',     r:27, glass:'#b9e17c', liq:'#2f7a1c', sprite:'assets/images/pizza/pepper-ring.png', bodyRatio:0.90 },
-  { name:'onion ring',      r:33, glass:'#ecc9ea', liq:'#8e3a86', sprite:'assets/images/pizza/onion-ring.png',  bodyRatio:0.90 },
-  { name:'pepperoni',       r:40, glass:'#f5ae7c', liq:'#b8400f', sprite:'assets/images/pizza/pepperoni.png',   bodyRatio:0.90 },
+  { name:'olive slice',     r:15, glass:'#8a7a95', liq:'#2a1d33', sprite:'assets/images/pizza/olive.png',       bodyRatio:0.96 },
+  { name:'mozzarella',      r:18, glass:'#fffdf6', liq:'#ded2b8', sprite:'assets/images/pizza/mozzarella.png',  bodyRatio:0.97 },
+  { name:'cherry tomato',   r:22, glass:'#ff9d87', liq:'#cf1f13', sprite:'assets/images/pizza/tomato.png',      bodyRatio:0.94 },
+  { name:'pepper ring',     r:27, glass:'#b9e17c', liq:'#2f7a1c', sprite:'assets/images/pizza/pepper-ring.png', bodyRatio:0.95 },
+  { name:'onion ring',      r:33, glass:'#ecc9ea', liq:'#8e3a86', sprite:'assets/images/pizza/onion-ring.png',  bodyRatio:0.97 },
+  { name:'pepperoni',       r:40, glass:'#f5ae7c', liq:'#b8400f', sprite:'assets/images/pizza/pepperoni.png',   bodyRatio:0.94 },
   { name:'pizza bianca',    r:48, glass:'#fffaf0', liq:'#dcbe86', sprite:'assets/images/pizza/bianca.png',      bodyRatio:0.90 },
-  { name:'pan pepperoni',   r:58, glass:'#f2b566', liq:'#a3301a', sprite:'assets/images/pizza/pan-pizza.png',   bodyRatio:0.90 },
-  { name:'the works',       r:71, glass:'#b9b2a8', liq:'#3d3a37', sprite:'assets/images/pizza/the-works.png',   bodyRatio:0.90 },
+  { name:'pan pepperoni',   r:58, glass:'#f2b566', liq:'#a3301a', sprite:'assets/images/pizza/pan-pizza.png',   bodyRatio:0.87 },
+  { name:'the works',       r:71, glass:'#b9b2a8', liq:'#3d3a37', sprite:'assets/images/pizza/the-works.png',   bodyRatio:0.89 },
 ];
 
 // Happy Hour mode: the receipt merge chain, shared by every map. Serving a

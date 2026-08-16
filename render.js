@@ -104,7 +104,7 @@ function makeCapsuleShadowSprite(hw, hh) {
 // it is undefined every map behaves exactly as it always did: the item carries
 // the tiny idle wobble and nothing else. Nothing here changes physics; the
 // bodies have always rotated, this only decides whether that is drawn.
-function drawDrink(sx, sy, item, scale, wobble, spin) {
+function drawDrink(sx, sy, item, scale, wobble, spin, flat) {
   const r = item.r * scale;
   const idle = Math.sin(wobble) * 0.02;
   ctx.save(); ctx.translate(sx, sy);
@@ -152,9 +152,20 @@ function drawDrink(sx, sy, item, scale, wobble, spin) {
     // vis (default 1) scales the drawn sprite only; r*0.75-dispH keeps the sprite
     // BOTTOM at ~0.75r so it stays grounded on the shadow (identical to the old
     // placement when vis===1, so other maps are unchanged).
+    //
+    // `flat` (map.flat, Napoli only) anchors the sprite by its CENTRE instead.
+    // Base-anchoring exists because every map until Napoli drew objects STANDING
+    // on a table: the body sits up inside the glass and the art hangs below it,
+    // so the shadow peeking out at the base reads as contact with the table.
+    // Top-down food LYING on a floor has no base to stand on — its disc is dead
+    // centre in the sprite, so base-anchoring drew it 0.45r above its own
+    // collision circle (measured across all nine of Napoli's sprites), which
+    // reads as levitating and makes touching items look interpenetrated.
+    // Centre-anchoring is the whole fix; the shadow keeps its own SHADOW_DROP
+    // nudge, so a flat item still gets a contact cue underneath it.
     const dispH = r * 2.4 * (item.vis || 1);
     const dispW = dispH * (item.img.naturalWidth / item.img.naturalHeight);
-    ctx.drawImage(item.img, -dispW / 2, r * 0.75 - dispH, dispW, dispH);
+    ctx.drawImage(item.img, -dispW / 2, flat ? -dispH / 2 : r * 0.75 - dispH, dispW, dispH);
   } else {
     ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.fillStyle = item.liq; ctx.fill();

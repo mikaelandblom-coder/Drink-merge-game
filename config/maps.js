@@ -150,7 +150,8 @@ const MAPS = [
     id:       'pizza',
     label:    'Napoli',
     sublabel: 'Pizzeria',
-    bg:       'assets/images/pizza/bg.webp',
+    bg:       'assets/images/pizza/bg_1.webp',   // A/B in progress: bg_1 = low camera,
+                                                 // bg_2 = steeper. Winner becomes bg.webp.
     bgm:      'assets/audio/Napoli.mp3',   // TODO: add Suno track (sunny mandolin
                                            // trattoria loop). Missing file just 404s — no crash.
     bgmVol:   0.35,
@@ -163,6 +164,14 @@ const MAPS = [
     // elsewhere because every subject in PIZZA_ITEMS is radially symmetric; see
     // "Rotating items" in CLAUDE.md before adding an item that isn't.
     spin:     true,
+    // Sprites are anchored by their CENTRE here, not by their base. Every other
+    // map draws objects STANDING on a table, so the art hangs below the body and
+    // the shadow peeks out at its foot. This map's food LIES on the oven floor:
+    // the disc is dead centre in each sprite, and base-anchoring drew it 0.45r
+    // above its own collision circle (measured on all nine), so items levitated
+    // and touching ones looked interpenetrated. See drawDrink in render.js.
+    // `?flat=1` / `?flat=0` force it either way for comparison, like `?spin`.
+    flat:     true,
     // The play surface is the FLOOR OF A WOOD-FIRED OVEN: a wide firebrick
     // hearth whose far edge curves up into the dome, i.e. a broad arch/"D" —
     // no other map has that boundary (Saigon is a round tray, Can Tho a
