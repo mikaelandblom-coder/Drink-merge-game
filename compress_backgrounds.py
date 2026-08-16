@@ -54,6 +54,7 @@ TARGETS = [
     # skipped with a note rather than failing -- drop the PNG in and re-run.
     ('assets/source/melody/bg_large.png',             'assets/images/melody/bg_large.webp', BACKDROP_Q),
     ('assets/source/farm/bg_small.png',               'assets/images/farm/bg_small.webp',   BACKDROP_Q),
+    ('assets/source/pizza/bg.png',                    'assets/images/pizza/bg.webp',        BACKDROP_Q),
 
     # --- site chrome (style.css url(...)) ---
     ('assets/source/chrome/bg-main-menu.png', 'assets/images/bg-main-menu.webp',  BACKDROP_Q),

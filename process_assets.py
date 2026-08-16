@@ -291,6 +291,28 @@ PIPELINE = {
         },
     ],
 
+    'pizza': [
+        # Napoli tier chain. Ask for TRUE alpha (the food template in
+        # assets/ART-PROMPTS.md, filled in at assets/source/pizza/PROMPT.md) --
+        # if the sheet comes back with a painted checkerboard instead, switch
+        # 'chroma' to 'checker' and add min_component_frac like 'cantho' does.
+        #
+        # Row-major order IS tier order and must match PIZZA_ITEMS in
+        # config/items.js. Every subject is a disc, ring or ball because this
+        # map sets spin: true.
+        {
+            'file':   'sprite_sheet.png',
+            'type':   'spritesheet',
+            'grid':   (3, 3),
+            'chroma': 'alpha',
+            'names':  [
+                'pizza/olive',       'pizza/mozzarella', 'pizza/tomato',
+                'pizza/pepper-ring', 'pizza/onion-ring', 'pizza/pepperoni',
+                'pizza/bianca',      'pizza/pan-pizza',  'pizza/the-works',
+            ],
+        },
+    ],
+
     # 'example-map': [
     #     {
     #         'file':      'items.png',

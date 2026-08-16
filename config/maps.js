@@ -146,6 +146,35 @@ const MAPS = [
                    small: 'assets/images/cantho/bg_small.webp' },
     defaultSize: 'small',
   },
+  {
+    id:       'pizza',
+    label:    'Napoli',
+    sublabel: 'Pizzeria',
+    bg:       'assets/images/pizza/bg.webp',
+    bgm:      'assets/audio/Napoli.mp3',   // TODO: add Suno track (sunny mandolin
+                                           // trattoria loop). Missing file just 404s — no crash.
+    bgmVol:   0.35,
+    itemsData: null,
+    // THE ROTATION MAP. `spin` was built (2026-08-16) with this map in mind and
+    // no map has used it until now: items draw at their real physics angle
+    // instead of the idle wobble. It is purely cosmetic — the bodies always
+    // rotated, this only decides whether drawDrink reads body.angle — so it
+    // cannot change physics, scores or seeded runs. It works HERE and not
+    // elsewhere because every subject in PIZZA_ITEMS is radially symmetric; see
+    // "Rotating items" in CLAUDE.md before adding an item that isn't.
+    spin:     true,
+    // The play surface is the FLOOR OF A WOOD-FIRED OVEN: a wide firebrick
+    // hearth whose far edge curves up into the dome, i.e. a broad arch/"D" —
+    // no other map has that boundary (Saigon is a round tray, Can Tho a
+    // tapering boat deck, the rest are tables). Trace it in
+    // tools/hitbox-editor.html; the brick-to-dome seam is the wall.
+    // Sounds inherit the `default` SOUND_MAP row until the map plays well;
+    // theme them in tools/sound-lab.html then, not here.
+    // NOT locked: the art does not exist yet, so this card plays into a missing
+    // background on purpose while the map is being built on its branch. Set
+    // `locked: true` if it ever has to reach main before the art does — that
+    // renders a "Coming soon" card instead (welcome.js).
+  },
 ];
 
 // Wire item sets after items.js has defined them.
@@ -158,6 +187,7 @@ MAPS[5].itemsData = MELODY_ITEMS;
 MAPS[6].itemsData = PARIS_ITEMS;
 MAPS[7].itemsData = FARM_ITEMS;
 MAPS[8].itemsData = CANTHO_ITEMS;
+MAPS[9].itemsData = PIZZA_ITEMS;
 
 // Storage key for a map's boundary in MAP_HITBOXES. Size-variant maps trace a
 // separate boundary per table framing (the tray/heart sits differently in each

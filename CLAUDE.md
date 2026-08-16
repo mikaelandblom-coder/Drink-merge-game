@@ -286,11 +286,14 @@ in style.css), and forces the render loop to stay live while on (`sceneBusy`
 returns true for `showXray`, so a settled board still repaints the overlay).
 Distinct from the dev-only `drawHitboxes` (the `h`-key / `?hitbox` overlay).
 
-## Rotating items (`spin:`) — OPT-IN PER MAP, off everywhere today
+## Rotating items (`spin:`) — OPT-IN PER MAP, on for Napoli only
 
 A map can set `spin: true` in config/maps.js to have its items drawn at their
-real physics angle instead of the tiny idle wobble. **No map sets it** — it was
-built 2026-08-16 for a planned PIZZA map, whose subjects are radially symmetric.
+real physics angle instead of the tiny idle wobble. **Only Napoli (the pizzeria
+map) sets it**, which is the map it was built for on 2026-08-16 — every subject
+in `PIZZA_ITEMS` is a disc, ring or ball, so rotation reads as items being
+shoved around a table rather than as art falling over. Turning it on for a map
+whose art has a "this way up" is the failure mode, not a tuning question.
 
 **It is purely cosmetic and cannot change gameplay.** The circle bodies have
 always rotated — Matter gives them default inertia and collisions impart angular
