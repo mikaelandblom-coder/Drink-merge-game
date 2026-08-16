@@ -579,23 +579,30 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
 }
 #devtools-box[hidden] { display: none; }
 .devtools-label {
-  font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #6d5637;
+  font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #a08658;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, .9);
 }
 .devtools-links { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 .devtools-links a {
   text-decoration: none; font-size: 12px; padding: 6px 14px; border-radius: 999px;
-  border: 1px solid #3d2d1a; color: #9a7a52;
+  /* Same opaque card backing as .map-card: these sit over #welcome-art, and a
+     transparent pill with a dim border was unreadable against the art. */
+  background: rgba(10, 6, 3, .82);
+  border: 1px solid #6b512e; color: var(--brass);
 }
-.devtools-links a:hover { color: var(--brass); border-color: #5a4630; }
+.devtools-links a:hover { color: var(--foam); border-color: #8a6a3c; }
 
 /* Backup & transfer panel on the welcome screen */
 #backup-box, #credits-box { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+/* Opaque backing (matching .map-card) rather than `background:none`: these
+   toggles sit over #welcome-art, where a transparent pill with a dim border and
+   dim text was effectively invisible against the busier parts of the art. */
 #backup-toggle, #credits-toggle {
-  background: none; border: 1px solid #3d2d1a; color: #9a7a52;
+  background: rgba(10, 6, 3, .82); border: 1px solid #6b512e; color: var(--brass);
   font-family: inherit; font-size: 12px; letter-spacing: .05em;
   padding: 7px 18px; border-radius: 999px; cursor: pointer;
 }
-#backup-toggle:hover, #credits-toggle:hover { color: var(--brass); border-color: #5a4630; }
+#backup-toggle:hover, #credits-toggle:hover { color: var(--foam); border-color: #8a6a3c; }
 #backup-panel {
   width: 100%; display: flex; flex-direction: column; gap: 10px;
   background: rgba(10, 6, 3, .82); border: 1px solid #3d2d1a;
@@ -618,7 +625,7 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
   font-family: inherit; font-size: 13px; font-weight: bold;
   padding: 8px 0; border-radius: 999px; cursor: pointer;
 }
-#backup-import { background: transparent; border: 1px solid #5a4630; color: var(--brass); }
+#backup-import { background: transparent; border: 1px solid #8a6a3c; color: var(--brass); }
 #backup-status { font-size: 11px; min-height: 14px; color: var(--brass); }
 #backup-status.err { color: #ff8a8a; }
 
