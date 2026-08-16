@@ -188,6 +188,27 @@ name — picking a map folder as the root used to 404 every one of them, and an
 `<img>` that fails inside a `.checker` tile paints NOTHING, so the library went
 silently blank-checkerboard.
 
+**With no folder picked, the library lists the art named in CONFIG** (2026-08-16).
+A static host serves no directory listing, so on the deployed site — and on
+iPad, where Safari has no File System Access API and the picker does not exist
+— the library column used to sit permanently at "No folder chosen", which takes
+the whole tier-chain half of the tool with it. No listing is needed to show the
+game's own art, though: every sprite it draws is NAMED in config, which the tool
+has already loaded to build `SETS`. `buildCatalog()` collects those paths
+(`SETS` items + `CUSTOMER_SPRITES` + any per-map `coin`/`bag`) and `catalogAt()`
+serves one level of a virtual tree out of them, so browsing, breadcrumbs,
+filtering and click-to-add all work unchanged; thumbnails come from the served
+URL, which `thumbSrc` already fell back to. Measured against the repo it covers
+**107 of the 112 PNGs** under `assets/images/` — the five it misses are the
+three site favicons plus coin and moneybag, none of them item art.
+
+It is a fallback, not a replacement, and the invariant is that `libCatalog` is
+non-null only while `libRoot` is null: both places that set a handle clear it on
+the same line. A real folder must keep winning because only a handle can see a
+PNG that was just extracted and no map references yet — the local authoring
+case. The write-time guard below is unaffected: `spriteExists()` asks the server
+first, which is exactly what catalog paths are checked against.
+
 **Sprite paths are resolved and then verified — the tool can no longer emit a
 path that 404s** (2026-07-28). Two independent guards, because a wrong
 `sprite:` path is *invisible*: every draw site gates on
