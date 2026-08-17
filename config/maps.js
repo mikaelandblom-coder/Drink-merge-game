@@ -148,16 +148,7 @@ const MAPS = [
     id:       'pizza',
     label:    'Napoli',
     sublabel: 'Pizzeria',
-    // TEMP PLACEHOLDER so the map is playable. Both oven backdrops generated on
-    // 2026-08-16 sit at ~45-55 degrees off vertical, and the item art is drawn
-    // straight down, so flat discs read as propped-up plates. The engine's own
-    // camera is much steeper — persp() narrows the far edge to 74% and drawDrink
-    // squashes the ground shadow to 0.82, i.e. ~35 degrees off vertical — so the
-    // replacement wants that angle, a pale surface (tier 0 is a near-black olive)
-    // and a horizon at world y >= ~235 for Happy Hour's cast. The full spec and
-    // prompt are in assets/source/pizza/DESIGN.md. Point this at bg.webp when the
-    // new art lands and archive the two ovens.
-    bg:       'assets/images/pizza/bg_2.webp',
+    bg:       'assets/images/pizza/bg_small.webp',
     bgm:      'assets/audio/Napoli.mp3',   // TODO: not generated yet — the Suno prompt
                                            // is in assets/source/pizza/DESIGN.md.
                                            // Missing file just 404s — no crash.
@@ -179,6 +170,22 @@ const MAPS = [
     // and touching ones looked interpenetrated. See drawDrink in render.js.
     // `?flat=1` / `?flat=0` force it either way for comparison, like `?spin`.
     flat:     true,
+    // Two framings of the same marble prep counter, and unusually they differ in
+    // what is TRACEABLE rather than only in dressing. In `large` the counter runs
+    // off both sides of the frame (it touches the left edge on 84% of its height
+    // and the right on 79%, measured), so its side walls have to be invented at
+    // the stage edge. In `small` the whole counter is in frame, so the boundary
+    // is the painted lip all the way round.
+    // `small` is therefore the DEFAULT: it is the one whose walls are real. That
+    // also gives it the plain `pizza` score/hitbox key — a free choice only
+    // because the map has never shipped, so there are no scores to re-point.
+    // Both taper hard: far edge ~50% of the near width, against the engine's
+    // FAR_W of 74%. Cần Thơ's small framing already showed a hard taper makes the
+    // endgame cramped (which is why a wider one was added), and Napoli's finale
+    // has physR 67 — so watch the top tiers here before calling the trace done.
+    sizes:       { large: 'assets/images/pizza/bg_large.webp',
+                   small: 'assets/images/pizza/bg_small.webp' },
+    defaultSize: 'small',
     // The play surface is the FLOOR OF A WOOD-FIRED OVEN: a wide firebrick
     // hearth whose far edge curves up into the dome, i.e. a broad arch/"D" —
     // no other map has that boundary (Saigon is a round tray, Can Tho a

@@ -54,13 +54,8 @@ TARGETS = [
     # skipped with a note rather than failing -- drop the PNG in and re-run.
     ('assets/source/melody/bg_large.png',             'assets/images/melody/bg_large.webp', BACKDROP_Q),
     ('assets/source/farm/bg_small.png',               'assets/images/farm/bg_small.webp',   BACKDROP_Q),
-    # Napoli. bg.png is the real one and does not exist yet -- see
-    # assets/source/pizza/PROMPT.md for the camera angle it has to hit (the first
-    # pass missed it). bg_1/bg_2 are that superseded wood-fired-oven pass, kept
-    # only because bg_2.webp is wired up as the placeholder meanwhile.
-    ('assets/source/pizza/bg.png',                     'assets/images/pizza/bg.webp',        BACKDROP_Q),
-    ('assets/source/pizza/bg_1.png',                   'assets/images/pizza/bg_1.webp',      BACKDROP_Q),
-    ('assets/source/pizza/bg_2.png',                   'assets/images/pizza/bg_2.webp',      BACKDROP_Q),
+    ('assets/source/pizza/bg_large.png',              'assets/images/pizza/bg_large.webp',  BACKDROP_Q),
+    ('assets/source/pizza/bg_small.png',              'assets/images/pizza/bg_small.webp',  BACKDROP_Q),
 
     # --- site chrome (style.css url(...)) ---
     ('assets/source/chrome/bg-main-menu.png', 'assets/images/bg-main-menu.webp',  BACKDROP_Q),

@@ -200,6 +200,13 @@ recompression (`compress_backgrounds.py`). Four things the prompt must carry:
 - **The play surface must be empty and unobstructed.** It gets traced as the
   physics boundary in the hitbox editor, and anything painted on it sits under
   the field reading as an obstacle that isn't there.
+- **Its EDGES must be inside the frame — all of them.** Say so explicitly; the
+  generator will happily hand you a beautiful surface that bleeds off both sides,
+  and it is not obvious until you go to trace it. The edge IS the boundary, so an
+  edge that leaves the frame means inventing a wall at the stage edge that the
+  art does not show, and balls then stop against nothing. Ask for the near edge
+  running off the BOTTOM only (the player's side, which is never a wall) and for
+  the left, right and far edges to be fully visible with a margin.
 - **The camera angle, matched to the ITEM prompt** — these two prompts are one
   decision, and Napoli paid a generation to learn it. The engine fixes the angle
   for every map: `persp()` narrows the far edge of the field to 74% of the near

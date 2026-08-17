@@ -3,7 +3,8 @@
 Structure and house rules for these docs: [assets/MAP-DESIGN.md](../../MAP-DESIGN.md).
 Prompting reasoning that applies to every map: [assets/ART-PROMPTS.md](../../ART-PROMPTS.md).
 
-**Status: in progress.** Item art shipped; background is being rerolled (§6.3).
+**Status: in progress.** Item art and both background framings shipped; boundary
+not traced yet, no BGM yet.
 
 ---
 
@@ -55,14 +56,37 @@ produced three indistinguishable circles.
 
 ## 3. The play surface
 
-**Undecided — the original oven-hearth plan was dropped with the background
-(§6.3).** Whatever replaces it, the boundary should be a shape no other map has:
-Saigon is a round tray, Cần Thơ a tapering boat deck, everything else is a
-table. A map should play different, not just look different.
+A **marble pizza prep counter** with a raised lip, seen from above. The original
+plan was the floor of a wood-fired oven; that went with the first background
+(§6.3), and the oven now appears in the backdrop band instead.
 
-The current placeholder background is an oven interior, so the traced boundary
-will change when the real art lands. Nothing has been traced yet — the map runs
-on default rectangular walls, `DEFAULT_HORIZON` and the default danger line.
+**Two framings, and they differ in what is TRACEABLE — not just in dressing,
+which is what `sizes` means on every other map.** Measured off the masters:
+
+| | far edge (horizon) | far/near width | sides in frame |
+|---|---|---|---|
+| `bg_large` | 31.7% down → world y ≈ 197 | 50% | **no** — touches the left frame edge on 84% of its height, the right on 79% |
+| `bg_small` | 34.3% down → world y ≈ 213 | 51% | yes, apart from the near corners |
+
+`small` is the **default**: its walls are the painted lip all the way round,
+where `large` needs side walls invented at the stage edge. That also gives it the
+plain `pizza` score/hitbox key — a free choice only because the map has never
+shipped, so there is nothing to re-point.
+
+Nothing is traced yet; the map still runs on default rectangular walls,
+`DEFAULT_HORIZON` and the default danger line.
+
+**Two things to check when tracing**, both measured rather than guessed:
+
+- **The taper is hard — ~50% far-to-near, against the engine's `FAR_W` of 74%.**
+  Cần Thơ's small framing proved that a hard taper cramps the endgame (a wider
+  `large` was added to it on 2026-08-02 for exactly this), and Napoli's finale
+  has `physR` 67. If the top tiers jam at the back, this is why.
+- **The horizon lands at world y ≈ 197–213, under the ~235 that Happy Hour
+  wants.** Customers are sized `min(108, HORIZON*0.46)`, so they will draw at
+  ~91–98px instead of the full 108 — about 10% small, not broken. The horizon is
+  dragged by hand in the editor and does not have to sit exactly on the painted
+  lip, so there is a little room to trade.
 
 ## 4. Engine features this map turns on
 
@@ -196,7 +220,7 @@ noodle nest still carries.
 
 ---
 
-### Background — REROLL PENDING (see §6.3)
+### Background — SHIPPED on the second pass (see §6.3, §6.4)
 
 #### The camera angle is the whole problem — get it from the engine, not by eye
 
@@ -371,7 +395,40 @@ missed by only fixing the angle:
 **For next time:** an item prompt and a background prompt are one decision, not
 two. Write the camera angle into both, from `persp()` and the shadow squash.
 
-### 6.4 bodyRatio was guessed when it could have been measured
+### 6.4 The first counter had no traceable edges
+
+**Symptom:** Mikael, on generating the replacement background — "the edge of the
+table is out of frame, so there is no natural game zone in the art."
+
+**Cause:** the respecified prompt (§5) fixed the camera angle, the brightness and
+the horizon, and still never said the play surface's edges had to be *visible*.
+It asked for the counter to fill the lower 60% of the frame, which the generator
+satisfied by running it off both sides. Measured on `bg_large.png`: the counter
+touches the left frame edge on **84%** of its height and the right on **79%**.
+The far edge is in frame; the sides simply are not.
+
+That matters because **the painted edge IS the boundary**. With no edge to trace,
+the side walls have to be invented at the stage edge, and balls stop against
+nothing.
+
+**Fix:** a second generation with the borders inside the frame (`bg_small.png`),
+and the rule added to the shared background prompt in
+[ART-PROMPTS.md](../../ART-PROMPTS.md) so no future map pays for it again: near
+edge off the bottom only, left/right/far fully visible.
+
+**Both were kept as size variants** rather than throwing the first away —
+`large` is genuinely the bigger table, `small` the one whose walls are real, so
+`small` is the default. Note this is NOT what `sizes` normally means: everywhere
+else the two framings differ only in dressing, while here they differ in what can
+be traced.
+
+**Worth watching:** both taper to about **50%** far-edge-to-near-edge width,
+against the engine's `FAR_W` of 74%. Cần Thơ's small framing already proved a
+hard taper makes the endgame cramped — that is exactly why a wider `large` was
+added to it on 2026-08-02 — and Napoli's finale has `physR` 67. If the top tiers
+jam at the back, that measurement is the reason.
+
+### 6.5 bodyRatio was guessed when it could have been measured
 
 Minor, but it set the whole chain wrong. The scaffold used a flat
 `bodyRatio: 0.90` across all nine as a "trace it later" placeholder. Once the art
