@@ -123,8 +123,7 @@ const MAPS = [
     label:    'Cần Thơ',
     sublabel: 'Floating Market',
     bg:       'assets/images/cantho/bg_small.webp',
-    bgm:      'assets/audio/Can Tho.mp3',   // NOTE: still 188 kbps, added after the
-                                            // 2026-07-26 pass. `python compress_audio.py` -> ~3.2 MB.
+    bgm:      'assets/audio/Can Tho.mp3',
     bgmVol:   0.35,
     itemsData: null,
     // The play surface is the BOAT'S PROW DECK: a long deck tapering to a
