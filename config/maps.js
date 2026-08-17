@@ -70,7 +70,7 @@ const MAPS = [
     label:    'Melody Lane',
     sublabel: 'Music Shop',
     bg:       'assets/images/melody/bg.webp',
-    bgm:      'assets/audio/Melody Lane.mp3',   // TODO: add track (or reuse another map's bgm)
+    bgm:      'assets/audio/Melody Lane.mp3',
     bgmVol:   0.35,
     itemsData: null,
     combos:   true,   // combos default on — a cascade rings out as a rising arpeggio
@@ -103,8 +103,7 @@ const MAPS = [
     label:    'Farm',
     sublabel: 'Sprout Valley',   // working name, not locked (see memory/design-farm-map)
     bg:       'assets/images/farm/bg_large.webp',
-    bgm:      'assets/audio/Sprout Valley.mp3',  // TODO: add Suno track (Stardew-vibe
-                                                 // folk loop). Missing file just 404s — no crash.
+    bgm:      'assets/audio/Sprout Valley.mp3',
     bgmVol:   0.35,
     itemsData: null,
     // Sounds (sprout-bloop merge + dirt-thud collision + wooden coin tick) are
@@ -124,8 +123,8 @@ const MAPS = [
     label:    'Cần Thơ',
     sublabel: 'Floating Market',
     bg:       'assets/images/cantho/bg_small.webp',
-    bgm:      'assets/audio/Can Tho.mp3',   // TODO: add Suno track (Mekong-morning
-                                            // dan tranh loop). Missing file just 404s — no crash.
+    bgm:      'assets/audio/Can Tho.mp3',   // NOTE: still 188 kbps, added after the
+                                            // 2026-07-26 pass. `python compress_audio.py` -> ~3.2 MB.
     bgmVol:   0.35,
     itemsData: null,
     // The play surface is the BOAT'S PROW DECK: a long deck tapering to a
@@ -157,11 +156,12 @@ const MAPS = [
     // squashes the ground shadow to 0.82, i.e. ~35 degrees off vertical — so the
     // replacement wants that angle, a pale surface (tier 0 is a near-black olive)
     // and a horizon at world y >= ~235 for Happy Hour's cast. The full spec and
-    // prompt are in assets/source/pizza/PROMPT.md. Point this at bg.webp when the
+    // prompt are in assets/source/pizza/DESIGN.md. Point this at bg.webp when the
     // new art lands and archive the two ovens.
     bg:       'assets/images/pizza/bg_2.webp',
-    bgm:      'assets/audio/Napoli.mp3',   // TODO: add Suno track (sunny mandolin
-                                           // trattoria loop). Missing file just 404s — no crash.
+    bgm:      'assets/audio/Napoli.mp3',   // TODO: not generated yet — the Suno prompt
+                                           // is in assets/source/pizza/DESIGN.md.
+                                           // Missing file just 404s — no crash.
     bgmVol:   0.35,
     itemsData: null,
     // THE ROTATION MAP. `spin` was built (2026-08-16) with this map in mind and

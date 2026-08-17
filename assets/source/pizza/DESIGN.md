@@ -257,6 +257,36 @@ No people.
 Swap the subject freely — the four constraints above are what matter, not the
 marble. A scrubbed-wood trattoria table on a sunny terrace works the same way.
 
+### Music (Suno) — NOT GENERATED YET
+
+Save as `assets/audio/Napoli.mp3` (already what `bgm:` points at), then run
+`python compress_audio.py` to bring it to 112 kbps.
+
+```
+Warm sunny Neapolitan trattoria instrumental. Mandolin lead with
+nylon-string acoustic guitar, soft accordion, gentle upright bass and light
+brushed percussion. Relaxed mid-tempo tarantella feel, major key, cheerful
+and appetizing, like a family pizzeria on a bright morning.
+
+Steady even energy throughout - no build-ups, no drops, no key changes, no
+solos that pull focus.
+
+Seamlessly loopable: no intro, no outro, no fade in or out, no final chord.
+It should be able to start again from the top without anyone noticing.
+
+Instrumental only, no vocals and no vocal samples. About 2 to 3 minutes.
+```
+
+Why those clauses are in there is in
+[ART-PROMPTS.md](../../ART-PROMPTS.md#bgm-prompt-suno); the short version is
+that the loop and length clauses are bandwidth and seam requirements, not taste.
+Mandolin is the one genuinely free choice, and it is the instrument that will
+place the map in one bar.
+
+`bgmVol` is at the house default of 0.35. Suno masters hot, so if it sits over
+the effects, lower that rather than re-exporting — the player's music slider
+multiplies it, so per-map balance survives.
+
 ---
 
 ## 6. Challenges

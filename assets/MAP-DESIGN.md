@@ -56,8 +56,11 @@ danger-line notes go here.
 `combos`, custom `coin`/`bag`, a `SOUND_MAP` row. One line each on WHY, since
 each is opt-in per map and the default is off.
 
-**5. Art prompts, as actually sent.** The reproducible input, plus how to judge
-what comes back. Generations are limited, so a prompt that worked is an asset.
+**5. Prompts, as actually sent.** All three of them — **item grid, background
+and BGM** — plus how to judge what comes back. Generations are limited, so a
+prompt that worked is an asset. The music one is the easiest to forget, because
+it is the only asset that isn't a file in `assets/source/`; a map doc with two
+prompts in it is missing one.
 
 **6. Challenges.** The load-bearing section — the reason Mikael asked for these
 docs. For each one: what the symptom looked like, what the cause turned out to

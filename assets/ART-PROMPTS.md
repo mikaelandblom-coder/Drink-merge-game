@@ -1,12 +1,16 @@
-# Art prompts for merge-item grids
+# Art & music prompts
 
 One AI generation has to produce all nine tiers of a map, and generations are
 limited — so the prompt is the cheapest place to fix a problem. Everything here
 was paid for by a map that shipped wrong.
 
-Two templates: the **food template** below (Cần Thơ, the most refined; use it
-for any food map) and the **Paris template** further down (the original, still
-the reference for non-food subjects).
+Two item templates: the **food template** below (Cần Thơ, the most refined; use
+it for any food map) and the **Paris template** further down (the original,
+still the reference for non-food subjects). Then the **background** prompt, and
+the **BGM** prompt at the end.
+
+A map's prompts are filled in and kept in its own
+`assets/source/<map-id>/DESIGN.md` — see [MAP-DESIGN.md](MAP-DESIGN.md).
 
 ---
 
@@ -190,12 +194,29 @@ reference sprite**. All three are already folded into the food template above.
 ## Backgrounds
 
 Backgrounds are not part of a `PIPELINE` entry — they need no keying, only
-recompression (`compress_backgrounds.py`). Two things the prompt must carry:
+recompression (`compress_backgrounds.py`). Four things the prompt must carry:
 
 - **Portrait 2:3**, and the play surface occupying roughly the lower two thirds.
 - **The play surface must be empty and unobstructed.** It gets traced as the
   physics boundary in the hitbox editor, and anything painted on it sits under
   the field reading as an obstacle that isn't there.
+- **The camera angle, matched to the ITEM prompt** — these two prompts are one
+  decision, and Napoli paid a generation to learn it. The engine fixes the angle
+  for every map: `persp()` narrows the far edge of the field to 74% of the near
+  width, and `drawDrink` squashes the ground shadow by `ctx.scale(1, 0.82)`,
+  i.e. `cos θ = 0.82`, a camera **~35° off vertical**. Straight-down item art
+  under a 45–55° room reads as plates propped up on a receding floor. Fully
+  overhead is wrong too: the trapezoid stays, so a surface with parallel edges
+  fights it.
+- **Keep the play surface pale**, unless the chain has no dark tiers. Dark
+  subjects vanish on a dark surface, and tier 0 is usually the smallest thing
+  on screen. Any bright feature in the backdrop belongs OFF TO ONE SIDE — a
+  bright thing dead centre behind the horizon competes with the aim line, which
+  is the mistake the sakura effect made on Kyoto.
+
+One framing constraint that is easy to miss: Happy Hour customers stand ON the
+horizon and are sized `min(108, HORIZON*0.46)` px (`customerLayout`, render.js).
+A play surface creeping much above the lower ~60% silently shrinks the cast.
 
 Cần Thơ's, which worked first time:
 
@@ -213,3 +234,50 @@ warm colours, no people in the foreground, nothing resting on the near deck.
 Give a map a boundary shape no other map has — Saigon is a round tray, Cần Thơ a
 tapering boat deck. It changes how the pile behaves, so the map plays different
 and not just looks different.
+
+---
+
+## BGM prompt (Suno)
+
+Every map gets one looping instrumental track, `assets/audio/<Track Name>.mp3`,
+pointed at by `bgm:` in `config/maps.js` and re-encoded to 112 kbps by
+`python compress_audio.py` before it ships.
+
+Five clauses, and four of them are requirements rather than taste:
+
+- **Instrumental. No vocals, no vocal samples.** Nothing else in the set has
+  them, and a voice pulls attention in a game whose whole action is lining up a
+  precise shot.
+- **It must LOOP.** The `<audio>` element repeats it forever, so no intro
+  fanfare, no ritardando, no big final chord and no fade-out — any of those
+  announce the seam every time round. Ask for a track that could start again
+  from the top without anyone noticing.
+- **2–3 minutes.** Once a map's art is lazy-loaded down to a few hundred KB the
+  **BGM is the payload** — Mage costs 6.4 MB for one 8-minute track, easily the
+  heaviest thing in the game. The documented rule is shorten the loop rather
+  than drop the bitrate again, so buy the saving in the prompt. Existing tracks
+  run 95–312s; ~180s is the house length.
+- **Even energy — no build, no drop, no key change.** A run can last twenty
+  minutes. A swell reads as "something just happened" when nothing did.
+- **The place, in instruments.** This is the only taste clause: name the
+  instruments and the setting rather than a genre, and Suno stays much closer to
+  the map. Warm and major unless the map is Mage.
+
+Napoli's, as a worked example — the full version lives in
+`assets/source/pizza/DESIGN.md`:
+
+```
+Warm sunny Neapolitan trattoria instrumental. Mandolin lead with nylon-string
+acoustic guitar, soft accordion, gentle upright bass and light brushed
+percussion. Relaxed mid-tempo tarantella feel, major key, cheerful and
+appetizing, like a family pizzeria on a bright morning. Steady even energy
+throughout with no build-ups, no drops and no key changes. Seamlessly
+loopable: no intro, no outro, no fade, no final chord. Instrumental only, no
+vocals. About 2 to 3 minutes.
+```
+
+**Name the track after the map**, not "bgm" — the first two shipped as
+`bgm.mp3` / `bgm-saigon.mp3` and are the odd ones out. `config/maps.js` also
+carries a per-map `bgmVol` (0.30–0.35), which the player's music slider
+multiplies rather than replaces, so a track mixed hot can be balanced there
+without touching the others.
