@@ -340,18 +340,37 @@ Verified by pixel-diffing a rendered board against a reimplementation of the old
   fudge factor is applied, and none is needed — don't add one.
 - **Circle items ONLY.** `makeDrink` locks capsule inertia (`Body.setInertia`
   `Infinity`) so a horizontal sprite can never drift off its stadium hitbox, and
-  the capsule shadow is baked at the authored `cap.rot`. The render call site
-  passes `undefined` for any item with `.cap`, so a spin map may mix shapes
+  the capsule shadow is baked at the authored `cap.rot`. `drawnSpin` (game.js)
+  returns `undefined` for any item with `.cap`, so a spin map may mix shapes
   safely — the capsules just won't turn. Don't "fix" this by unlocking them.
+- **`spin: true` covers the MAP'S OWN CHAIN — never shared art.** Happy Hour
+  injects `RECEIPT_ITEMS` into every map, and those four sprites are a printed
+  slip, a roll, a stack and a clipboard with a clip at the top: unmistakable
+  "this way up" art. They are circles with no `.cap`, so the capsule exclusion
+  above did not catch them and Napoli spun them (reported 2026-08-19). The flag
+  is a claim a map author made about art in THEIR items list; it cannot speak
+  for art a mode adds to every map alike. `drawnSpin` therefore tests
+  `plugin.kind === 'drink'` — the KIND, not the receipt chain by name, so any
+  future shared chain is right by default. Verified by pixel-diff: all five
+  receipt tiers render **0 differing subpixels** between body angle 0, +120° and
+  −80°, against a control pizza item that moves 10,578.
+- **`drawnSpin(d)` is the single source of truth for "is this rotation drawn?"**
+  Both the render loop and `sceneBusy()` go through it. They must agree: if the
+  loop drew a rotation `sceneBusy` ignored, an item would freeze mid-turn and
+  jump on the next wake; if `sceneBusy` held the loop awake for a rotation the
+  loop discards, a settled receipt would pin the game at 60fps for a turn nobody
+  can see. Both were real — the second one shipped, and this is what fixed it.
 - **The shadow never spins.** It keeps the idle wobble it always had but sits in
   its own `save`/`restore` outside the rotation: the light is overhead, so a
   squashed shadow ellipse turning with the item reads as the lamp orbiting the
   table. This restructuring is what the pixel-diff above was verifying.
-- **`sceneBusy()` gained an `angularVelocity` test, gated on the flag.** A body
-  can be linearly still while still turning; without this it would freeze
+- **`sceneBusy()` gained an `angularVelocity` test, gated through `drawnSpin`.**
+  A body can be linearly still while still turning; without this it would freeze
   mid-turn when the board settles and jump on the next wake. The threshold
   (0.0015 rad/step) leaves under 3° of un-drawn rotation at the measured
-  ~0.97/step decay. Gated so every other map's idle behaviour is unchanged.
+  ~0.97/step decay. Gated so every other map's idle behaviour is unchanged —
+  and, since 2026-08-19, so that a body whose rotation is NOT drawn (a receipt,
+  a capsule) can no longer hold the loop awake.
 - **`?spin=1` forces it on for any map, `?spin=0` off** — for judging a
   candidate map's art before committing `spin:` to config. Worth doing: tried on
   Cần Thơ, the upright rice-paper rolls tilt like they're falling over. Rotation
@@ -1029,6 +1048,23 @@ Two traps that script now handles, both of which cost real time:
   a per-pop canvas at spawn (`spawnTextPop`) so `shadowBlur` never runs in the
   frame loop. Remaining known levers if heat returns: re-enable the shelved
   cool mode (30fps), rate-limit `clink()` node creation.
+- **A silhouette shadow follows the ART, a blob shadow follows the BODY (fixed
+  2026-08-19).** `drawDrink` draws the sprite at the hitbox offset
+  (`hbOffX`/`hbOffY` from `ITEM_HITBOXES`) so the art stays glued to its
+  collision circle. The blob and capsule shadows deliberately ignore that offset
+  — they are a hitbox-grounding cue, drawn on the body. A `flat:` map's
+  silhouette shadow (`makeFlatShadowSprite`) is the opposite: it is baked from
+  the sprite's own alpha and claims to be the item's outline, so it must sit
+  under where the sprite is DRAWN. It didn't, so the offset pushed the art off
+  its own shadow. **A per-item inventory of which of the three shadow systems
+  every item takes, and the open questions about them, is in
+  [TODO-shadows.md](TODO-shadows.md).** Visible on Happy Hour's
+  `receipt-ball.png`, whose `dy -0.281`
+  is the biggest offset in config/hitboxes.js: ~0.28r of shadow stood proud
+  above the crumpled receipt. Napoli's own items hid it — every traced offset in
+  its chain is under 1.5%. **Any future per-item shadow baked from art must take
+  the art's transform, not the body's.** See §6.9 in
+  `assets/source/pizza/DESIGN.md`.
 - **Collision sounds**: synthesised via Web Audio API (no files). This is intentional —
   instant, zero-size, procedurally variable by tier.
 - **A GainNode defaults to 1.0, so set `.value` as well as `setValueAtTime`**

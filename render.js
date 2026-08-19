@@ -169,7 +169,31 @@ function drawDrink(sx, sy, item, scale, wobble, spin, flat) {
   const pr = item.physR * scale;
   const flatShadow = flat && item.img.complete && item.img.naturalWidth;
   ctx.save();
-  ctx.rotate(idle);
+  // The blob and capsule shadows are deliberately drawn on the BODY: they are a
+  // hitbox-grounding cue, and the comment above says so. The flat silhouette is
+  // not — it claims to be the item's own outline, so it has to sit under where
+  // the SPRITE is actually drawn, which includes the hitbox offset the art
+  // applies further down. Without this the shadow keeps the body's position
+  // while the art moves off it, and the silhouette peeks out from behind the
+  // item on the side the offset came from.
+  //
+  // `receipt-ball.png` is where this shows: dy -0.281 is the biggest offset in
+  // config/hitboxes.js, so ~0.28r of shadow stood proud ABOVE the crumpled
+  // receipt (Mikael, 2026-08-19). Napoli's own items are unaffected in practice
+  // — their traced offsets are all under 1.5% — which is why it surfaced only
+  // once Happy Hour put the shared receipt chain on a flat map.
+  //
+  // Rotating by the ART's angle first puts the offset in the same frame the art
+  // puts it in; `idle - shAng` then takes the silhouette back to a plain idle
+  // wobble, so the SHAPE still never turns with the item (overhead light — an
+  // orbiting silhouette would read as the lamp swinging). Non-flat maps take
+  // shAng === idle and no translate, i.e. the path they always had.
+  const shAng = flatShadow ? (spin === undefined ? idle : spin) : idle;
+  ctx.rotate(shAng);
+  if (flatShadow) {
+    ctx.translate(-item.hbOffX * r, -item.hbOffY * r);
+    ctx.rotate(idle - shAng);
+  }
   // A flat-lying item gets a MUCH smaller drop and NO extra squash, and both
   // differences are the same point: SHADOW_DROP and the 0.82 squash exist to
   // slide a STANDING object's shadow out from under its base, which is what
@@ -671,11 +695,21 @@ function drawBag(coinCount, dt, best) {
     ctx.fillStyle = '#8a5a2e'; ctx.beginPath(); ctx.arc(0, 4, 18, 0, Math.PI * 2); ctx.fill();
   }
   ctx.restore();
-  ctx.fillStyle = 'rgba(20,12,6,.55)';
-  ctx.beginPath(); ctx.roundRect(BAG_POS.x + 24, BAG_POS.y - 12, 64, 24, 12); ctx.fill();
-  ctx.fillStyle = '#ffe9a8'; ctx.font = 'bold 15px Georgia';
+  // Grouped through fmtScore (scores.js) so this pill and the "to beat" pill
+  // 27px below it read the same way -- see the note there.
+  const coinTxt = fmtScore(coinCount);
+  ctx.font = 'bold 15px Georgia';
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  ctx.fillText(coinCount, BAG_POS.x + 34, BAG_POS.y + 1);
+  // The pill used to be a hardcoded 64px, which fitted the un-grouped number by
+  // luck and nothing more: a separator adds ~4px per thousand, so a six-figure
+  // run would have overflowed it. Measure instead, with the same 20px of
+  // padding the old constant implied at four digits, and never shrink below it
+  // so a low score keeps the pill shape the HUD was designed around.
+  const coinW = Math.max(64, ctx.measureText(coinTxt).width + 20);
+  ctx.fillStyle = 'rgba(20,12,6,.55)';
+  ctx.beginPath(); ctx.roundRect(BAG_POS.x + 24, BAG_POS.y - 12, coinW, 24, 12); ctx.fill();
+  ctx.fillStyle = '#ffe9a8';
+  ctx.fillText(coinTxt, BAG_POS.x + 34, BAG_POS.y + 1);
 
   // Second pill: the standing record's remaining gap, counting down as coins
   // land, flipping to gold the moment it's overtaken. It sits here rather than

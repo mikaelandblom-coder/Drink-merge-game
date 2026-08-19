@@ -890,6 +890,5 @@ const ITEM_HITBOXES = {
   'assets/images/pizza/onion-ring.png': { bodyRatio: 1.087 },
   'assets/images/pizza/pepperoni.png': { bodyRatio: 1.051 },
   'assets/images/pizza/bianca.png': { bodyRatio: 1.033, dx: 0.014 },
-  'assets/images/pizza/pan-pizza.png': { bodyRatio: 1.003, dx: -0.013, dy: 0.023 },
   'assets/images/pizza/the-works.png': { bodyRatio: 1.002, dx: -0.011, dy: -0.007 },
 };

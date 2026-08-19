@@ -125,11 +125,11 @@ function showScorePanel(state) {
     gapEl.textContent = 'No score on this board yet — whatever you bank sets the record.';
   } else if (score > best) {
     gapEl.className = 'ahead';
-    gapEl.innerHTML = `🏆 You're <strong>${(score - best).toLocaleString()}</strong> past the record`;
+    gapEl.innerHTML = `🏆 You're <strong>${fmtScore(score - best)}</strong> past the record`;
   } else {
     gapEl.className = '';
-    gapEl.innerHTML = `<strong>${(best - score).toLocaleString()}</strong> more to beat
-      ${best.toLocaleString()}`;
+    gapEl.innerHTML = `<strong>${fmtScore(best - score)}</strong> more to beat
+      ${fmtScore(best)}`;
   }
 
   // The live run is shown as a row IN the board, at the place it currently
@@ -142,12 +142,12 @@ function showScorePanel(state) {
     <div class="score-row${e.live ? ' this-round' : ''}">
       <span class="sr-rank">${i + 1}</span>
       <span class="sr-name">${e.name}</span>
-      <span class="sr-val">${e.score.toLocaleString()}</span>
+      <span class="sr-val">${fmtScore(e.score)}</span>
     </div>`).join('');
 
   document.getElementById('sp-list').innerHTML = rowsHtml;
   document.getElementById('sp-foot').textContent = onBoard
-    ? '' : 'This run: ' + score.toLocaleString() + ' — not on the board yet';
+    ? '' : 'This run: ' + fmtScore(score) + ' — not on the board yet';
 
   setPaused(true);
   document.getElementById('score-panel').style.display = 'flex';
@@ -375,7 +375,7 @@ function showGameOver(state, key) {
   let banner = '';
   if (score > 0 && score > prevBest && prevBest > 0) {
     banner = `<div class="new-best">🏆 New high score!
-      <span class="nb-sub">You topped the previous best of ${prevBest.toLocaleString()}</span>
+      <span class="nb-sub">You topped the previous best of ${fmtScore(prevBest)}</span>
     </div>`;
     fanfare();
     spawnConfetti(document.getElementById('over'));
@@ -391,7 +391,7 @@ function showGameOver(state, key) {
     return `<div class="score-row${highlight ? ' this-round' : ''}">
       <span class="sr-rank">${i + 1}</span>
       <span class="sr-name">${e.name}</span>
-      <span class="sr-val">${e.score.toLocaleString()}</span>
+      <span class="sr-val">${fmtScore(e.score)}</span>
       ${highlight ? '<span class="sr-you">you</span>' : ''}
     </div>`;
   }).join('');
@@ -406,7 +406,7 @@ function showGameOver(state, key) {
 
   document.getElementById('finalScore').innerHTML =
     `${banner}
-     <div class="final-coins">You earned <strong>${score.toLocaleString()}</strong> coins</div>
+     <div class="final-coins">You earned <strong>${fmtScore(score)}</strong> coins</div>
      ${xpLine}
      ${scores.length ? `<div class="score-list"><div class="score-list-title">Top scores</div>${rowsHtml}</div>` : ''}`;
 

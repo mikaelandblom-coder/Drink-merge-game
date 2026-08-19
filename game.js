@@ -101,6 +101,29 @@ let SPIN_ENABLED = false;         // draw items at their real body angle (map.sp
 const SPIN_PARAM = /[?&]spin=0/.test(location.search) ? false
                  : /[?&]spin/.test(location.search)   ? true : null;
 let FLAT_ENABLED = false;         // anchor sprites by CENTRE, not base (map.flat, set in startGame)
+// The body angle to DRAW an item at, or undefined for "don't rotate this one".
+// Single source of truth: the render loop draws it and sceneBusy() decides
+// whether a still-turning body must keep the loop awake, and if those two ever
+// disagreed an item would either freeze mid-turn or hold the loop at 60fps
+// forever. Two kinds of item are excluded on a spin map:
+//
+//   CAPSULES — makeDrink locks their inertia so the horizontal sprite can never
+//   drift off its stadium hitbox, and their shadow is baked at the authored
+//   cap.rot. Spin is a circle-only feature.
+//
+//   ANYTHING THAT IS NOT THE MAP'S OWN CHAIN — i.e. Happy Hour's shared receipt
+//   chain. `spin: true` is a claim its author made about the art in THEIR items
+//   list, which they chose to be radially symmetric; it cannot speak for art the
+//   mode injects into every map alike. The receipts are a printed slip, a roll,
+//   a stack and a clipboard with a clip at the top — four sprites with an
+//   unmistakable "this way up", which Napoli spun (reported 2026-08-19). Testing
+//   the KIND rather than naming receipts keeps this right for any future shared
+//   chain, since the flaw is in the flag's REACH, not in receipts specifically.
+function drawnSpin(d) {
+  return (SPIN_ENABLED && d.plugin.kind === 'drink' && !d.plugin.item.cap)
+    ? d.angle : undefined;
+}
+
 // Dev preview: ?flat=1 / ?flat=0, same escape hatch as ?spin.
 const FLAT_PARAM = /[?&]flat=0/.test(location.search) ? false
                  : /[?&]flat/.test(location.search)   ? true : null;
@@ -244,7 +267,7 @@ function bestToBeatLine() {
   bestLineFor = state.coinCount;
   const gap = state.bestToBeat - state.coinCount;
   bestLine = (gap > 0)
-    ? { text: gap.toLocaleString() + ' to beat', ahead: false }
+    ? { text: fmtScore(gap) + ' to beat', ahead: false }
     : { text: '🏆 new best', ahead: true };
   return bestLine;
 }
@@ -553,11 +576,7 @@ function render(dt) {
     const born   = (performance.now() - d.plugin.born) / 200;
     const growth = Math.min(1, 0.6 + born * 0.4);
     const p      = persp(d.position.x, d.position.y);
-    // CAPSULE items are excluded on purpose: makeDrink locks their inertia so
-    // the horizontal sprite can never drift off its stadium hitbox, and their
-    // shadow is baked at the authored cap.rot. Spin is a circle-only feature.
-    const spin = (SPIN_ENABLED && !d.plugin.item.cap) ? d.angle : undefined;
-    drawDrink(p.x, p.y, d.plugin.item, p.s * growth, wob + d.id, spin, FLAT_ENABLED);
+    drawDrink(p.x, p.y, d.plugin.item, p.s * growth, wob + d.id, drawnSpin(d), FLAT_ENABLED);
   }
 
   if (!state.gameOver) {
@@ -624,13 +643,15 @@ function sceneBusy() {
   }
   for (const d of state.drinks) {
     if (Math.hypot(d.velocity.x, d.velocity.y) > 0.08) return true;
-    // A body can be linearly still while it is STILL TURNING, and on a spin map
-    // that rotation is drawn — so without this an item would freeze mid-turn
-    // when the board settles and then jump on the next wake. Gated on the flag
-    // so every other map's idle behaviour is bit-for-bit what it was.
-    // 0.0015 rad/step: at the measured ~0.97/step decay that leaves under 3
-    // degrees of un-drawn rotation, which is invisible.
-    if (SPIN_ENABLED && Math.abs(d.angularVelocity) > 0.0015) return true;
+    // A body can be linearly still while it is STILL TURNING, and where that
+    // rotation is drawn the item would otherwise freeze mid-turn when the board
+    // settles and jump on the next wake. Gated through drawnSpin so it asks the
+    // exact question "is this body's rotation on screen?" — a settled receipt
+    // whose angle is thrown away must NOT hold the loop at 60fps for a turn
+    // nobody can see. Every non-spin map's idle behaviour is bit-for-bit what
+    // it was. 0.0015 rad/step: at the measured ~0.97/step decay that leaves
+    // under 3 degrees of un-drawn rotation, which is invisible.
+    if (drawnSpin(d) !== undefined && Math.abs(d.angularVelocity) > 0.0015) return true;
   }
   return false;
 }

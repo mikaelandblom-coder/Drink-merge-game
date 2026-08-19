@@ -68,7 +68,7 @@ function buildScoreRows(map) {
   return mapVariants(map).map(v => {
     const top = getScores(v.key).slice(0, 3);
     const vals = top.length
-      ? top.map(e => e.score.toLocaleString()).join('<span class="csr-sep">·</span>')
+      ? top.map(e => fmtScore(e.score)).join('<span class="csr-sep">·</span>')
       : '<span class="csr-empty">—</span>';
     return `<div class="csr-variant${v.key === activeKey ? ' active' : ''}">
        <span class="cv-label">${v.label}</span>
@@ -92,7 +92,7 @@ function savedRunLabel(map, s) {
   if (map.sizes && s.size) bits.push(s.size === 'large' ? 'Large' : 'Small');
   if (s.happyHour) bits.push('Happy Hour');
   else if (s.combos) bits.push('Combo');
-  bits.push((s.score || 0).toLocaleString() + ' coins');
+  bits.push(fmtScore(s.score || 0) + ' coins');
   return bits.join(' · ');
 }
 

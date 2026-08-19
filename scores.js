@@ -1,5 +1,21 @@
 const SCORE_MAX = 8;
 
+// Every score the player reads — the coin pill, the record to beat, the score
+// panel, the game-over recap, the menu cards — goes through here, so the HUD
+// can never show two conventions at once. That was the actual bug: the coin
+// count was drawn as a raw number while the "to beat" pill directly under it
+// was already grouped, and the two sat 27px apart (Mikael, 2026-08-19).
+//
+// The separator is a fixed NO-BREAK SPACE (U+00A0), not `toLocaleString()`,
+// which is what the rest of the game used to call. Two reasons to pin it:
+// toLocaleString follows the BROWSER's locale, so the same run reads "2,150"
+// on an English device and "2 150" on a Swedish one — and some locales group
+// with a dot ("2.150"), which for a score is actively misleading. And the
+// space has to be NO-BREAK or an HTML score can wrap mid-number at the gap.
+function fmtScore(n) {
+  return String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0');
+}
+
 // Storage format per key: [{name: string, score: number}]
 // Migrates old number-only entries automatically.
 //

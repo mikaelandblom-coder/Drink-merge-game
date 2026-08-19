@@ -300,6 +300,12 @@ PIPELINE = {
         # Row-major order IS tier order and must match PIZZA_ITEMS in
         # config/items.js. Every subject is a disc, ring or ball because this
         # map sets spin: true.
+        #
+        # Cell 8 (the deep-dish "pan pepperoni") is RETIRED, hence the None:
+        # it is the one cell on this sheet drawn from a 3/4 angle, so its pan's
+        # side wall gives it a "this way up" -- which spin: true then rotates.
+        # Tier 8 is now 'pizza/arugula' off more_pizzas.png below. The art is
+        # still in the sheet: put the name back to un-retire it.
         {
             'file':   'sprite_sheet.png',
             'type':   'spritesheet',
@@ -308,7 +314,26 @@ PIPELINE = {
             'names':  [
                 'pizza/olive',       'pizza/mozzarella', 'pizza/tomato',
                 'pizza/pepper-ring', 'pizza/onion-ring', 'pizza/pepperoni',
-                'pizza/bianca',      'pizza/pan-pizza',  'pizza/the-works',
+                'pizza/bianca',      None,               'pizza/the-works',
+            ],
+        },
+        # ALTERNATE FINISHED PIES -- a second sheet of nine whole pizzas, drawn
+        # to the same straight-down camera as the chain above. Only 'arugula'
+        # is currently wired into PIZZA_ITEMS (it replaced the original
+        # pan-pizza, whose 3/4 view showed the pan's side wall and so had a
+        # "this way up" -- forbidden on a spin: true map, see config/items.js).
+        # The other eight are extracted as SWAP CANDIDATES for the top tiers:
+        # nothing fetches them (loadItemSprites only pulls the active chain),
+        # so they cost repo size and nothing per visit.
+        {
+            'file':   'more_pizzas.png',
+            'type':   'spritesheet',
+            'grid':   (3, 3),
+            'chroma': 'alpha',
+            'names':  [
+                'pizza/alt/margherita', 'pizza/alt/pepperoni-pie', 'pizza/alt/funghi',
+                'pizza/arugula',        'pizza/alt/formaggi',      'pizza/alt/diavola',
+                'pizza/alt/ortolana',   'pizza/alt/hawaiian',      'pizza/alt/burrata',
             ],
         },
     ],

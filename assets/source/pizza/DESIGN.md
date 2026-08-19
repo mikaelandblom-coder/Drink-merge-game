@@ -32,8 +32,11 @@ art.
 
 ```
 olive slice → mozzarella → cherry tomato → pepper ring → onion ring →
-pepperoni → pizza bianca → pan pepperoni → the works
+pepperoni → pizza bianca → prosciutto e rucola → the works
 ```
+
+Tier 8 was `pan pepperoni` until 2026-08-19; it was replaced off a second sheet
+for a reason that goes to this map's one hard rule — see §6.7.
 
 **Every subject must be radially symmetric** — a disc, a ring or a ball, with no
 handle, no stem, no top and no bottom. This is the map's one hard rule. A wedge
@@ -43,16 +46,25 @@ rotation was tried on Cần Thơ's upright rice-paper rolls. A cell that comes b
 with a stalk on the tomato is a reroll, not a "good enough".
 
 **Colour ladder:** near-black → cream → red → green → violet → orange → cream →
-red-gold → slate. Adjacent tiers never share a family, because at r15–r30 hue is
+**green** → slate. Adjacent tiers never share a family, because at r15–r30 hue is
 what tells a player two items match. The two creams sit five tiers and 30px of
-radius apart.
+radius apart, and since 2026-08-19 so do the two greens (pepper ring r27, rucola
+r58) — the same spacing the creams had already proved is far enough.
 
-**The last three escalate by SILHOUETTE, not size**, which is the hard part of a
-chain whose every finale is a circle: flat disc (bianca) → visibly thick cylinder
-with a raised wall (pan pizza) → disc framed by the dark ring of a stone (the
-works). Judge a candidate finale by whether the three are tellable apart as black
-shapes. Escalating by size the way Saigon does (bowl → bowl → pot) would have
-produced three indistinguishable circles.
+**The last three were meant to escalate by SILHOUETTE, not size**, which is the
+hard part of a chain whose every finale is a circle: flat disc (bianca) → visibly
+thick cylinder with a raised wall (pan pizza) → disc framed by the dark ring of a
+stone (the works). Escalating by size the way Saigon does (bowl → bowl → pot)
+would have produced three indistinguishable circles.
+
+**That plan half-survived.** The thick-cylinder tier was retired on 2026-08-19
+(§6.7) because the only way to paint a raised wall is to tilt the pan, and a
+visible side wall is a "this way up" — the thing the rule above forbids outright.
+The finales now separate as: pale flat disc → **green canopy** → dark stone ring.
+Two of those three are still black-shape distinct (the works keeps its frame);
+bianca and rucola separate by hue alone. That is a weaker cue and is the one
+thing on this map worth watching in play — but a silhouette that only exists at
+one camera angle is not a silhouette at all on a map whose items turn.
 
 ## 3. The play surface
 
@@ -475,6 +487,191 @@ finale, so the size ramp is slightly compressed. If the endgame plays cramped th
 fix is to scale the whole `r` ramp by ~0.89 — **not** to shrink `bodyRatio`,
 which would just detach the collision circles from the art again.
 
+### 6.7 The deep-dish tier had a "this way up" — and the map rotates
+
+**Mikael, 2026-08-19: "the pan pizza looks a bit weird and not like an actual
+pan pizza".** He was reading a symptom of the map's own rule.
+
+Tier 8 asked the art for something self-contradictory. §2 requires every subject
+to be radially symmetric, because `spin: true` draws items at their real physics
+angle. But §2 *also* asked tier 8 to be a **visibly thick cylinder with a raised
+wall** so the three finales differed as black shapes. A wall is only visible if
+you can see its side — and you can only see the side of a pan by tilting the
+camera off vertical. So the cell came back at roughly 3/4 view while its eight
+neighbours were straight down.
+
+That is what "weird" was. Two separate defects, from the one cause:
+
+- **It did not read as a pan pizza.** The tilt shortened the pie into an oval
+  and put the crust's outer face in view, so it read as a normal pizza tipping
+  away from the viewer — a perspective error, not a deep dish.
+- **It was the only item on the map with an up.** `spin: true` then rotated it.
+  The other eight are discs and rings that look identical at any angle; this one
+  advertised a horizon and spent the run turning it.
+
+The alpha bounding boxes measure the first defect without opening the art. Every
+straight-down sprite in the chain is square to within 3% (olive 328×327,
+mozzarella 342×339, onion ring 343×340). The three finales are not:
+bianca 389×417, the works 412×449, **pan pizza 395×438** — 10% taller than wide,
+which is the perspective depth of a tilted disc showing its far rim. Bianca and
+the works carry a mild version of the same tilt and get away with it because
+neither shows a *wall*; the pan pizza's whole reason to exist was the wall.
+
+**Fix:** a second sheet (`more_pizzas.png`, nine whole pies, all straight down)
+supplied a replacement. Tier 8 is now **prosciutto e rucola** — a flat pie under
+a green rocket canopy, alpha box 389×391, i.e. square to half a percent. Its
+green also does more work than the pan pizza's red-gold did, since it is the one
+thing separating it from bianca's cream now that the silhouette cue is gone.
+
+**The lesson generalises past this map, and it is the ART-PROMPTS.md one turned
+up a level.** CLAUDE.md already says the item prompt and the background prompt
+are one decision, because the camera angle has to match. This adds: on a `spin`
+map, **a silhouette requirement and the radial-symmetry rule can be in direct
+conflict, and radial symmetry has to win.** Any finale distinguished by a feature
+you can only see off-axis — a wall, a rim, a depth, a base — is asking for art
+the map cannot use. Distinguish by what survives rotation: hue, a frame around
+the disc, the density of the topping. Check a candidate cell's alpha box before
+looking at it; a finished pie more than ~4% off square is tilted.
+
+**The other eight pies from that sheet are extracted** to
+`assets/images/pizza/alt/` (margherita, pepperoni-pie, funghi, formaggi,
+diavola, ortolana, hawaiian, burrata) as swap candidates for the top tiers. All
+nine cells split clean on the first pass — real alpha, no edge contact, no
+neighbour slivers, no `min_component_frac` needed, unlike §6.1's sheet. Nothing
+fetches them (`loadItemSprites` only pulls the active chain), so they cost repo
+size and nothing per visit.
+
+**Two loose ends this left, both handled:**
+
+- `config/hitboxes.js` had a hand-traced entry keyed to `pan-pizza.png`, which
+  no longer exists. It was dropped — dead keys are how someone restores retired
+  art and silently gets a hitbox for a sprite the pipeline does not emit. Its
+  value is recorded here instead: `{ bodyRatio: 1.003, dx: -0.013, dy: 0.023 }`.
+- `arugula.png` therefore has **no** override, so unusually for this map its
+  `config/items.js` literal is live rather than a fallback (§6.6). It is not
+  guessed. `width / height / 0.88` is the formula the eight hand traces already
+  obey, and on the finale tiers — the ones whose discs are widest relative to
+  their frame — it reproduces them to within 1.5%: bianca 1.031 vs 1.033 traced,
+  the works 1.016 vs 1.002, the retired pan pizza 0.998 vs 1.003. For rucola it
+  gives **1.097**, and the sprite's box is centred to within one pixel, so `dx`
+  and `dy` are genuinely 0. Verified in X-ray on a real merge: the circle sits on
+  the painted crust edge, which is this map's convention. A re-trace in the
+  hitbox editor would move it under the override with the rest — a confirmation
+  pass, not a repair.
+
+**One number did move, and it is the thing to watch.** The old sprite's disc
+filled less of its taller frame, so tier 8 drew at ~122 world px and had
+`physR` 61.4. Rucola's square frame draws at ~134 px, `physR` 67.2. Both are
+correct — the body tracks the painted disc in each case — but tier 8 is now 9.5%
+larger, and the gap to the works narrowed from 25% to 13%. Adjacent finales that
+are close in size *and* no longer silhouette-distinct is exactly the combination
+§2 was trying to avoid. If it plays badly the lever is tier 8's `r` (58 → ~54),
+**not** `bodyRatio`, for §6.6's reason.
+
+### 6.8 Happy Hour's receipts spun too — a per-map flag over shared art
+
+**Mikael, 2026-08-19, right after §6.7: "the receipt items are rotating on the
+pizza map, which is not supported by the art".** Correct, and it is the same
+mistake as §6.7 one level up: §6.7 was art that broke the map's rule, this is
+art the rule was never able to reach.
+
+`spin: true` lives in `config/maps.js` next to the map's `items:` reference, so
+it reads as a statement about that chain — and it is. But Happy Hour injects
+`RECEIPT_ITEMS` (shared, in `config/items.js`) into **every** map, and nobody
+choosing `spin` for Napoli was choosing anything about receipts. All four have a
+blatant up: the slip's printed lines run horizontally, the roll stands on its
+end, the stack lies flat, and the golden receipt is a clipboard with its clip
+and coins at the TOP. Napoli turned all of them.
+
+The existing exclusion did not catch it. The render call site already skipped
+capsule items — but receipts are plain circles with no `.cap`, so they sailed
+straight through a guard that looked like it was about shapes when the real
+question was about **provenance**.
+
+**Fix:** one predicate, `drawnSpin(d)` in game.js, testing
+`plugin.kind === 'drink'` alongside the old capsule check. Testing the KIND
+rather than naming the receipt chain is deliberate: the defect is in the flag's
+REACH, so any future shared chain is right without anyone remembering this.
+
+**It also fixed a heat bug nobody had reported.** `sceneBusy()` had its own copy
+of the rotation test, gated on `SPIN_ENABLED` alone, so a settled receipt that
+was still turning held the render loop at 60fps for a rotation the loop was
+throwing away — the exact opposite of the idle-parking that `sceneBusy` exists
+for. Both callers now go through `drawnSpin`, which is the point of extracting
+it: the loop and the idle check are answering one question ("is this body's
+rotation on screen?") and cannot drift apart. The two ways they can disagree are
+both real and opposite — draw a rotation `sceneBusy` ignores and the item freezes
+mid-turn, or hold the loop awake for one the loop discards and the game never
+sleeps. The second had shipped.
+
+**Verification, same standard as the original spin feature.** All five receipt
+tiers render **0 differing subpixels** between body angle 0, +120° and −80°, with
+a measured noise floor of 0 and a control pizza item moving 10,578 subpixels. The
+noise floor is the part worth copying: a first attempt at this test showed every
+receipt "differing" under rotation and looked like the fix had failed. It had
+not — `render()` advances `wob` by `0.05*dt` per call and the 200ms grow-in reads
+`performance.now()`, so two frames of the *same* board are never identical.
+Pinning `wob`, backdating `plugin.born`, and clearing particles and text pops
+takes the floor to 0 and makes the result mean something. Physics is untouched
+either way: all four bodies in the mixed test sat at 68.5° while only the drinks
+drew that way.
+
+### 6.9 The silhouette shadow took the body's position, not the art's
+
+**Mikael, 2026-08-19: the shadow on the crumpled receipt has "a part of the
+shadow above the item which doesn't make sense".** It didn't, and the reason is
+a two-line-apart mismatch in `drawDrink`.
+
+The sprite is drawn at the **hitbox offset** — `ctx.translate(-hbOffX*r,
+-hbOffY*r)`, from the `dx`/`dy` traced in the hitbox editor — so the art stays
+glued to its collision circle wherever the circle was placed. §6.5's silhouette
+shadow was sized off the art (its own comment says "so it lines up with the
+sprite exactly") but positioned on the **body**, inside a `save`/`restore` that
+never saw that translate. Size from one, position from the other. So for any
+item whose circle is off-centre, the art slid out from under its own shadow and
+the silhouette showed on the opposite side.
+
+The direction follows the sign: `hbOffY` negative means the art is drawn *below*
+the body centre, so the shadow was left standing above it.
+
+**Why the receipts and only the receipts.** Napoli's own nine are traced almost
+dead-centre — every `dx`/`dy` in the chain is under 1.5%, so the mismatch was
+sub-pixel and invisible. The shared receipt chain is not: `receipt-ball.png`
+carries **`dy: -0.281`**, the largest offset in all of `config/hitboxes.js`,
+because a crumpled ball's painted mass sits high in its frame. That is ~0.28r of
+shadow standing proud of the item — and it took **two** things landing together
+to become visible, the `flat:` shadow system (§6.5, Napoli-only) and Happy Hour
+putting shared art on a flat map. Neither alone would have shown it.
+
+**Fix:** the flat branch now applies the same offset the art applies, under the
+art's own angle, then rotates back by `idle - shAng` so the silhouette's SHAPE
+still never turns with the item (§6.5's overhead-lamp rule is untouched).
+Non-flat maps take `shAng === idle` and no translate — bit-for-bit the path they
+always had.
+
+**The distinction worth keeping**, because it is not obvious and the two shadow
+kinds genuinely disagree: a **blob or capsule shadow follows the BODY** — it is a
+hitbox-grounding cue and is *supposed* to ignore the art offset — while a
+**silhouette shadow follows the ART**, because it is a picture of the sprite and
+belongs wherever the sprite is. Any future per-item shadow baked from art wants
+the art's transform.
+
+**Measured, before and after,** by restoring `render.js` from HEAD and shooting
+the same board:
+
+| | shadow centroid | art centroid |
+|---|---|---|
+| before | y **31.45** | y 34.57 |
+| after  | y **36.59** | y 34.30 |
+
+The shadow moves from 3.1px *above* the art's centre to 2.3px *below* it, while
+the art itself moves 0.27px — threshold bleed, not motion. Changed pixels are
+confined to the five receipts' own regions. Instrumenting `ctx.drawImage` to log
+the device-space centre of each blit is the quicker check and the one to reach
+for next time: it reports the shadow-minus-art offset per item directly, and
+after the fix every item on every map shows a small positive `dy` (the intended
+`FLAT_SHADOW_DROP`) and `dx` within 0.07px of zero.
+
 ---
 
 ## 7. Open questions and still to do
@@ -491,6 +688,11 @@ which would just detach the collision circles from the art again.
   the flat discs on a steep surface? The discs will match the ground plane
   exactly; a sphere is angle-independent and should be fine, but it is an eyeball
   call on the real art and nobody has made it yet.
+- **Are tiers 8 and 9 tellable apart mid-run?** Since the tier-8 swap (§6.7) they
+  are both flat pies, 13% apart in size, separated mainly by rucola's green
+  against the works' dark stone ring. Levers, in order: re-trace rucola in the
+  hitbox editor, then tier 8's `r` (58 → ~54), then a different pie from
+  `assets/images/pizza/alt/`.
 - ~~Combos~~ — settled 2026-08-19: off.
 
 **Checklist:**

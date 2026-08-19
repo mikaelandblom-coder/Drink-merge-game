@@ -164,27 +164,53 @@ const CANTHO_ITEMS = [
 // the "make a dish from its ingredients" arc Mai singles out, and it fits pizza
 // better than any other cuisine because the toppings are already discs.
 //
-// The last three escalate by SILHOUETTE, not size, which is the hard part when
-// every finale is a circle: flat disc (bianca) -> visibly THICK cylinder with a
-// raised wall (pan pizza) -> disc framed by the dark ring of a stone/pan (the
-// works). Judge a candidate finale by whether you can tell the three apart as
-// black shapes; if not, reroll the art rather than the numbers.
+// The last three were meant to escalate by SILHOUETTE, not size, which is the
+// hard part when every finale is a circle: flat disc (bianca) -> visibly THICK
+// cylinder with a raised wall (pan pizza) -> disc framed by the dark ring of a
+// stone (the works).
+//
+// THE MIDDLE ONE HAD TO GO (2026-08-19). The only way that sheet could paint a
+// raised wall was to tilt the pan into a 3/4 view -- and a visible side wall IS
+// a "this way up", which is precisely what the top of this comment forbids and
+// what `spin: true` then rotates. It read as a pie tipping over, not a deep
+// dish. Tier 8 is now a straight-down prosciutto e rucola off more_pizzas.png.
+//
+// So the three finales now separate by COLOUR rather than silhouette: cream
+// (bianca) -> GREEN (the rocket canopy) -> slate (the works' stone). That is a
+// weaker cue than a black-shape difference and is worth watching in play -- but
+// it beats the alternative, because a silhouette that only exists at one camera
+// angle is no silhouette at all on a map whose items turn. If a future sheet
+// offers a genuinely thick pie drawn straight down, it belongs here.
+// Eight more whole pies are extracted to assets/images/pizza/alt/ as swap
+// candidates (see process_assets.py); none is wired in.
 //
 // Colour ladder (adjacent tiers never share a family, the thing that tells the
 // player two items match at r15-r30):
-//   near-black -> cream -> red -> green -> violet -> orange -> cream -> red-gold
-//   -> slate. The two creams sit five tiers and 30px of radius apart.
+//   near-black -> cream -> red -> green -> violet -> orange -> cream -> GREEN
+//   -> slate. The two creams sit five tiers and 30px of radius apart, and so do
+//   the two greens (pepper ring r27, rucola r58) -- the same spacing the creams
+//   already proved is far enough apart to never be confused mid-run.
 //
 // r reuses the proven Paris/Farm 15->71 ramp. `vis` is deliberately ABSENT: the
 // extracted sprites measured aspect 0.88-1.01, i.e. square, so they already draw
 // at parity — items.js warns at load if that ever stops being true.
 //
-// The bodyRatio literals below are SUPERSEDED for this map: every one of them is
-// overridden by a traced ITEM_HITBOXES entry in config/hitboxes.js, which is
-// what the game actually uses (see the override loop at the bottom of this
-// file). They were measured off the shipped PNGs -- disc diameter over sprite
-// height, 0.87-0.97 -- and are kept only as the fallback if an override is ever
-// removed.
+// The bodyRatio literals below are SUPERSEDED for this map -- WITH ONE
+// EXCEPTION. Every tier except `prosciutto e rucola` is overridden by a traced
+// ITEM_HITBOXES entry in config/hitboxes.js, which is what the game actually
+// uses (see the override loop at the bottom of this file). Those were measured
+// off the shipped PNGs -- disc diameter over sprite height, 0.87-0.97 -- and are
+// kept only as the fallback if an override is ever removed.
+//
+// Tier 8's 1.097 is LIVE, not a fallback: its sprite arrived after the tracing
+// pass, so config/hitboxes.js has no entry keyed to arugula.png. It is not a
+// guess -- it is width/height/0.88, the formula the existing traces obey (it
+// reproduces the three finale tiers' hand-traced values to within 1.5%:
+// bianca 1.031 vs 1.033, the-works 1.016 vs 1.002, the retired pan pizza 0.998
+// vs 1.003). The sprite's disc is 389px across in a 403px-tall frame and its
+// bounding box is centred to within a pixel, so dx/dy are genuinely 0. Re-trace
+// it in tools/hitbox-editor.html to move it under the override like the rest --
+// that is a confirmation pass, not a fix.
 //
 // The traced values run HIGHER, around 1.00-1.11, and that is deliberate: it
 // sizes the collision circle to the painted edge of the disc rather than
@@ -208,7 +234,7 @@ const PIZZA_ITEMS = [
   { name:'onion ring',      r:33, glass:'#ecc9ea', liq:'#8e3a86', sprite:'assets/images/pizza/onion-ring.png',  bodyRatio:0.97 },
   { name:'pepperoni',       r:40, glass:'#f5ae7c', liq:'#b8400f', sprite:'assets/images/pizza/pepperoni.png',   bodyRatio:0.94 },
   { name:'pizza bianca',    r:48, glass:'#fffaf0', liq:'#dcbe86', sprite:'assets/images/pizza/bianca.png',      bodyRatio:0.90 },
-  { name:'pan pepperoni',   r:58, glass:'#f2b566', liq:'#a3301a', sprite:'assets/images/pizza/pan-pizza.png',   bodyRatio:0.87 },
+  { name:'prosciutto e rucola', r:58, glass:'#e7b56d', liq:'#4a7418', sprite:'assets/images/pizza/arugula.png', bodyRatio:1.097 },
   { name:'the works',       r:71, glass:'#b9b2a8', liq:'#3d3a37', sprite:'assets/images/pizza/the-works.png',   bodyRatio:0.89 },
 ];
 
