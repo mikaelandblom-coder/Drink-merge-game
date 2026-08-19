@@ -13,61 +13,69 @@
 
 const SOUND_MAP = {
   default: {
-    merge:    'merge-glass',
-    collide:  'collide-glass',
-    coin:     'coin-blip',
-    shoot:    'shoot-whoosh',
-    gameOver: 'over-gently-down',
-    best:     'best-brass-fanfare',
-    levelUp:  'levelup-triad',
+    merge:     'merge-glass',
+    collide:   'collide-glass',
+    coin:      'coin-blip',
+    shoot:     'shoot-whoosh',
+    gameOver:  'over-gently-down',
+    best:      'best-brass-fanfare',
+    levelUp:   'levelup-triad',
   },
 
-  // Hawaii — Tiki Bar: the house set, unchanged.
+  // Hawaii — Tiki Bar
   hawaii: {},
 
-  // Saigon — Pho House: wooden bowls and broth.
+  // Saigon — Pho House
   saigon: {
-    merge:   'merge-bubble',
-    collide: 'collide-wood-tok',
+    merge:     'merge-bubble',
+    collide:   'collide-wood-tok',
   },
 
-  // Kyoto — Night Market: soft food, nothing with a hard edge.
+  // Kyoto — Night Market
   kyoto: {
-    merge:   'merge-mochi',
-    collide: 'collide-soft-food',
+    merge:     'merge-mochi',
+    collide:   'collide-soft-food',
   },
 
-  // Mage Tower: crystalline and shimmering.
+  // Mage Tower — Arcane Sanctum
   mage: {
-    merge:   'merge-arcane',
-    collide: 'collide-crystal',
+    merge:     'merge-arcane',
+    collide:   'collide-crystal',
   },
 
-  // Plushie Factory: the softest profile in the game.
+  // Plushie Factory — Made for Mai
   teddy: {
-    merge:   'merge-squeak',
-    collide: 'collide-fabric',
+    merge:     'merge-squeak',
+    collide:   'collide-fabric',
   },
 
-  // Melody Lane — music shop: everything is an instrument. The coin shower
-  // climbs a pentatonic run so a big payout pours in as a harp cascade.
+  // Melody Lane — Music Shop
   melody: {
-    merge:   'merge-pluck',
-    collide: 'collide-hollow-body',
-    coin:    'coin-pentatonic-run',
+    merge:     'merge-pluck',
+    collide:   'collide-hollow-body',
+    coin:      'coin-pentatonic-run',
   },
 
-  // Paris — Le Petit Café: china and pastry.
+  // Paris — Le Petit Café
   paris: {
-    merge:   'merge-china',
-    collide: 'collide-pastry',
-    coin:    'coin-bell',
+    merge:     'merge-china',
+    collide:   'collide-pastry',
+    coin:      'coin-bell',
   },
 
-  // Farm — Sprout Valley: soil, wood and sprouting crops.
+  // Farm — Sprout Valley
   farm: {
-    merge:   'merge-sprout',
-    collide: 'collide-dirt',
-    coin:    'coin-xylophone',
+    merge:     'merge-sprout',
+    collide:   'collide-dirt',
+    coin:      'coin-xylophone',
+  },
+
+  // Cần Thơ — Floating Market
+  cantho: {},
+
+  // Napoli — Pizzeria
+  pizza: {
+    merge:     'merge-bubble',
+    collide:   'collide-wood-tok',
   },
 };
