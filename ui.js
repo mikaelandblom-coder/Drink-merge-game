@@ -164,6 +164,10 @@ function wireHUD(state) {
   // Tap toggles, press-and-hold opens the volume slider (see wireSoundBtn).
   wireSoundBtn('mute', 'sfx');
   wireSoundBtn('musicBtn', 'music');
+  // The markup hardcodes the "on" icon, but the VOLUMES are persisted while
+  // muted/musicOn are not — so a slider left at 0 last session would otherwise
+  // show an "on" button over silence.
+  syncSoundBtns();
   // currentTarget, not target: clicks can land on the buttons' SVG icons.
   document.getElementById('xrayBtn').onclick  = e => toggleXray(e.currentTarget);
 

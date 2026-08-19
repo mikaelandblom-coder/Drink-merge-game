@@ -65,6 +65,53 @@ const SHADOW_SPRITE = (() => {
   return cv;
 })();
 
+// Flat-lying maps (map.flat -- Napoli) bake each item's shadow from its OWN
+// ALPHA SILHOUETTE instead of blitting the radial blob. The blob is a filled
+// disc that is darkest at its centre, so a HOLLOW item -- an olive slice, a
+// pepper or onion ring -- showed you the densest part of its own shadow through
+// its hole, which is the one place the counter should have been visible.
+//
+// Deriving it from the sprite fixes every shape at once and needs no per-item
+// authoring: a ring casts a ring, a pizza casts a disc. It is only safe because
+// this shadow does NOT rotate with the item (see drawDrink) while a `flat` map's
+// art is radially symmetric by rule -- a silhouette that held still under a
+// turning asymmetric sprite would read as the lamp swinging.
+//
+// Baked once per item, then blitted scaled -- the same perf model as
+// SHADOW_SPRITE and the capsule shadows, and the same bake-time-only use of
+// shadowBlur as spawnTextPop. Never blurs in the frame loop.
+const FLAT_SHADOW_H    = 160;   // baked height, px
+const FLAT_SHADOW_PAD  = 0.10;  // blur headroom, as a fraction of that height
+const FLAT_SHADOW_DROP = 0.13;  // downward nudge, vs SHADOW_DROP's 0.40 — see drawDrink
+
+function makeFlatShadowSprite(img) {
+  const asp = img.naturalWidth / img.naturalHeight;
+  const h = FLAT_SHADOW_H, w = Math.max(1, Math.round(h * asp));
+  const pad = Math.round(h * FLAT_SHADOW_PAD);
+  // 1. the item's alpha, flattened to one solid dark shape
+  const sil = document.createElement('canvas');
+  sil.width = w + pad * 2; sil.height = h + pad * 2;
+  const sc = sil.getContext('2d');
+  sc.drawImage(img, pad, pad, w, h);
+  sc.globalCompositeOperation = 'source-in';
+  sc.fillStyle = 'rgb(28,15,4)';
+  sc.fillRect(0, 0, sil.width, sil.height);
+  // 2. soften it. Draw that shape far off-canvas with an equal-and-opposite
+  //    shadow offset, so ONLY the blurred copy lands in frame.
+  const out = document.createElement('canvas');
+  out.width = sil.width; out.height = sil.height;
+  const oc = out.getContext('2d');
+  oc.shadowColor   = 'rgba(28,15,4,.40)';
+  oc.shadowBlur    = h * 0.075;
+  oc.shadowOffsetX = sil.width * 2;
+  oc.drawImage(sil, -sil.width * 2, 0);
+  // The pad is equal on every side in PIXELS, so the two axes grow by different
+  // fractions whenever the sprite is not square -- keep both.
+  out.padW = sil.width / w;
+  out.padH = sil.height / h;
+  return out;
+}
+
 // Capsule items get the SAME shadow profile as circles (0→.36, .72→.20, 1→0),
 // extruded along the stadium's long axis instead of a hard-edged flat fill —
 // so shadows read identically across maps. Baked once per item on first draw
@@ -104,7 +151,7 @@ function makeCapsuleShadowSprite(hw, hh) {
 // it is undefined every map behaves exactly as it always did: the item carries
 // the tiny idle wobble and nothing else. Nothing here changes physics; the
 // bodies have always rotated, this only decides whether that is drawn.
-function drawDrink(sx, sy, item, scale, wobble, spin) {
+function drawDrink(sx, sy, item, scale, wobble, spin, flat) {
   const r = item.r * scale;
   const idle = Math.sin(wobble) * 0.02;
   ctx.save(); ctx.translate(sx, sy);
@@ -120,11 +167,29 @@ function drawDrink(sx, sy, item, scale, wobble, spin) {
   // orbiting the table. Hence its own save/restore rather than the shared
   // rotation this function used to open with.
   const pr = item.physR * scale;
+  const flatShadow = flat && item.img.complete && item.img.naturalWidth;
   ctx.save();
   ctx.rotate(idle);
-  ctx.translate(0, pr * SHADOW_DROP);
-  ctx.scale(1, 0.82);
-  if (item.cap) {
+  // A flat-lying item gets a MUCH smaller drop and NO extra squash, and both
+  // differences are the same point: SHADOW_DROP and the 0.82 squash exist to
+  // slide a STANDING object's shadow out from under its base, which is what
+  // grounds it. A flat item has no base to hide behind — its shadow is the
+  // same shape the camera already sees, sitting directly beneath it.
+  // Keeping the standing values pushed the shadow's top edge ~0.43r BELOW the
+  // top of the art, so a hollow item showed a bare gap above its own shadow and
+  // read as floating (Mikael, on the pepper ring). At 0.13 with no squash the
+  // soft edge closes over the top of the art while still spilling below.
+  ctx.translate(0, pr * (flatShadow ? FLAT_SHADOW_DROP : SHADOW_DROP));
+  if (!flatShadow) ctx.scale(1, 0.82);
+  if (flatShadow) {
+    // Silhouette shadow -- see makeFlatShadowSprite. Sized off the ART (the
+    // thing casting it), not physR, so it lines up with the sprite exactly.
+    const sh   = item.flatShadow || (item.flatShadow = makeFlatShadowSprite(item.img));
+    const base = r * 2.4 * (item.vis || 1);                 // the sprite's drawn height
+    const sdH  = base * sh.padH;                            // + its blur headroom
+    const sdW  = base * (item.img.naturalWidth / item.img.naturalHeight) * sh.padW;
+    ctx.drawImage(sh, -sdW / 2, -sdH / 2, sdW, sdH);
+  } else if (item.cap) {
     // Stadium shadow matching the elongated (capsule) hitbox, orientation-aware
     // and rotated to the capsule's fixed authored angle. Soft sprite baked on
     // first use — same falloff as SHADOW_SPRITE so all maps' shadows match.
@@ -152,9 +217,20 @@ function drawDrink(sx, sy, item, scale, wobble, spin) {
     // vis (default 1) scales the drawn sprite only; r*0.75-dispH keeps the sprite
     // BOTTOM at ~0.75r so it stays grounded on the shadow (identical to the old
     // placement when vis===1, so other maps are unchanged).
+    //
+    // `flat` (map.flat, Napoli only) anchors the sprite by its CENTRE instead.
+    // Base-anchoring exists because every map until Napoli drew objects STANDING
+    // on a table: the body sits up inside the glass and the art hangs below it,
+    // so the shadow peeking out at the base reads as contact with the table.
+    // Top-down food LYING on a floor has no base to stand on — its disc is dead
+    // centre in the sprite, so base-anchoring drew it 0.45r above its own
+    // collision circle (measured across all nine of Napoli's sprites), which
+    // reads as levitating and makes touching items look interpenetrated.
+    // Centre-anchoring is the whole fix; the shadow keeps its own SHADOW_DROP
+    // nudge, so a flat item still gets a contact cue underneath it.
     const dispH = r * 2.4 * (item.vis || 1);
     const dispW = dispH * (item.img.naturalWidth / item.img.naturalHeight);
-    ctx.drawImage(item.img, -dispW / 2, r * 0.75 - dispH, dispW, dispH);
+    ctx.drawImage(item.img, -dispW / 2, flat ? -dispH / 2 : r * 0.75 - dispH, dispW, dispH);
   } else {
     ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.fillStyle = item.liq; ctx.fill();

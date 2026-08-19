@@ -152,6 +152,66 @@ const CANTHO_ITEMS = [
   { name:'feast tray',    r:71, glass:'#ddc7a6', liq:'#2a1309', sprite:'assets/images/cantho/tray.png',         bodyRatio:0.83, vis:0.77 },
 ];
 
+// Napoli (pizzeria). THE ROTATION MAP: this is the chain `spin: true` was built
+// for (see "Rotating items" in CLAUDE.md), so every subject here is chosen to be
+// RADIALLY SYMMETRIC — slices, rings, balls and pies read the same at any angle,
+// which is exactly what Can Tho's upright rice-paper rolls did not (they tilted
+// like they were falling over). Nothing in this chain may grow a handle, a stem
+// or a "this way up": a pizza peel, a wedge/slice-of-pizza, a bottle or a
+// leaning basil sprig would all break the map's premise, not just look odd.
+//
+// Structure is Saigon/Can Tho's — SIX ingredients then THREE finished pies —
+// the "make a dish from its ingredients" arc Mai singles out, and it fits pizza
+// better than any other cuisine because the toppings are already discs.
+//
+// The last three escalate by SILHOUETTE, not size, which is the hard part when
+// every finale is a circle: flat disc (bianca) -> visibly THICK cylinder with a
+// raised wall (pan pizza) -> disc framed by the dark ring of a stone/pan (the
+// works). Judge a candidate finale by whether you can tell the three apart as
+// black shapes; if not, reroll the art rather than the numbers.
+//
+// Colour ladder (adjacent tiers never share a family, the thing that tells the
+// player two items match at r15-r30):
+//   near-black -> cream -> red -> green -> violet -> orange -> cream -> red-gold
+//   -> slate. The two creams sit five tiers and 30px of radius apart.
+//
+// r reuses the proven Paris/Farm 15->71 ramp. `vis` is deliberately ABSENT: the
+// extracted sprites measured aspect 0.88-1.01, i.e. square, so they already draw
+// at parity — items.js warns at load if that ever stops being true.
+//
+// The bodyRatio literals below are SUPERSEDED for this map: every one of them is
+// overridden by a traced ITEM_HITBOXES entry in config/hitboxes.js, which is
+// what the game actually uses (see the override loop at the bottom of this
+// file). They were measured off the shipped PNGs -- disc diameter over sprite
+// height, 0.87-0.97 -- and are kept only as the fallback if an override is ever
+// removed.
+//
+// The traced values run HIGHER, around 1.00-1.11, and that is deliberate: it
+// sizes the collision circle to the painted edge of the disc rather than
+// leaving it ~12% inside, which is what the 0.88 fudge in physR does elsewhere.
+// That fudge suits soft, rounded glassware, where a little visual overlap in a
+// pile reads as settling. Rigid flat discs do not squash into each other, so
+// pizzas touching exactly when their art touches looks right. Retune in
+// tools/hitbox-editor.html, never here.
+//
+// KNOWN, AND A PLAY-TEST QUESTION: because those ratios are higher, physR at a
+// given r is ~13% larger than other maps' at the LOW tiers and only ~4% at the
+// finale, so the size ramp is slightly compressed. That may well be fine (small
+// items are less fiddly) — but if the endgame feels cramped, the fix is to
+// scale the whole r ramp down by ~0.89, NOT to shrink bodyRatio, which would
+// just detach the collision circles from the art again.
+const PIZZA_ITEMS = [
+  { name:'olive slice',     r:15, glass:'#8a7a95', liq:'#2a1d33', sprite:'assets/images/pizza/olive.png',       bodyRatio:0.96 },
+  { name:'mozzarella',      r:18, glass:'#fffdf6', liq:'#ded2b8', sprite:'assets/images/pizza/mozzarella.png',  bodyRatio:0.97 },
+  { name:'cherry tomato',   r:22, glass:'#ff9d87', liq:'#cf1f13', sprite:'assets/images/pizza/tomato.png',      bodyRatio:0.94 },
+  { name:'pepper ring',     r:27, glass:'#b9e17c', liq:'#2f7a1c', sprite:'assets/images/pizza/pepper-ring.png', bodyRatio:0.95 },
+  { name:'onion ring',      r:33, glass:'#ecc9ea', liq:'#8e3a86', sprite:'assets/images/pizza/onion-ring.png',  bodyRatio:0.97 },
+  { name:'pepperoni',       r:40, glass:'#f5ae7c', liq:'#b8400f', sprite:'assets/images/pizza/pepperoni.png',   bodyRatio:0.94 },
+  { name:'pizza bianca',    r:48, glass:'#fffaf0', liq:'#dcbe86', sprite:'assets/images/pizza/bianca.png',      bodyRatio:0.90 },
+  { name:'pan pepperoni',   r:58, glass:'#f2b566', liq:'#a3301a', sprite:'assets/images/pizza/pan-pizza.png',   bodyRatio:0.87 },
+  { name:'the works',       r:71, glass:'#b9b2a8', liq:'#3d3a37', sprite:'assets/images/pizza/the-works.png',   bodyRatio:0.89 },
+];
+
 // Happy Hour mode: the receipt merge chain, shared by every map. Serving a
 // customer's order spawns tier 0 (crumpled ball) where the served drink stood;
 // receipts merge among themselves in parallel with the drink chain. The FINAL
@@ -207,7 +267,7 @@ const CUSTOMER_SPRITES = [
 // pick (~1MB). The sprite fetch now happens in loadItemSprites() below, called
 // per map by startGame(). The geometry below stays global — it costs nothing,
 // and every map's physR/cap must exist for the menu and the tools.
-[...HAWAII_ITEMS, ...SAIGON_ITEMS, ...KYOTO_ITEMS, ...MAGE_ITEMS, ...TEDDY_ITEMS, ...MELODY_ITEMS, ...PARIS_ITEMS, ...FARM_ITEMS, ...CANTHO_ITEMS, ...RECEIPT_ITEMS].forEach(item => {
+[...HAWAII_ITEMS, ...SAIGON_ITEMS, ...KYOTO_ITEMS, ...MAGE_ITEMS, ...TEDDY_ITEMS, ...MELODY_ITEMS, ...PARIS_ITEMS, ...FARM_ITEMS, ...CANTHO_ITEMS, ...PIZZA_ITEMS, ...RECEIPT_ITEMS].forEach(item => {
   const hb = (typeof ITEM_HITBOXES !== 'undefined') && ITEM_HITBOXES[item.sprite];
   if (hb && hb.bodyRatio) item.bodyRatio = hb.bodyRatio;
   // Collision-circle offset relative to the sprite anchor, in units of r

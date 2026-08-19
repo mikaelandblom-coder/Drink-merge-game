@@ -70,7 +70,7 @@ const MAPS = [
     label:    'Melody Lane',
     sublabel: 'Music Shop',
     bg:       'assets/images/melody/bg.webp',
-    bgm:      'assets/audio/Melody Lane.mp3',   // TODO: add track (or reuse another map's bgm)
+    bgm:      'assets/audio/Melody Lane.mp3',
     bgmVol:   0.35,
     itemsData: null,
     combos:   true,   // combos default on — a cascade rings out as a rising arpeggio
@@ -103,8 +103,7 @@ const MAPS = [
     label:    'Farm',
     sublabel: 'Sprout Valley',   // working name, not locked (see memory/design-farm-map)
     bg:       'assets/images/farm/bg_large.webp',
-    bgm:      'assets/audio/Sprout Valley.mp3',  // TODO: add Suno track (Stardew-vibe
-                                                 // folk loop). Missing file just 404s — no crash.
+    bgm:      'assets/audio/Sprout Valley.mp3',
     bgmVol:   0.35,
     itemsData: null,
     // Sounds (sprout-bloop merge + dirt-thud collision + wooden coin tick) are
@@ -124,8 +123,7 @@ const MAPS = [
     label:    'Cần Thơ',
     sublabel: 'Floating Market',
     bg:       'assets/images/cantho/bg_small.webp',
-    bgm:      'assets/audio/Can Tho.mp3',   // TODO: add Suno track (Mekong-morning
-                                            // dan tranh loop). Missing file just 404s — no crash.
+    bgm:      'assets/audio/Can Tho.mp3',
     bgmVol:   0.35,
     itemsData: null,
     // The play surface is the BOAT'S PROW DECK: a long deck tapering to a
@@ -146,6 +144,61 @@ const MAPS = [
                    small: 'assets/images/cantho/bg_small.webp' },
     defaultSize: 'small',
   },
+  {
+    id:       'pizza',
+    label:    'Napoli',
+    sublabel: 'Pizzeria',
+    bg:       'assets/images/pizza/bg_small.webp',
+    bgm:      'assets/audio/Napoli.mp3',
+    bgmVol:   0.35,
+    itemsData: null,
+    // THE ROTATION MAP. `spin` was built (2026-08-16) with this map in mind and
+    // no map has used it until now: items draw at their real physics angle
+    // instead of the idle wobble. It is purely cosmetic — the bodies always
+    // rotated, this only decides whether drawDrink reads body.angle — so it
+    // cannot change physics, scores or seeded runs. It works HERE and not
+    // elsewhere because every subject in PIZZA_ITEMS is radially symmetric; see
+    // "Rotating items" in CLAUDE.md before adding an item that isn't.
+    // No `combos:` — DELIBERATE, decided 2026-08-19 after playtesting, not an
+    // omission. The flag only sets the checkbox's default state, so the option
+    // is still offered; this map just doesn't open with it on.
+    spin:     true,
+    // Sprites are anchored by their CENTRE here, not by their base. Every other
+    // map draws objects STANDING on a table, so the art hangs below the body and
+    // the shadow peeks out at its foot. This map's food LIES on the oven floor:
+    // the disc is dead centre in each sprite, and base-anchoring drew it 0.45r
+    // above its own collision circle (measured on all nine), so items levitated
+    // and touching ones looked interpenetrated. See drawDrink in render.js.
+    // `?flat=1` / `?flat=0` force it either way for comparison, like `?spin`.
+    flat:     true,
+    // Two framings of the same marble prep counter, and unusually they differ in
+    // what is TRACEABLE rather than only in dressing. In `large` the counter runs
+    // off both sides of the frame (it touches the left edge on 84% of its height
+    // and the right on 79%, measured), so its side walls have to be invented at
+    // the stage edge. In `small` the whole counter is in frame, so the boundary
+    // is the painted lip all the way round.
+    // `small` is therefore the DEFAULT: it is the one whose walls are real. That
+    // also gives it the plain `pizza` score/hitbox key — a free choice only
+    // because the map has never shipped, so there are no scores to re-point.
+    // Both taper hard: far edge ~50% of the near width, against the engine's
+    // FAR_W of 74%. Cần Thơ's small framing already showed a hard taper makes the
+    // endgame cramped (which is why a wider one was added), and Napoli's finale
+    // has physR 67 — so watch the top tiers here before calling the trace done.
+    sizes:       { large: 'assets/images/pizza/bg_large.webp',
+                   small: 'assets/images/pizza/bg_small.webp' },
+    defaultSize: 'small',
+    // The play surface is the FLOOR OF A WOOD-FIRED OVEN: a wide firebrick
+    // hearth whose far edge curves up into the dome, i.e. a broad arch/"D" —
+    // no other map has that boundary (Saigon is a round tray, Can Tho a
+    // tapering boat deck, the rest are tables). Trace it in
+    // tools/hitbox-editor.html; the brick-to-dome seam is the wall.
+    // Sounds inherit the `default` SOUND_MAP row until the map plays well;
+    // theme them in tools/sound-lab.html then, not here.
+    // NOT locked: the art does not exist yet, so this card plays into a missing
+    // background on purpose while the map is being built on its branch. Set
+    // `locked: true` if it ever has to reach main before the art does — that
+    // renders a "Coming soon" card instead (welcome.js).
+  },
 ];
 
 // Wire item sets after items.js has defined them.
@@ -158,6 +211,7 @@ MAPS[5].itemsData = MELODY_ITEMS;
 MAPS[6].itemsData = PARIS_ITEMS;
 MAPS[7].itemsData = FARM_ITEMS;
 MAPS[8].itemsData = CANTHO_ITEMS;
+MAPS[9].itemsData = PIZZA_ITEMS;
 
 // Storage key for a map's boundary in MAP_HITBOXES. Size-variant maps trace a
 // separate boundary per table framing (the tray/heart sits differently in each

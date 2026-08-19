@@ -472,10 +472,15 @@ function drawItems() {
   ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
   for (const g of itemLayout) {
     const it = g.it, active = it === activeItem;
-    // sprite exactly as the game draws it (incl. per-item vis scale), anchored at (ax, ay)
+    // sprite exactly as the game draws it (incl. per-item vis scale), anchored at (ax, ay).
+    // The anchor MUST match drawDrink in render.js: base at r*0.75 normally, but
+    // CENTRE on a `flat: true` map (Napoli). Getting this wrong is not cosmetic
+    // here — the whole point of this view is judging the collision circle against
+    // the art, so a sprite drawn 0.45r off its body would be tuned against a lie.
     if (it.img && it.img.complete && it.img.naturalWidth) {
       const dispH = it.r * 2.4 * (it.vis || 1) * g.k, dispW = dispH * (it.img.naturalWidth / it.img.naturalHeight);
-      ctx.drawImage(it.img, g.ax - dispW/2, g.ay + it.r*0.75*g.k - dispH, dispW, dispH);
+      const top = (curMap && curMap.flat) ? g.ay - dispH/2 : g.ay + it.r*0.75*g.k - dispH;
+      ctx.drawImage(it.img, g.ax - dispW/2, top, dispW, dispH);
     }
     // collision shape + move/resize handles (active item highlighted pink)
     const col = active ? '#ff7ab8' : '#50dcff';

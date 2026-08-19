@@ -224,14 +224,17 @@ function toggleMusic(btn) {
   // through setSoundEnabled so the zero-volume restore applies here too: the
   // branch used to force the icon on while leaving musicOn false and the
   // slider at 0, i.e. an "on" button playing nothing.
-  setSoundEnabled('music', musicStarted ? !musicOn : true);
+  // Read through isSoundEnabled, not the raw flag: at a zero volume the button
+  // shows OFF, so one press must make it audible rather than toggling an
+  // invisible "on" to "off" and needing a second press.
+  setSoundEnabled('music', musicStarted ? !isSoundEnabled('music') : true);
   startMusic();   // no-op once started
-  setToggleBtn(btn, musicOn);
+  setToggleBtn(btn, isSoundEnabled('music'));
 }
 
 function toggleMute(btn) {
-  setSoundEnabled('sfx', muted);
-  setToggleBtn(btn, !muted);
+  setSoundEnabled('sfx', !isSoundEnabled('sfx'));
+  setToggleBtn(btn, isSoundEnabled('sfx'));
 }
 
 // ---------- volume ----------
@@ -271,7 +274,24 @@ function applySfxVol()   { if (sfxBus) sfxBus.gain.value = sfxVol; }
 // The single door for "is this channel on", used by BOTH the toggle buttons and
 // the sliders — a slider dragged to zero is off, and the icon must say so, or it
 // claims sound is on while nothing can be heard.
-function isSoundEnabled(kind) { return kind === 'music' ? musicOn : !muted; }
+//
+// A ZERO VOLUME COUNTS AS OFF HERE, not just at the moment the slider is
+// dragged. The two facts have different lifetimes: musicOn/muted are per-page
+// (they reset to on every load), while the volumes are persisted forever. So a
+// slider left at 0 used to come back as a button claiming "on" over silence, and
+// the only code that knew better ran on drag. Deriving it here means every
+// caller — icons, toggles, the startup sync — agrees automatically.
+function isSoundEnabled(kind) {
+  return getVolume(kind) > 0 && (kind === 'music' ? musicOn : !muted);
+}
+
+// Paint both HUD buttons from the live state. Called once at startup (ui.js),
+// because the markup hardcodes the "on" icon and nothing else would correct it.
+function syncSoundBtns() {
+  const m = document.getElementById('mute'), b = document.getElementById('musicBtn');
+  if (m) setToggleBtn(m, isSoundEnabled('sfx'));
+  if (b) setToggleBtn(b, isSoundEnabled('music'));
+}
 
 function setSoundEnabled(kind, on) {
   // Coming back on at zero would be a silent "on" — restore something audible.

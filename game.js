@@ -100,6 +100,10 @@ let SPIN_ENABLED = false;         // draw items at their real body angle (map.sp
 // so a candidate map's art can be judged before committing `spin:` to config.
 const SPIN_PARAM = /[?&]spin=0/.test(location.search) ? false
                  : /[?&]spin/.test(location.search)   ? true : null;
+let FLAT_ENABLED = false;         // anchor sprites by CENTRE, not base (map.flat, set in startGame)
+// Dev preview: ?flat=1 / ?flat=0, same escape hatch as ?spin.
+const FLAT_PARAM = /[?&]flat=0/.test(location.search) ? false
+                 : /[?&]flat/.test(location.search)   ? true : null;
 let ACTIVE_SIZE = null;           // table-size variant of the current run (for score keys)
 let trayWalls = [];               // just the traced boundary bodies
 let trayPoly  = [];               // boundary polygon (physics coords) for the inside test
@@ -553,12 +557,13 @@ function render(dt) {
     // the horizontal sprite can never drift off its stadium hitbox, and their
     // shadow is baked at the authored cap.rot. Spin is a circle-only feature.
     const spin = (SPIN_ENABLED && !d.plugin.item.cap) ? d.angle : undefined;
-    drawDrink(p.x, p.y, d.plugin.item, p.s * growth, wob + d.id, spin);
+    drawDrink(p.x, p.y, d.plugin.item, p.s * growth, wob + d.id, spin, FLAT_ENABLED);
   }
 
   if (!state.gameOver) {
     recoil *= Math.pow(0.82, dt);
-    if (state.canShoot) drawDrink(sl.x, sl.y + recoil, ITEMS[state.nextTier], 1, wob);
+    if (state.canShoot) drawDrink(sl.x, sl.y + recoil, ITEMS[state.nextTier], 1, wob,
+                                  undefined, FLAT_ENABLED);
   }
 
   drawParticles(state.particles, dt);
@@ -809,6 +814,10 @@ function startGame(map, opts = {}) {
   // art (radially symmetric subjects only), not to how a player wants to play.
   // Purely visual: the bodies already rotate, this only draws it.
   SPIN_ENABLED = (SPIN_PARAM !== null) ? SPIN_PARAM : !!map.spin;
+  // Flat-lying art: same shape of decision, also a property of the ART. See the
+  // sprite-anchor comment in drawDrink (render.js) for what it changes and why
+  // top-down food needs it while every standing drink does not.
+  FLAT_ENABLED = (FLAT_PARAM !== null) ? FLAT_PARAM : !!map.flat;
   // Apply the active size variant's traced boundary (each framing has its own).
   // Falls back to the map's base boundary if this size wasn't traced yet.
   if (typeof MAP_HITBOXES !== 'undefined') {
