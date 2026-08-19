@@ -662,6 +662,20 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
 }
 @media (prefers-reduced-motion: reduce) { .xp-medal.pulse { animation: none; } }
 
+/* Source-on-GitHub link. Player-facing, so it keeps the same opaque pill
+   backing as the other welcome-screen controls (a dim border over #welcome-art
+   is unreadable) — just quieter, since it is the last line of the menu. */
+#source-box { width: 100%; display: flex; justify-content: center; margin-top: 2px; }
+#source-link {
+  display: inline-flex; align-items: center; gap: 7px;
+  text-decoration: none; font-size: 12px; letter-spacing: .05em;
+  padding: 7px 16px; border-radius: 999px;
+  background: rgba(10, 6, 3, .82); border: 1px solid #6b512e; color: var(--brass);
+}
+#source-link svg { width: 14px; height: 14px; display: block; }
+#source-link:hover { color: var(--foam); border-color: #8a6a3c; }
+#source-link:focus-visible { outline: 3px solid var(--neon); outline-offset: 2px; }
+
 /* Dev tools row on the welcome screen. Stays hidden until welcome.js unhides
    it (localhost or ?dev=1) — deliberately the quietest thing on the menu, since
    it sits below Backup & transfer and is never for the player. */

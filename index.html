@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Mixology Merge</title>
 <!-- PNG icons: iOS Safari ignores SVG/data-URI favicons, so a real apple-touch-icon is required -->
-<link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png?v=90">
-<link rel="icon" type="image/png" sizes="192x192" href="assets/images/icon-192.png?v=90">
-<link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=90">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png?v=91">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/images/icon-192.png?v=91">
+<link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=91">
 <meta name="apple-mobile-web-app-title" content="Mixology Merge">
-<link rel="stylesheet" href="style.css?v=90">
+<link rel="stylesheet" href="style.css?v=91">
 </head>
 <body>
 
@@ -72,10 +72,19 @@
             <dt>Physics engine</dt><dd>Matter.js</dd>
           </div>
           <div class="credit-row">
-            <dt>Ideas, testing, design, review, etc</dt><dd>Mikael Andblom</dd>
+            <dt>Ideas, testing, design, review, etc</dt><dd>Mai Nguyen &amp; Mikael Andblom</dd>
           </div>
         </dl>
       </div>
+    </div>
+    <!-- Source link. Player-facing (unlike the dev-tools row below, which is
+         hidden unless localhost/?dev=1), so it sits last in the normal menu. -->
+    <div id="source-box">
+      <a id="source-link" href="https://github.com/mikaelandblom-coder/Drink-merge-game"
+         target="_blank" rel="noopener">
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        <span>Source on GitHub</span>
+      </a>
     </div>
     <!-- Dev tools. Rendered ONLY on localhost or with ?dev=1 (see welcome.js) —
          tools/ ships with the repo, so an ungated link would show up on the
@@ -231,29 +240,29 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
-<script src="config/constants.js?v=90"></script>
-<script src="config/hitboxes.js?v=90"></script>
-<script src="config/items.js?v=90"></script>
-<script src="config/maps.js?v=90"></script>
+<script src="config/constants.js?v=91"></script>
+<script src="config/hitboxes.js?v=91"></script>
+<script src="config/items.js?v=91"></script>
+<script src="config/maps.js?v=91"></script>
 <!-- Sound library + the map/event -> sound wiring (both shared with
      tools/sound-lab.html, so auditions there are what the game plays) -->
-<script src="config/sounds.js?v=90"></script>
-<script src="config/soundmap.js?v=90"></script>
-<script src="scores.js?v=90"></script>
-<script src="buglog.js?v=90"></script>
+<script src="config/sounds.js?v=91"></script>
+<script src="config/soundmap.js?v=91"></script>
+<script src="scores.js?v=91"></script>
+<script src="buglog.js?v=91"></script>
 <!-- Suspended runs (menu "Continue"). After buglog.js — it serializes boards
      with BUGLOG.snapDrink so the two can't drift apart. -->
-<script src="suspend.js?v=90"></script>
-<script src="progress.js?v=90"></script>
-<script src="audio.js?v=90"></script>
+<script src="suspend.js?v=91"></script>
+<script src="progress.js?v=91"></script>
+<script src="audio.js?v=91"></script>
 <!-- Ambient background motion. Before render.js (loadMapAssets calls setMapFx)
      and before game.js (fitCanvas calls fxSetScale). -->
-<script src="fx.js?v=90"></script>
-<script src="render.js?v=90"></script>
-<script src="ui.js?v=90"></script>
-<script src="welcome.js?v=90"></script>
-<script src="game.js?v=90"></script>
+<script src="fx.js?v=91"></script>
+<script src="render.js?v=91"></script>
+<script src="ui.js?v=91"></script>
+<script src="welcome.js?v=91"></script>
+<script src="game.js?v=91"></script>
 <!-- Dev-only test harness: inert unless the URL has ?test (see test.js) -->
-<script src="test.js?v=90"></script>
+<script src="test.js?v=91"></script>
 </body>
 </html>
