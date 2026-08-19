@@ -149,9 +149,7 @@ const MAPS = [
     label:    'Napoli',
     sublabel: 'Pizzeria',
     bg:       'assets/images/pizza/bg_small.webp',
-    bgm:      'assets/audio/Napoli.mp3',   // TODO: not generated yet — the Suno prompt
-                                           // is in assets/source/pizza/DESIGN.md.
-                                           // Missing file just 404s — no crash.
+    bgm:      'assets/audio/Napoli.mp3',
     bgmVol:   0.35,
     itemsData: null,
     // THE ROTATION MAP. `spin` was built (2026-08-16) with this map in mind and
@@ -161,6 +159,9 @@ const MAPS = [
     // cannot change physics, scores or seeded runs. It works HERE and not
     // elsewhere because every subject in PIZZA_ITEMS is radially symmetric; see
     // "Rotating items" in CLAUDE.md before adding an item that isn't.
+    // No `combos:` — DELIBERATE, decided 2026-08-19 after playtesting, not an
+    // omission. The flag only sets the checkbox's default state, so the option
+    // is still offered; this map just doesn't open with it on.
     spin:     true,
     // Sprites are anchored by their CENTRE here, not by their base. Every other
     // map draws objects STANDING on a table, so the art hangs below the body and

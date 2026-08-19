@@ -80,8 +80,9 @@ const SHADOW_SPRITE = (() => {
 // Baked once per item, then blitted scaled -- the same perf model as
 // SHADOW_SPRITE and the capsule shadows, and the same bake-time-only use of
 // shadowBlur as spawnTextPop. Never blurs in the frame loop.
-const FLAT_SHADOW_H   = 160;    // baked height, px
-const FLAT_SHADOW_PAD = 0.10;   // blur headroom, as a fraction of that height
+const FLAT_SHADOW_H    = 160;   // baked height, px
+const FLAT_SHADOW_PAD  = 0.10;  // blur headroom, as a fraction of that height
+const FLAT_SHADOW_DROP = 0.13;  // downward nudge, vs SHADOW_DROP's 0.40 — see drawDrink
 
 function makeFlatShadowSprite(img) {
   const asp = img.naturalWidth / img.naturalHeight;
@@ -166,11 +167,21 @@ function drawDrink(sx, sy, item, scale, wobble, spin, flat) {
   // orbiting the table. Hence its own save/restore rather than the shared
   // rotation this function used to open with.
   const pr = item.physR * scale;
+  const flatShadow = flat && item.img.complete && item.img.naturalWidth;
   ctx.save();
   ctx.rotate(idle);
-  ctx.translate(0, pr * SHADOW_DROP);
-  ctx.scale(1, 0.82);
-  if (flat && item.img.complete && item.img.naturalWidth) {
+  // A flat-lying item gets a MUCH smaller drop and NO extra squash, and both
+  // differences are the same point: SHADOW_DROP and the 0.82 squash exist to
+  // slide a STANDING object's shadow out from under its base, which is what
+  // grounds it. A flat item has no base to hide behind — its shadow is the
+  // same shape the camera already sees, sitting directly beneath it.
+  // Keeping the standing values pushed the shadow's top edge ~0.43r BELOW the
+  // top of the art, so a hollow item showed a bare gap above its own shadow and
+  // read as floating (Mikael, on the pepper ring). At 0.13 with no squash the
+  // soft edge closes over the top of the art while still spilling below.
+  ctx.translate(0, pr * (flatShadow ? FLAT_SHADOW_DROP : SHADOW_DROP));
+  if (!flatShadow) ctx.scale(1, 0.82);
+  if (flatShadow) {
     // Silhouette shadow -- see makeFlatShadowSprite. Sized off the ART (the
     // thing casting it), not physR, so it lines up with the sprite exactly.
     const sh   = item.flatShadow || (item.flatShadow = makeFlatShadowSprite(item.img));

@@ -3,8 +3,8 @@
 Structure and house rules for these docs: [assets/MAP-DESIGN.md](../../MAP-DESIGN.md).
 Prompting reasoning that applies to every map: [assets/ART-PROMPTS.md](../../ART-PROMPTS.md).
 
-**Status: in progress.** Item art and both background framings shipped; boundary
-not traced yet, no BGM yet.
+**Status: playable.** Art, both framings, boundaries, sounds and BGM all in.
+Remaining: the deploy checklist (GAME_VERSION + `?v=`).
 
 ---
 
@@ -73,10 +73,11 @@ where `large` needs side walls invented at the stage edge. That also gives it th
 plain `pizza` score/hitbox key — a free choice only because the map has never
 shipped, so there is nothing to re-point.
 
-Nothing is traced yet; the map still runs on default rectangular walls,
-`DEFAULT_HORIZON` and the default danger line.
+**Both are now traced** (2026-08-19), with horizons at 212.7 (`pizza`) and 196.2
+(`pizza__large`) — within a couple of px of the 213/197 measured off the masters
+above, so the painted lip and the perspective row agree.
 
-**Two things to check when tracing**, both measured rather than guessed:
+**Two things that were checked while tracing**, both measured rather than guessed:
 
 - **The taper is hard — ~50% far-to-near, against the engine's `FAR_W` of 74%.**
   Cần Thơ's small framing proved that a hard taper cramps the endgame (a wider
@@ -95,8 +96,8 @@ Nothing is traced yet; the map still runs on default rectangular walls,
 | `spin: true` | The reason the map exists. Items draw at their real body angle; purely cosmetic, since the bodies always rotated. |
 | `flat: true` | **New, added for this map.** Anchors sprites by their CENTRE instead of their base — see §6.2. |
 | Happy Hour | Inherited, as on every map. Constrains the background: the cast is sized off `HORIZON`. |
-| combos | Left at the default (off). Not considered — worth a look once the map is playable. |
-| `SOUND_MAP` | No row yet; inherits `default`. Theme it in the sound lab once the map plays well. |
+| combos | OFF, decided after playtesting (2026-08-19). No `combos:` field, which is what leaves the checkbox unticked; the option is still offered. |
+| `SOUND_MAP` | `pizza` row: merge-bubble + collide-wood-tok, rest inherited from `default`. |
 
 ## 5. Art prompts, as sent
 
@@ -281,10 +282,11 @@ No people.
 Swap the subject freely — the four constraints above are what matter, not the
 marble. A scrubbed-wood trattoria table on a sunny terrace works the same way.
 
-### Music (Suno) — NOT GENERATED YET
+### Music (Suno) — SHIPPED
 
-Save as `assets/audio/Napoli.mp3` (already what `bgm:` points at), then run
-`python compress_audio.py` to bring it to 112 kbps.
+`assets/audio/Napoli.mp3`, 196s, re-encoded to 112 kbps (2.6 MB). It ends on a
+fade rather than looping seamlessly, so the loop point goes briefly quiet —
+Mikael's call to keep it (2026-08-19), a slight pause being fine.
 
 ```
 Warm sunny Neapolitan trattoria instrumental. Mandolin lead with
@@ -428,7 +430,38 @@ hard taper makes the endgame cramped — that is exactly why a wider `large` was
 added to it on 2026-08-02 — and Napoli's finale has `physR` 67. If the top tiers
 jam at the back, that measurement is the reason.
 
-### 6.5 bodyRatio was guessed when it could have been measured
+### 6.5 Hollow items had solid shadows, then floating ones
+
+**Symptom:** the ring tiers — olive slice, pepper ring, onion ring — showed a
+dark blob through their holes.
+
+**Cause:** the shared shadow is a radial gradient that is DARKEST AT ITS CENTRE,
+which is invisible under a solid item and exactly wrong under a hollow one: the
+densest part of an item's own shadow sat in the one place the counter should
+have shown through.
+
+**Fix:** on a `flat` map each item's shadow is baked from its own alpha
+silhouette (`makeFlatShadowSprite`), so a ring casts a ring and a pizza casts a
+disc, with nothing to author per item and nothing to re-sync when art changes.
+Two alternatives were considered and rejected: dropping shadows for the map
+(these items had only just stopped looking like they levitated, §6.2) and a
+crescent shadow visible along the bottom edge (it implies a LOW light, while the
+overhead light is the reason the shadow is centred and squashed at all).
+
+**Then it floated at the top**, which is the part worth remembering. The
+silhouette alone was not enough, because it was still being placed with the
+constants meant for standing objects: `SHADOW_DROP` 0.40 plus the 0.82 ground
+squash pushed the shadow's top edge about **0.43r below the top of the art**.
+Under a solid item nobody sees that; under a ring it is a bare gap. Both
+constants exist to slide a standing object's shadow out from under its BASE —
+and a flat item has no base, so it needs neither. It now uses
+`FLAT_SHADOW_DROP` 0.13 and no extra squash.
+
+The general shape of the lesson: `flat` was introduced as one change to sprite
+ANCHORING (§6.2), but standing-vs-lying assumptions turned out to be baked into
+the shadow geometry too. Expect a third one somewhere.
+
+### 6.6 bodyRatio was guessed when it could have been measured
 
 Minor, but it set the whole chain wrong. The scaffold used a flat
 `bodyRatio: 0.90` across all nine as a "trace it later" placeholder. Once the art
@@ -458,7 +491,7 @@ which would just detach the collision circles from the art again.
   the flat discs on a steep surface? The discs will match the ground plane
   exactly; a sphere is angle-independent and should be fine, but it is an eyeball
   call on the real art and nobody has made it yet.
-- Combos are at the default (off) and have not been considered.
+- ~~Combos~~ — settled 2026-08-19: off.
 
 **Checklist:**
 
