@@ -179,12 +179,20 @@ const CANTHO_ITEMS = [
 // extracted sprites measured aspect 0.88-1.01, i.e. square, so they already draw
 // at parity — items.js warns at load if that ever stops being true.
 //
-// bodyRatio is MEASURED off the shipped PNGs, not guessed: disc diameter over
-// sprite height (2*fx*aspect), which is exactly what the hitbox editor would
-// trace. It runs 0.87-0.97 rather than the 0.85 other maps use because a
-// top-down disc genuinely fills its frame where a bottle or a bowl does not.
-// The usual 0.88 fudge in physR still applies on top, so items overlap in a
-// pile here by the same fraction as everywhere else.
+// The bodyRatio literals below are SUPERSEDED for this map: every one of them is
+// overridden by a traced ITEM_HITBOXES entry in config/hitboxes.js, which is
+// what the game actually uses (see the override loop at the bottom of this
+// file). They were measured off the shipped PNGs -- disc diameter over sprite
+// height, 0.87-0.97 -- and are kept only as the fallback if an override is ever
+// removed.
+//
+// The traced values run HIGHER, around 1.00-1.11, and that is deliberate: it
+// sizes the collision circle to the painted edge of the disc rather than
+// leaving it ~12% inside, which is what the 0.88 fudge in physR does elsewhere.
+// That fudge suits soft, rounded glassware, where a little visual overlap in a
+// pile reads as settling. Rigid flat discs do not squash into each other, so
+// pizzas touching exactly when their art touches looks right. Retune in
+// tools/hitbox-editor.html, never here.
 //
 // KNOWN, AND A PLAY-TEST QUESTION: because those ratios are higher, physR at a
 // given r is ~13% larger than other maps' at the LOW tiers and only ~4% at the

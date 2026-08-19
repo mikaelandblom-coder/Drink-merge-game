@@ -65,6 +65,52 @@ const SHADOW_SPRITE = (() => {
   return cv;
 })();
 
+// Flat-lying maps (map.flat -- Napoli) bake each item's shadow from its OWN
+// ALPHA SILHOUETTE instead of blitting the radial blob. The blob is a filled
+// disc that is darkest at its centre, so a HOLLOW item -- an olive slice, a
+// pepper or onion ring -- showed you the densest part of its own shadow through
+// its hole, which is the one place the counter should have been visible.
+//
+// Deriving it from the sprite fixes every shape at once and needs no per-item
+// authoring: a ring casts a ring, a pizza casts a disc. It is only safe because
+// this shadow does NOT rotate with the item (see drawDrink) while a `flat` map's
+// art is radially symmetric by rule -- a silhouette that held still under a
+// turning asymmetric sprite would read as the lamp swinging.
+//
+// Baked once per item, then blitted scaled -- the same perf model as
+// SHADOW_SPRITE and the capsule shadows, and the same bake-time-only use of
+// shadowBlur as spawnTextPop. Never blurs in the frame loop.
+const FLAT_SHADOW_H   = 160;    // baked height, px
+const FLAT_SHADOW_PAD = 0.10;   // blur headroom, as a fraction of that height
+
+function makeFlatShadowSprite(img) {
+  const asp = img.naturalWidth / img.naturalHeight;
+  const h = FLAT_SHADOW_H, w = Math.max(1, Math.round(h * asp));
+  const pad = Math.round(h * FLAT_SHADOW_PAD);
+  // 1. the item's alpha, flattened to one solid dark shape
+  const sil = document.createElement('canvas');
+  sil.width = w + pad * 2; sil.height = h + pad * 2;
+  const sc = sil.getContext('2d');
+  sc.drawImage(img, pad, pad, w, h);
+  sc.globalCompositeOperation = 'source-in';
+  sc.fillStyle = 'rgb(28,15,4)';
+  sc.fillRect(0, 0, sil.width, sil.height);
+  // 2. soften it. Draw that shape far off-canvas with an equal-and-opposite
+  //    shadow offset, so ONLY the blurred copy lands in frame.
+  const out = document.createElement('canvas');
+  out.width = sil.width; out.height = sil.height;
+  const oc = out.getContext('2d');
+  oc.shadowColor   = 'rgba(28,15,4,.40)';
+  oc.shadowBlur    = h * 0.075;
+  oc.shadowOffsetX = sil.width * 2;
+  oc.drawImage(sil, -sil.width * 2, 0);
+  // The pad is equal on every side in PIXELS, so the two axes grow by different
+  // fractions whenever the sprite is not square -- keep both.
+  out.padW = sil.width / w;
+  out.padH = sil.height / h;
+  return out;
+}
+
 // Capsule items get the SAME shadow profile as circles (0→.36, .72→.20, 1→0),
 // extruded along the stadium's long axis instead of a hard-edged flat fill —
 // so shadows read identically across maps. Baked once per item on first draw
@@ -124,7 +170,15 @@ function drawDrink(sx, sy, item, scale, wobble, spin, flat) {
   ctx.rotate(idle);
   ctx.translate(0, pr * SHADOW_DROP);
   ctx.scale(1, 0.82);
-  if (item.cap) {
+  if (flat && item.img.complete && item.img.naturalWidth) {
+    // Silhouette shadow -- see makeFlatShadowSprite. Sized off the ART (the
+    // thing casting it), not physR, so it lines up with the sprite exactly.
+    const sh   = item.flatShadow || (item.flatShadow = makeFlatShadowSprite(item.img));
+    const base = r * 2.4 * (item.vis || 1);                 // the sprite's drawn height
+    const sdH  = base * sh.padH;                            // + its blur headroom
+    const sdW  = base * (item.img.naturalWidth / item.img.naturalHeight) * sh.padW;
+    ctx.drawImage(sh, -sdW / 2, -sdH / 2, sdW, sdH);
+  } else if (item.cap) {
     // Stadium shadow matching the elongated (capsule) hitbox, orientation-aware
     // and rotated to the capsule's fixed authored angle. Soft sprite baked on
     // first use — same falloff as SHADOW_SPRITE so all maps' shadows match.
