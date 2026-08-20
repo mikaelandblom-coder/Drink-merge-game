@@ -325,6 +325,50 @@ and collision quality are unchanged. Re-enable by restoring the index.html
 block + welcome.js wiring + the localStorage read in startGame. It remains the
 biggest thermal lever if the DOM-layer background isn't enough.
 
+## The button language (style.css)
+
+Every button in the game is one of **three materials**, and each is declared
+**once** — as a selector group, so adding a control means adding its selector to
+the group, never copying the block:
+
+| role | who wears it | look |
+|------|--------------|------|
+| primary | `.play-btn`, `.over-btns button`, `.confirm-btns button`, `.backup-btns button` | brass gradient, dark rim, lit top edge, 2px ledge |
+| secondary | `.play-btn.ghost`, `#menu`, `#confirm-no`, `#confirm-new-no`, `#backup-import` | dark glass, brass rim, same geometry and press |
+| glass | `.hud-btn`, `#over-close`, `#over-peek`, `#backup-toggle`, `#credits-toggle`, `#source-link`, `.devtools-links a` | warm dark gradient, hairline highlight |
+
+This is why the menu read as bland before 2026-08-20, and the fix is structural
+rather than cosmetic: the flat brass pill was declared **five separate times**,
+so no single edit could make the UI feel like one thing, and the five copies had
+already drifted (three different border colours for what was meant to be the
+same secondary button). The `--brass-hi` / `--brass` / `--brass-lo` / `--ink`
+tokens exist so a retune is one edit rather than five.
+
+- **Light comes from above, everywhere.** Every control is a vertical gradient
+  with an inset highlight on its top edge. That is the whole reason a flat fill
+  looks cheap next to it — and why a new control that skips the gradient will
+  look wrong no matter what colour it is.
+- **The press is a real one**: the button sits on a 2px solid "ledge" of its own
+  edge colour and `:active` moves the face down onto it (`transform` +
+  `box-shadow`, both compositor-friendly). The page sets
+  `-webkit-tap-highlight-color: transparent` globally, so **without an `:active`
+  state a control gives NO touch feedback at all** on Mai's iPad. Any new button
+  needs one.
+  A press on a control that is already transformed must carry that transform —
+  `#over-peek` is centred with `translateX(-50%)`, and a bare `translateY` in
+  `:active` threw it to the left edge for the duration of the tap.
+- **The checkboxes are drawn by hand** (`appearance: none` + a `::after` tick),
+  not `accent-color`. The native box renders as a stark white square on every
+  platform and was the single cheapest-looking element on the menu. They are
+  17px, not the 19 they want to be for touch: **19 cost Kyoto's three toggles
+  their single row**, so the box size and `.map-options`' gaps are one
+  measurement — verified at 480/420/390/360px that wrapping is unchanged from
+  before the restyle.
+- **`.cv-top`** marks the leading score in each variant row (welcome.js), so the
+  number being chased is the bright one and the two behind it recede.
+- Everything transitions `transform`/`box-shadow`/`filter` only, and every
+  transition is off under `prefers-reduced-motion: reduce`.
+
 ## XP & levels (progress.js)
 
 Every shot earns **1 XP** on every map/mode — shots ≈ time played, so no mode

@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Mixology Merge</title>
 <!-- PNG icons: iOS Safari ignores SVG/data-URI favicons, so a real apple-touch-icon is required -->
-<link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png?v=93">
-<link rel="icon" type="image/png" sizes="192x192" href="assets/images/icon-192.png?v=93">
-<link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=93">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png?v=94">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/images/icon-192.png?v=94">
+<link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=94">
 <meta name="apple-mobile-web-app-title" content="Mixology Merge">
-<link rel="stylesheet" href="style.css?v=93">
+<link rel="stylesheet" href="style.css?v=94">
 </head>
 <body>
 
@@ -19,8 +19,13 @@
   <div id="welcome-ui">
     <div id="welcome-title">MIXOLOGY MERGE</div>
     <div id="welcome-sub">a world tour of flavours</div>
-    <div id="welcome-version"></div>
-    <div id="welcome-level"></div>
+    <!-- One row, two chips: they are both "who/where am I" metadata, and as two
+         stacked centred lines they read as unfinished text. welcome.js still
+         fills each by id, so nothing in JS changes. -->
+    <div id="welcome-meta">
+      <span id="welcome-version"></span>
+      <span id="welcome-level"></span>
+    </div>
     <div id="welcome-howto">Shoot drinks onto the table &mdash; two of a kind merge into a
       bigger one. Don't let the pile overflow the line!</div>
     <!-- Cool mode (30fps cap) â€” shelved for now in favour of the DOM-layer
@@ -240,29 +245,29 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
-<script src="config/constants.js?v=93"></script>
-<script src="config/hitboxes.js?v=93"></script>
-<script src="config/items.js?v=93"></script>
-<script src="config/maps.js?v=93"></script>
+<script src="config/constants.js?v=94"></script>
+<script src="config/hitboxes.js?v=94"></script>
+<script src="config/items.js?v=94"></script>
+<script src="config/maps.js?v=94"></script>
 <!-- Sound library + the map/event -> sound wiring (both shared with
      tools/sound-lab.html, so auditions there are what the game plays) -->
-<script src="config/sounds.js?v=93"></script>
-<script src="config/soundmap.js?v=93"></script>
-<script src="scores.js?v=93"></script>
-<script src="buglog.js?v=93"></script>
+<script src="config/sounds.js?v=94"></script>
+<script src="config/soundmap.js?v=94"></script>
+<script src="scores.js?v=94"></script>
+<script src="buglog.js?v=94"></script>
 <!-- Suspended runs (menu "Continue"). After buglog.js — it serializes boards
      with BUGLOG.snapDrink so the two can't drift apart. -->
-<script src="suspend.js?v=93"></script>
-<script src="progress.js?v=93"></script>
-<script src="audio.js?v=93"></script>
+<script src="suspend.js?v=94"></script>
+<script src="progress.js?v=94"></script>
+<script src="audio.js?v=94"></script>
 <!-- Ambient background motion. Before render.js (loadMapAssets calls setMapFx)
      and before game.js (fitCanvas calls fxSetScale). -->
-<script src="fx.js?v=93"></script>
-<script src="render.js?v=93"></script>
-<script src="ui.js?v=93"></script>
-<script src="welcome.js?v=93"></script>
-<script src="game.js?v=93"></script>
+<script src="fx.js?v=94"></script>
+<script src="render.js?v=94"></script>
+<script src="ui.js?v=94"></script>
+<script src="welcome.js?v=94"></script>
+<script src="game.js?v=94"></script>
 <!-- Dev-only test harness: inert unless the URL has ?test (see test.js) -->
-<script src="test.js?v=93"></script>
+<script src="test.js?v=94"></script>
 </body>
 </html>

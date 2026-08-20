@@ -67,8 +67,12 @@ function buildScoreRows(map) {
   const activeKey = scoreKey(map, getMapSize(map), getMapCombos(map), getMapHH(map));
   return mapVariants(map).map(v => {
     const top = getScores(v.key).slice(0, 3);
+    // The row's BEST is marked up separately (.cv-top): it is the number the
+    // player is chasing, and the two behind it are context.
     const vals = top.length
-      ? top.map(e => fmtScore(e.score)).join('<span class="csr-sep">·</span>')
+      ? top.map((e, i) => i === 0
+            ? `<span class="cv-top">${fmtScore(e.score)}</span>`
+            : fmtScore(e.score)).join('<span class="csr-sep">·</span>')
       : '<span class="csr-empty">—</span>';
     return `<div class="csr-variant${v.key === activeKey ? ' active' : ''}">
        <span class="cv-label">${v.label}</span>
