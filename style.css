@@ -89,19 +89,68 @@ html, body {
   text-shadow: 0 1px 6px rgba(0,0,0,.85);
 }
 
+/* A card is an ART STRIP with the map's name and Play button on it, over a
+   body holding the options and score board. `overflow:hidden` is what clips the
+   strip to the rounded corners, so the padding that used to live here moved
+   into .map-art / .map-body. */
 .map-card {
   background: rgba(10, 6, 3, .82);
   border: 1px solid #3d2d1a;
   border-radius: 14px;
-  padding: 18px 22px;
-  display: flex; flex-direction: column; gap: 12px;
+  overflow: hidden;
+  display: flex; flex-direction: column;
   backdrop-filter: blur(6px);
 }
 
 .map-card.locked { opacity: 0.45; }
 
+.map-body { padding: 12px 22px 18px; display: flex; flex-direction: column; gap: 12px; }
+
+/* The strip. Its art is a crop of the map's own backdrop taken from above the
+   map's horizon (config/maps.js `card:`, cut by compress_backgrounds.py), so
+   every card is the place it plays in — no art was generated for the menu.
+   The header is anchored to the BOTTOM of the strip, where the scrim is
+   darkest, and the whole card's colour comes from the map rather than from
+   ten identical brass rectangles. */
+.map-art {
+  position: relative;
+  padding: 14px 20px 12px;
+  display: flex; flex-direction: column; justify-content: flex-end;
+}
+/* 420x120 is the world-space band the crop is taken from (see CARD_BAND in
+   compress_backgrounds.py) — matching it here means a card at its full 420px
+   width shows the art at 1:1 with no cover-crop. `aspect-ratio` sets the
+   height only while the header FITS: .map-art is a flex item in a column flex
+   container, so its automatic minimum size still wins, and a card with the
+   two-button Continue/New run stack on a narrow phone grows instead of
+   clipping. Without art the strip keeps no aspect at all and is just a header. */
+.map-card.has-art .map-art { aspect-ratio: 420 / 120; }
+
+.map-art-img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;              /* a card narrower than 420px crops the sides */
+  /* Nothing here is decoded until the card scrolls into view (loading="lazy"
+     in welcome.js) — the fade is so a late arrival doesn't snap in. */
+  animation: card-art-in .45s ease-out;
+}
+@keyframes card-art-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .map-art-img { animation: none; } }
+
+/* Scrim: the strip has to stay legible under brass text on any of ten very
+   different backdrops (a noon farm, a night market), and has to hand off to
+   the card body without a seam. Hence bottom-heavy, ending at the body's own
+   colour rather than at transparent. */
+.map-card.has-art .map-art::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(to bottom,
+              rgba(10, 6, 3, .15) 0%, rgba(10, 6, 3, .55) 52%, rgba(10, 6, 3, .93) 100%);
+  pointer-events: none;
+}
+
 .map-header {
-  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  position: relative; z-index: 1;   /* over the art and its scrim */
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 12px;
 }
 
 .map-name {
@@ -110,6 +159,19 @@ html, body {
 
 .map-sub {
   font-size: 12px; color: #7a5f3f; letter-spacing: .04em; margin-top: 2px;
+}
+
+/* Over art both lines lift a step: the sublabel's #7a5f3f reads on flat card
+   backing but disappears into a lantern-lit alley. */
+.map-card.has-art .map-name {
+  color: #f0cf94; text-shadow: 0 2px 10px rgba(0, 0, 0, .9), 0 1px 2px rgba(0, 0, 0, .8);
+}
+.map-card.has-art .map-sub {
+  color: #d3ab7b; text-shadow: 0 1px 6px rgba(0, 0, 0, .95);
+}
+.map-card.has-art .play-btn { box-shadow: 0 3px 14px rgba(0, 0, 0, .55); }
+.map-card.has-art .play-btn.ghost {
+  background: rgba(10, 6, 3, .55); border-color: #7a5f3f; color: #f0cf94;
 }
 
 .map-soon {

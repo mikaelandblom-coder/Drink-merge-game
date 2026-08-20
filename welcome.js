@@ -99,10 +99,14 @@ function savedRunLabel(map, s) {
 function buildWelcomeCards() {
   return MAPS.map(map => {
     if (map.locked) {
+      // No art band: a locked map is locked precisely because its art isn't in
+      // yet, so there is nothing to crop a strip from.
       return `<div class="map-card locked">
-        <div class="map-name">${map.label}</div>
-        <div class="map-sub">${map.sublabel || ''}</div>
-        <div class="map-soon">Coming soon</div>
+        <div class="map-body">
+          <div class="map-name">${map.label}</div>
+          <div class="map-sub">${map.sublabel || ''}</div>
+          <div class="map-soon">Coming soon</div>
+        </div>
       </div>`;
     }
     const sizeToggle = map.sizes
@@ -138,22 +142,38 @@ function buildWelcomeCards() {
            <button class="play-btn ghost" data-id="${map.id}">New run</button>
          </div>`
       : `<button class="play-btn" data-id="${map.id}">Play</button>`;
-    return `<div class="map-card" data-map="${map.id}">
-      <div class="map-header">
-        <div>
-          <div class="map-name">${map.label}<span class="map-level">Lv ${Progress.level(map.id)}</span></div>
-          <div class="map-sub">${map.sublabel || ''}</div>
+    // The card wears a strip of the map's own backdrop (config/maps.js `card:`,
+    // cropped by compress_backgrounds.py from the band above its horizon) with
+    // the name and Play button sitting on it. An <img> rather than a CSS
+    // background because only an <img> can be lazy: ten cards is ~300 KB of art
+    // and the menu's whole first load is under 400 KB (CLAUDE.md "Bandwidth"),
+    // so the ones below the fold must not be fetched until they're scrolled to.
+    // `.map-art` keeps its layout box with no image, so a map without `card:`
+    // just gets the plain header this card used to have.
+    const art = map.card
+      ? `<img class="map-art-img" src="${map.card}" alt="" loading="lazy" decoding="async">`
+      : '';
+    return `<div class="map-card${map.card ? ' has-art' : ''}" data-map="${map.id}">
+      <div class="map-art">
+        ${art}
+        <div class="map-header">
+          <div>
+            <div class="map-name">${map.label}<span class="map-level">Lv ${Progress.level(map.id)}</span></div>
+            <div class="map-sub">${map.sublabel || ''}</div>
+          </div>
+          ${playBtns}
         </div>
-        ${playBtns}
       </div>
-      ${savedRow}
-      <div class="map-options">${sizeToggle}${comboToggle}${hhToggle}</div>
-      <div class="card-scores">
-        <div class="card-scores-header">
-          <span class="card-scores-title">Top scores</span>
-        </div>
-        <div class="card-score-list" id="score-list-${map.id}">
-          ${buildScoreRows(map)}
+      <div class="map-body">
+        ${savedRow}
+        <div class="map-options">${sizeToggle}${comboToggle}${hhToggle}</div>
+        <div class="card-scores">
+          <div class="card-scores-header">
+            <span class="card-scores-title">Top scores</span>
+          </div>
+          <div class="card-score-list" id="score-list-${map.id}">
+            ${buildScoreRows(map)}
+          </div>
         </div>
       </div>
     </div>`;

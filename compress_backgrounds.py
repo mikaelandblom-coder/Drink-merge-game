@@ -14,12 +14,17 @@ Sources stay untouched: assets/source/ remains the raw AI art (see CLAUDE.md),
 and the WebP outputs land in assets/images/<map>/ like every other processed
 asset. config/maps.js + style.css point at the .webp files.
 
+It has a SECOND job that shares the same masters: cropping each map's menu
+card strip (assets/images/<map>/card.webp) out of the band above that map's
+horizon. See CARDS below.
+
 Usage:
     python compress_backgrounds.py            # write any missing/stale .webp
     python compress_backgrounds.py --force    # re-encode everything
     python compress_backgrounds.py --check    # report only, write nothing
 """
 import argparse
+import re
 from pathlib import Path
 
 from PIL import Image
@@ -62,6 +67,118 @@ TARGETS = [
     ('assets/source/chrome/xp-bar-frame.png', 'assets/images/xp-bar-frame.webp',  CHROME_Q),
     ('assets/source/chrome/xp-medal.png',     'assets/images/xp-medal.webp',      CHROME_Q),
 ]
+
+# --- menu card art (welcome.js `.map-art`) ---------------------------------
+# Each map card in the main menu wears a strip of its OWN background art. The
+# strip is not new art: it is a crop of the same master the map plays on, taken
+# from the band that ends at the map's HORIZON -- i.e. the painted backdrop
+# (bar, shopfront, alley), never the empty play surface below it.
+#
+# The horizon is read out of config/hitboxes.js rather than written down here,
+# because it is dragged in tools/hitbox-editor.html and would otherwise drift:
+# re-tracing a boundary moves the band the card shows. Re-run this script after
+# moving a horizon.
+#
+# CARD_BAND is in WORLD px against the 620-tall physics stage, which is what the
+# horizon is measured in; `#stage-bg` stretches the master over the stage with
+# `background-size: 100% 100%`, so world y maps linearly onto image height.
+# A map whose horizon is SHALLOWER than the band (Mage, at 67.5) gets the top
+# CARD_BAND px instead, dipping a little below its horizon -- better than
+# cropping a wide vista down to a keyhole to keep the rule pure.
+CARD_BAND = 120        # world px tall, full 420-wide -- a 3.5:1 strip
+CARD_W = 840           # output px: 2x the 420 CSS px a card is at most wide
+CARD_Q = 76            # ~30 KB each; see CLAUDE.md "Bandwidth" for the budget
+
+# (map id, source master, output). The SOURCE picks which framing a size-variant
+# map advertises -- always its `defaultSize`, since that is what Play starts.
+# The map id is also the default hitbox key (hitboxKey() with no size), which is
+# how the horizon below is looked up.
+CARDS = [
+    ('hawaii', 'assets/source/tikibar/tiki_bar_background.png', 'assets/images/hawaii/card.webp'),
+    ('saigon', 'assets/source/saigon/bg-saigon.png',            'assets/images/saigon/card.webp'),
+    ('kyoto',  'assets/source/kyoto/bg_large.png',              'assets/images/kyoto/card.webp'),
+    ('mage',   'assets/source/mage/bg.png',                     'assets/images/mage/card.webp'),
+    ('teddy',  'assets/source/teddy/bg.png',                    'assets/images/teddy/card.webp'),
+    ('melody', 'assets/source/melody/bg.png',                   'assets/images/melody/card.webp'),
+    ('paris',  'assets/source/paris/bg_large.png',              'assets/images/paris/card.webp'),
+    ('farm',   'assets/source/farm/bg_large.png',               'assets/images/farm/card.webp'),
+    ('cantho', 'assets/source/cantho/bg_small.png',             'assets/images/cantho/card.webp'),
+    ('pizza',  'assets/source/pizza/bg_small.png',              'assets/images/pizza/card.webp'),
+]
+
+HITBOXES = Path('config/hitboxes.js')
+STAGE_H = 620          # H in config/constants.js -- the world the horizon is in
+
+
+def read_horizons():
+    """{hitbox key: horizon} straight out of config/hitboxes.js.
+
+    Regex rather than a parser because that file is TOOL-GENERATED (the hitbox
+    editor writes it) and so has a fixed shape: one `key: { ... },` block per
+    boundary at two-space indent. A key with no horizon simply doesn't appear.
+    """
+    out = {}
+    src = HITBOXES.read_text(encoding='utf-8')
+    for m in re.finditer(r"^  ([A-Za-z0-9_]+):\s*\{(.*?)^  \},", src, re.S | re.M):
+        h = re.search(r"horizon:\s*([\d.]+)", m.group(2))
+        if h:
+            out[m.group(1)] = float(h.group(1))
+    return out
+
+
+def make_card(map_id, src: Path, out: Path, horizon: float, check: bool):
+    """Crop one map's backdrop band and write it as a small WebP."""
+    im = Image.open(src).convert('RGB')
+    # Bottom of the band sits ON the horizon; a shallow horizon starts at the
+    # top of the frame instead (see CARD_BAND above).
+    y0 = max(0.0, horizon - CARD_BAND)
+    box = (0, round(y0 / STAGE_H * im.height),
+           im.width, round((y0 + CARD_BAND) / STAGE_H * im.height))
+    if check:
+        return (src.stat().st_size, None)
+    band = im.crop(box).resize((CARD_W, round(CARD_W * CARD_BAND / 420)), Image.LANCZOS)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    band.save(out, 'WEBP', quality=CARD_Q, method=6)
+    return (src.stat().st_size, out.stat().st_size)
+
+
+def build_cards(force: bool, check: bool):
+    horizons = read_horizons()
+    wrote = skipped = missing = 0
+    total = 0
+    print('\nMenu card art (crop above each map\'s horizon):')
+    for map_id, src_s, out_s in CARDS:
+        src, out = Path(src_s), Path(out_s)
+        if not src.exists():
+            print('  missing source (not built yet), skipping: %s' % src_s)
+            missing += 1
+            continue
+        horizon = horizons.get(map_id)
+        if horizon is None:
+            # No traced boundary yet -> no horizon -> no way to know where the
+            # backdrop ends. Say so; don't guess a band.
+            print('  no horizon in %s for "%s", skipping' % (HITBOXES, map_id))
+            missing += 1
+            continue
+        # Stale if the master OR the horizon moved.
+        newest_in = max(src.stat().st_mtime, HITBOXES.stat().st_mtime)
+        if not force and not check and out.exists() and out.stat().st_mtime >= newest_in:
+            total += out.stat().st_size
+            skipped += 1
+            continue
+        _, out_b = make_card(map_id, src, out, horizon, check)
+        if check:
+            print('  would crop y %.0f..%.0f of %s' % (max(0, horizon - CARD_BAND),
+                                                       max(0, horizon - CARD_BAND) + CARD_BAND, src_s))
+            continue
+        total += out_b
+        wrote += 1
+        print('  band y %3.0f..%3.0f -> %5.1f KB  %s'
+              % (max(0, horizon - CARD_BAND), max(0, horizon - CARD_BAND) + CARD_BAND,
+                 out_b / 1024, out_s))
+    if not check:
+        print('  Wrote %d, up-to-date %d, skipped %d — %.0f KB of card art total'
+              % (wrote, skipped, missing, total / 1024))
 
 
 def encode(src: Path, out: Path, quality: int, check: bool):
@@ -138,12 +255,14 @@ def main():
     if args.check:
         print('CHECK: %d encodable, %d missing sources, %.1f MB of PNG input'
               % (len(TARGETS) - missing, missing, total_src / 1024 / 1024))
+        build_cards(args.force, args.check)
         return
     print('Wrote %d, up-to-date %d, missing sources %d' % (wrote, skipped, missing))
     if total_src:
         print('Browser-facing background bytes: %.1f MB PNG -> %.1f MB WebP (-%.0f%%)'
               % (total_src / 1024 / 1024, total_out / 1024 / 1024,
                  100 * (1 - total_out / total_src)))
+    build_cards(args.force, args.check)
 
 
 if __name__ == '__main__':

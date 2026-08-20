@@ -54,7 +54,10 @@ render.js             — All canvas drawing (bg, drinks, coins, bag, particles,
                          (see "X-ray" below), separate from the dev `drawHitboxes`
 ui.js                 — Pointer input, HUD buttons, game-over overlay, LAUNCH pos,
                          the in-game score panel (tap the coin bag)
-welcome.js            — Main menu: map cards, size/combo checkboxes, score lists
+welcome.js            — Main menu: map cards, size/combo checkboxes, score lists.
+                         Each card wears a strip of its map's own backdrop
+                         (`card:` in config/maps.js) — see "Map cards wear the
+                         map's own art".
 game.js               — Physics engine, state object, merge logic, render loop
 style.css             — All CSS
 index.html            — Shell: loads scripts in order (constants → hitboxes →
@@ -64,7 +67,10 @@ index.html            — Shell: loads scripts in order (constants → hitboxes 
 process_assets.py     — Asset pipeline: source images → game-ready PNGs
 compress_backgrounds.py — Background/chrome PNG → WebP (~-91%). Separate from
                          process_assets.py because backgrounds need no keying,
-                         only recompression. See "Bandwidth".
+                         only recompression. See "Bandwidth". ALSO cuts each
+                         map's menu-card strip (`CARDS`) out of the same master,
+                         from the band above that map's horizon — see "Map cards
+                         wear the map's own art".
 compress_audio.py     — BGM mp3 → 112 kbps (ran 2026-07-26: 40.8→24.4 MB).
                          `--check` reports the true AVERAGE bitrate with no
                          ffmpeg (these files are VBR, so the first frame header
@@ -258,6 +264,49 @@ in localStorage and passed into `startGame(map, {size, combos, happyHour})`:
   new faces through the sprite editor's **max height** control (see "Sprite
   editing") so this doesn't recur — it defaults to 256 px, which is exactly
   right for this use.
+
+### Map cards wear the map's own art
+
+Every card in the menu is topped by a strip of the map it plays — the tiki bar's
+sunset, Kyoto's lantern alley, Napoli's oven — with the name, level badge and
+Play button sitting on it. **No art was generated for the menu.** The strip is a
+crop of the same background master the map plays on, taken from the 120 world-px
+band that ENDS at that map's horizon: the painted backdrop, never the empty play
+surface below it. `compress_backgrounds.py` cuts it (`CARDS`, `CARD_BAND`,
+`CARD_W`, `CARD_Q`) into `assets/images/<map>/card.webp`, and `card:` in
+config/maps.js points at it. A map with no `card:` falls back to the plain
+header the cards used to have, so this can never block a map from shipping.
+
+- **The horizon is READ OUT of config/hitboxes.js, not written down again.** It
+  is dragged in the hitbox editor, so a copy here would silently drift and the
+  strip would start including table. That also fixes the ORDER for a new map:
+  trace its boundary first, then run `compress_backgrounds.py`. The script
+  treats a moved `config/hitboxes.js` as making every card stale, so re-running
+  it after a re-trace is all that's needed; a map with no traced horizon yet is
+  skipped with a note rather than guessed at.
+- **The band dips below the horizon on a shallow-backdrop map.** Mage Tower's
+  horizon is 67.5, so its strip is the top 120px and takes in ~50px of the
+  arcane slab. The alternative — keeping the rule pure by cropping a 6:1 vista
+  down to a keyhole — looked far worse. The rule is about not showing an EMPTY
+  play surface, not about the number.
+- **The strips are `<img loading="lazy">`, not CSS backgrounds, and that is the
+  whole reason they're affordable.** Ten cards is ~300 KB of art against a menu
+  that loads in ~510 KB; only an `<img>` can defer. Measured on the built page:
+  first paint 511 KB → **709 KB** (Chrome's lazy lookahead pulls 7 of the 10 on
+  a phone), a full scroll to the bottom 810 KB. A one-map SESSION barely moves
+  (~5.5 → ~5.8 MB), because the map's own background and BGM dominate — it is
+  only a menu-bouncer who pays. If that ever needs cutting, drop `CARD_W` from
+  840 (2× a 420px card) before touching `CARD_Q`: it is a dark, scrimmed,
+  decorative strip, and area beats quality here.
+- **`.map-art` sizes itself with `aspect-ratio: 420/120`, but the header still
+  wins.** It is a flex item in a column flex container, so its automatic minimum
+  size keeps a card with the two-button Continue/New run stack from clipping on
+  a narrow phone — verified at a 320px viewport, where the strip grows to fit
+  instead. Don't replace this with a fixed height.
+- The scrim (`.map-art::after`) is bottom-heavy and ends at the card body's own
+  colour rather than at transparent, so ten very different backdrops (a noon
+  farm, a night market) all stay legible under brass text and the strip hands
+  off to the body with no seam.
 
 **Cool mode (30 fps cap) — built but SHELVED.** The welcome-screen checkbox is
 commented out in index.html (with its wiring in welcome.js), and startGame pins
@@ -888,6 +937,12 @@ aren't owed one retroactively.
 5. Add new drink tiers in `config/items.js` (sprite path, r, colors, bodyRatio)
 6. Run `python process_assets.py --map <mapname>`
 7. Set `ACTIVE_MAP = MAPS[n]` in `config/maps.js`
+8. Trace the boundary in tools/hitbox-editor.html, THEN add the map to `CARDS`
+   in `compress_backgrounds.py` and re-run it — the menu-card strip is cut from
+   the band above the horizon you just dragged, so it can't be cut before that
+   exists. Point the map's `card:` at the `assets/images/<map>/card.webp` it
+   writes. (Skipping this is not fatal: a map with no `card:` gets the plain
+   card. See "Map cards wear the map's own art".)
 
 Optional per-map fields (see "Menu options"): `combos: true` to default the combo
 checkbox on; `sizes: {large, small}` + `defaultSize` to offer a Large-table
@@ -991,6 +1046,12 @@ future map needs trimming, shorten the loop rather than dropping the bitrate aga
   `xp-bar-frame` is sliced by `border-image` at fixed pixel offsets). New map or
   framing = drop the PNG master in `assets/source/<map>/`, run the script, point
   `bg:`/`sizes:` at the `.webp`.
+- **Menu card strips are the one piece of map art the menu fetches**, and they
+  are sized to be affordable: ~30 KB each, `loading="lazy"` so the cards below
+  the fold wait, and cropped rather than generated. See "Map cards wear the
+  map's own art" for the measured before/after. Never point a card at a map's
+  full `bg:` — ten full backdrops would be ~2.1 MB and would undo the single
+  biggest saving in this table.
 - **Item sprites are deliberately still PNG.** Lazy loading already cuts them to
   ~1 MB per map, and lossy WebP with alpha risks haloing the carefully feathered
   edges the pipeline produces. Revisit only with a visual A/B.

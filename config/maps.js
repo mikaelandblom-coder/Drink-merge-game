@@ -1,9 +1,16 @@
+// A map entry's `card:` is the strip of art its menu card wears (welcome.js).
+// It is NOT new art: compress_backgrounds.py crops it out of the same master
+// `bg:` points at, from the 120 world-px band that ENDS at the map's horizon —
+// the painted backdrop, never the empty play surface. Re-run that script after
+// dragging a horizon in the hitbox editor, or the strip stops matching the map.
+// A map with no `card:` simply gets a plain card, as they all used to be.
 const MAPS = [
   {
     id:        'hawaii',
     label:     'Hawaii',
     sublabel:  'Tiki Bar',
     bg:        'assets/images/hawaii/bg.webp',
+    card:      'assets/images/hawaii/card.webp',
     bgm:       'assets/audio/bgm.mp3',
     bgmVol:    0.35,
     itemsData: null, // filled after items.js loads (see bottom of this file)
@@ -13,6 +20,7 @@ const MAPS = [
     label:     'Saigon',
     sublabel:  'Pho House',
     bg:        'assets/images/saigon/bg.webp',
+    card:      'assets/images/saigon/card.webp',
     bgm:       'assets/audio/bgm-saigon.mp3',
     bgmVol:    0.30,
     itemsData: null, // filled below
@@ -24,6 +32,7 @@ const MAPS = [
     label:    'Kyoto',
     sublabel: 'Night Market',
     bg:       'assets/images/kyoto/bg_large.webp',
+    card:     'assets/images/kyoto/card.webp',
     bgm:      'assets/audio/Lantern Alley.mp3',
     bgmVol:   0.35,
     itemsData: null,
@@ -47,6 +56,7 @@ const MAPS = [
     label:    'Mage Tower',
     sublabel: 'Arcane Sanctum',
     bg:       'assets/images/mage/bg.webp',
+    card:     'assets/images/mage/card.webp',
     bgm:      'assets/audio/Arcane Sanctum.mp3',
     bgmVol:   0.35,
     itemsData: null,
@@ -57,6 +67,7 @@ const MAPS = [
     label:    'Plushie Factory',
     sublabel: 'Made for Mai',
     bg:       'assets/images/teddy/bg.webp',
+    card:     'assets/images/teddy/card.webp',
     bgm:      'assets/audio/Stuffed with love.mp3',
     bgmVol:   0.35,
     itemsData: null,
@@ -70,6 +81,7 @@ const MAPS = [
     label:    'Melody Lane',
     sublabel: 'Music Shop',
     bg:       'assets/images/melody/bg.webp',
+    card:     'assets/images/melody/card.webp',
     bgm:      'assets/audio/Melody Lane.mp3',
     bgmVol:   0.35,
     itemsData: null,
@@ -91,6 +103,7 @@ const MAPS = [
     label:    'Paris',
     sublabel: 'Le Petit Café',
     bg:       'assets/images/paris/bg_large.webp',
+    card:     'assets/images/paris/card.webp',
     bgm:      'assets/audio/Le Petit Cafe.mp3',
     bgmVol:   0.35,
     itemsData: null,
@@ -103,6 +116,7 @@ const MAPS = [
     label:    'Farm',
     sublabel: 'Sprout Valley',   // working name, not locked (see memory/design-farm-map)
     bg:       'assets/images/farm/bg_large.webp',
+    card:     'assets/images/farm/card.webp',
     bgm:      'assets/audio/Sprout Valley.mp3',
     bgmVol:   0.35,
     itemsData: null,
@@ -123,6 +137,7 @@ const MAPS = [
     label:    'Cần Thơ',
     sublabel: 'Floating Market',
     bg:       'assets/images/cantho/bg_small.webp',
+    card:     'assets/images/cantho/card.webp',
     bgm:      'assets/audio/Can Tho.mp3',
     bgmVol:   0.35,
     itemsData: null,
@@ -149,6 +164,7 @@ const MAPS = [
     label:    'Napoli',
     sublabel: 'Pizzeria',
     bg:       'assets/images/pizza/bg_small.webp',
+    card:     'assets/images/pizza/card.webp',
     bgm:      'assets/audio/Napoli.mp3',
     bgmVol:   0.35,
     itemsData: null,
