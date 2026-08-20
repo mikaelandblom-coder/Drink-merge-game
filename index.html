@@ -246,8 +246,11 @@
 
 <!-- Physics. VENDORED (vendor/README.md): loading this from cdnjs meant any
      outage there left the game a blank stage with "Matter is not defined", and
-     it is the last cross-origin request the game makes. -->
-<script src="vendor/matter-0.19.0.min.js?v=95"></script>
+     it was the last cross-origin request the game made.
+     NO ?v= here, deliberately, and it is the one file that should not have one:
+     the VERSION IS IN THE FILENAME, so an upgrade is already a new URL, while a
+     cache-buster would re-download 79 KB on every deploy that didn't touch it. -->
+<script src="vendor/matter-0.19.0.min.js"></script>
 <script src="config/constants.js?v=95"></script>
 <script src="config/hitboxes.js?v=95"></script>
 <script src="config/items.js?v=95"></script>

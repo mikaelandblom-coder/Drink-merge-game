@@ -144,11 +144,16 @@ html, body {
               0 8px 22px rgba(0, 0, 0, .5);
   transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
 }
-.map-card:hover {
-  transform: translateY(-2px);
-  border-color: #5c452a;
-  box-shadow: inset 0 1px 0 rgba(255, 226, 170, .18),
-              0 14px 30px rgba(0, 0, 0, .55);
+/* `hover: hover` is REQUIRED, not tidiness: iOS applies :hover on tap and keeps
+   it until you tap elsewhere, so on Mai's iPad a card stayed lifted after being
+   touched. The press states below are :active and are unaffected. */
+@media (hover: hover) {
+  .map-card:hover {
+    transform: translateY(-2px);
+    border-color: #5c452a;
+    box-shadow: inset 0 1px 0 rgba(255, 226, 170, .18),
+                0 14px 30px rgba(0, 0, 0, .55);
+  }
 }
 @media (prefers-reduced-motion: reduce) { .map-card { transition: none; } }
 
@@ -256,10 +261,12 @@ html, body {
               0 5px 14px rgba(0, 0, 0, .45);
   transition: transform .09s ease, box-shadow .12s ease, filter .15s ease;
 }
-.play-btn:hover,
-.over-btns button:hover,
-.confirm-btns button:hover,
-.backup-btns button:hover { filter: brightness(1.08); }
+@media (hover: hover) {
+  .play-btn:hover,
+  .over-btns button:hover,
+  .confirm-btns button:hover,
+  .backup-btns button:hover { filter: brightness(1.08); }
+}
 /* The face drops onto its own ledge — see .btn-press. */
 .play-btn:active,
 .over-btns button:active,
@@ -288,7 +295,17 @@ html, body {
 #menu,
 #confirm-no,
 #confirm-new-no,
-#backup-import {
+#backup-import,
+/* The bug panel holds FIVE buttons; with the new brass material all shouting at
+   once it read as a wall of gold. Only "Copy code" is the panel's purpose — the
+   dismiss and the three sound-check diagnostics are secondary, and demoting
+   them is what makes the one that matters findable. (#sp-close stays primary:
+   it is the only button in the score panel, so there is nothing to rank it
+   against.) */
+#bug-close,
+#bug-beep1,
+#bug-beep2,
+#bug-fixsound {
   background: linear-gradient(180deg, rgba(46, 30, 14, .92), rgba(20, 12, 6, .92));
   border: 1px solid var(--line);
   color: var(--brass); font-weight: normal;
@@ -297,12 +314,16 @@ html, body {
               0 2px 0 rgba(0, 0, 0, .5),
               0 4px 10px rgba(0, 0, 0, .4);
 }
-.play-btn.ghost:hover,
-#menu:hover, #confirm-no:hover, #confirm-new-no:hover, #backup-import:hover {
-  filter: none; color: var(--foam); border-color: #8a6a3c;
+@media (hover: hover) {
+  .play-btn.ghost:hover,
+  #menu:hover, #confirm-no:hover, #confirm-new-no:hover, #backup-import:hover,
+  #bug-close:hover, #bug-beep1:hover, #bug-beep2:hover, #bug-fixsound:hover {
+    filter: none; color: var(--foam); border-color: #8a6a3c;
+  }
 }
 .play-btn.ghost:active,
-#menu:active, #confirm-no:active, #confirm-new-no:active, #backup-import:active {
+#menu:active, #confirm-no:active, #confirm-new-no:active, #backup-import:active,
+#bug-close:active, #bug-beep1:active, #bug-beep2:active, #bug-fixsound:active {
   transform: translateY(2px);
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, .6), 0 1px 4px rgba(0, 0, 0, .35);
 }
@@ -754,6 +775,7 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
   transition: transform .09s ease, color .15s ease;
 }
 #over-close:active { transform: scale(.92); }
+@media (prefers-reduced-motion: reduce) { #over-close { transition: none; } }
 #over-close svg { width: 15px; height: 15px; display: block; }
 #over-close:focus-visible { outline: 3px solid var(--neon); outline-offset: 2px; }
 
@@ -771,6 +793,7 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
 /* The press has to CARRY the centering transform, or the button would jump to
    the left edge for the duration of the tap. */
 #over-peek:active { transform: translateX(-50%) translateY(1px); }
+@media (prefers-reduced-motion: reduce) { #over-peek { transition: none; } }
 #over-peek:focus-visible { outline: 3px solid var(--neon); outline-offset: 2px; }
 
 /* ── XP / levels (progress.js) ──────────────────────────────── */
