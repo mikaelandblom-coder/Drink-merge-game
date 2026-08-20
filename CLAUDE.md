@@ -75,10 +75,22 @@ compress_audio.py     — BGM mp3 → 112 kbps (ran 2026-07-26: 40.8→24.4 MB).
                          `--check` reports the true AVERAGE bitrate with no
                          ffmpeg (these files are VBR, so the first frame header
                          lies); re-encoding needs ffmpeg. Idempotent.
+vendor/             — Third-party code, committed rather than fetched:
+                         matter-0.19.0.min.js (the physics engine). See
+                         vendor/README.md for why it is not on a CDN any more.
+.claude/hooks/
+  session-start.sh    — SessionStart hook: makes a fresh CLOUD container able to
+                         run the asset pipeline, serve the game and render it.
+                         Remote-only; a local checkout is untouched. See
+                         "Working in a cloud session" below.
 tools/
   README.md           — Manuals for the three editors below (hitbox, sprite,
                          sound). READ THE RELEVANT SECTION before editing a tool
                          or hand-touching config/hitboxes.js or config/items.js.
+  shot.js             — Screenshot/measure the real game headlessly (Playwright).
+                         `node tools/shot.js out.png --map=kyoto --bytes`. The
+                         way to verify a UI change, and the way to measure a
+                         page's byte cost.
   hitbox-editor.html  — Visual hitbox editor (manual: tools/README.md)
   sprite-editor.html  — Visual sprite prep: AI sheet -> individual PNGs, then
                          PNGs -> an items.js tier chain (manual: tools/README.md)
@@ -824,6 +836,38 @@ URL carries `?dev=1` (the escape hatch for reaching the tools from a phone or
 iPad pointed at the dev server). It only ever shows links, so `?dev=1` is safe
 to leave in place.
 
+### Working in a cloud session (Claude Code on the web)
+
+A cloud container is NOT Mikael's machine, and three gaps cost real time every
+session until `.claude/hooks/session-start.sh` closed them. The hook installs
+Pillow + NumPy (absent from the base image, so `process_assets.py` and
+`compress_backgrounds.py` both die on import), installs the Playwright driver
+for `tools/shot.js`, and starts `serve.py` on 5500. It is **remote-only**
+(`$CLAUDE_CODE_REMOTE`) and idempotent, so it is silent on a local checkout.
+
+Node packages install to `~/.cache/mm-dev`, deliberately OUTSIDE the repo: "no
+build step, no framework" is this project's ethos and a root `package.json` or
+`node_modules/` would be the first crack in it. `NODE_PATH` (set via
+`$CLAUDE_ENV_FILE`) is how `tools/shot.js` finds them.
+
+What still has to be known rather than installed:
+
+- **Outbound HTTPS goes through a filtering proxy, and cdnjs is blocked.** This
+  is what made vendoring Matter.js worth doing on its own merits — before that,
+  no cloud session could start a run at all without intercepting the request.
+  npm and PyPI do work.
+- **The browser is in the image; the npm `playwright` package is not pinned to
+  it.** Its bundled build number won't match, so a launch must pass
+  `executablePath: '/opt/pw-browsers/chromium'` (a symlink straight to the
+  binary). Never run `playwright install` — it re-downloads a browser that is
+  already there.
+- **Background processes need the harness's own backgrounding**, not a
+  `( ... & )` subshell — one launched that way gets reaped when the tool call
+  ends, and the server then vanishes mid-task looking like a flaky sandbox.
+- **The shell's cwd resets to the project root after every command**, so a `cd`
+  followed by `git` in a *later* call runs somewhere else. Use absolute paths or
+  `git -C`.
+
 ### Test mode (?test=1) — USE THIS to verify gameplay changes
 
 **http://localhost:5500/?test=1** loads `test.js`, which installs `window.TT`
@@ -1105,6 +1149,12 @@ future map needs trimming, shorten the loop rather than dropping the bitrate aga
   map's own art" for the measured before/after. Never point a card at a map's
   full `bg:` — ten full backdrops would be ~2.1 MB and would undo the single
   biggest saving in this table.
+- **The physics engine is now our bytes, not cdnjs'** (vendored 2026-08-20):
+  79 KB raw, **~24 KB over the wire** once GitHub Pages compresses it, on every
+  uncached visit. That is ~5% of the menu's first load, and it buys the game not
+  going blank when a third party has an outage. NOTE the dev server does NOT
+  compress, so `tools/shot.js --bytes` reports the full 79 KB locally — don't
+  read that number as production.
 - **Item sprites are deliberately still PNG.** Lazy loading already cuts them to
   ~1 MB per map, and lossy WebP with alpha risks haloing the carefully feathered
   edges the pipeline produces. Revisit only with a visual A/B.
@@ -1387,7 +1437,7 @@ Two traps that script now handles, both of which cost real time:
 
 ## Tech stack
 
-- Matter.js 0.19 (CDN) — physics
+- Matter.js 0.19 (vendored in `vendor/`, not a CDN — see vendor/README.md) — physics
 - Canvas 2D API — rendering
 - Web Audio API — sound effects
 - Python + Pillow + NumPy — asset pipeline
