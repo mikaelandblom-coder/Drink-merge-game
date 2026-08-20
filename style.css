@@ -3,6 +3,26 @@
   --brass:    #c89b5a;
   --neon:     #ff7ab8;
   --foam:     #fff3e0;
+  /* Brass as a MATERIAL rather than one flat colour: a lit top edge, the base
+     tone, and the shaded underside. Every control in the game is built from
+     these three plus --ink, so the whole UI catches light from the same place
+     (above) and a retune is one edit instead of five. */
+  --brass-hi: #f3d79a;
+  --brass-lo: #a97429;
+  --brass-edge: #7a5522;
+  --ink:      #2c1c0a;   /* text on a brass fill */
+  --line:     #6b512e;   /* hairline on dark backings */
+}
+
+/* The press. Every brass and ghost control shares it: the button sits on a 2px
+   solid "ledge" (its own thickness), and pushing it moves the face down onto
+   that ledge instead of animating a shadow. Cheap — transform + box-shadow
+   only — and on a -webkit-tap-highlight-color:transparent page it is the only
+   touch feedback there is. */
+.btn-press { transition: transform .09s ease, box-shadow .12s ease, filter .15s ease; }
+.btn-press:active { transform: translateY(2px); }
+@media (prefers-reduced-motion: reduce) {
+  .btn-press { transition: none; }
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -52,8 +72,14 @@ html, body {
 
 #welcome-title {
   font-size: 28px; font-style: italic; letter-spacing: .1em;
+  /* Brass poured into the letters, lit from above like everything else.
+     drop-shadow rather than text-shadow: with a clipped background the glyph
+     fill is transparent, and a text-shadow would show THROUGH it. */
   color: var(--brass);
-  text-shadow: 0 2px 18px rgba(200, 155, 90, .45);
+  background: linear-gradient(180deg, #ffeec4 0%, var(--brass) 55%, #9a6b28 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 14px rgba(200, 155, 90, .45)) drop-shadow(0 1px 1px rgba(0, 0, 0, .6));
 }
 
 #welcome-sub {
@@ -66,10 +92,21 @@ html, body {
   width: 100%; display: flex; flex-direction: column; gap: 12px;
 }
 
-#welcome-version {
-  margin-top: -2px; margin-bottom: 10px;
-  font-size: 12px; letter-spacing: .14em;
-  color: #b8935f; text-shadow: 0 1px 6px rgba(0,0,0,.85);
+/* Version + player level, side by side as two quiet chips (see index.html).
+   Both are still filled by id from welcome.js. */
+#welcome-meta {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  justify-content: center; margin: -2px 0 8px;
+}
+#welcome-version, #welcome-level {
+  padding: 4px 12px; border-radius: 999px;
+  background: rgba(10, 6, 3, .55); border: 1px solid rgba(200, 155, 90, .28);
+  font-size: 11px; letter-spacing: .12em;
+  color: #d4a870; text-shadow: 0 1px 6px rgba(0, 0, 0, .85);
+}
+#welcome-level {
+  color: var(--brass); border-color: rgba(200, 155, 90, .45);
+  box-shadow: inset 0 1px 0 rgba(255, 226, 170, .14);
 }
 
 /* One-line gameplay hint under the title — deliberately quiet so returning
@@ -89,19 +126,86 @@ html, body {
   text-shadow: 0 1px 6px rgba(0,0,0,.85);
 }
 
+/* A card is an ART STRIP with the map's name and Play button on it, over a
+   body holding the options and score board. `overflow:hidden` is what clips the
+   strip to the rounded corners, so the padding that used to live here moved
+   into .map-art / .map-body. */
 .map-card {
   background: rgba(10, 6, 3, .82);
   border: 1px solid #3d2d1a;
   border-radius: 14px;
-  padding: 18px 22px;
-  display: flex; flex-direction: column; gap: 12px;
+  overflow: hidden;
+  display: flex; flex-direction: column;
   backdrop-filter: blur(6px);
+  /* Lifted off the menu backdrop, with the same hairline of light along the
+     top edge that the buttons have — the cards were flat rectangles sitting
+     directly on the art. */
+  box-shadow: inset 0 1px 0 rgba(255, 226, 170, .12),
+              0 8px 22px rgba(0, 0, 0, .5);
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
 }
+/* `hover: hover` is REQUIRED, not tidiness: iOS applies :hover on tap and keeps
+   it until you tap elsewhere, so on Mai's iPad a card stayed lifted after being
+   touched. The press states below are :active and are unaffected. */
+@media (hover: hover) {
+  .map-card:hover {
+    transform: translateY(-2px);
+    border-color: #5c452a;
+    box-shadow: inset 0 1px 0 rgba(255, 226, 170, .18),
+                0 14px 30px rgba(0, 0, 0, .55);
+  }
+}
+@media (prefers-reduced-motion: reduce) { .map-card { transition: none; } }
 
 .map-card.locked { opacity: 0.45; }
 
+.map-body { padding: 12px 22px 18px; display: flex; flex-direction: column; gap: 12px; }
+
+/* The strip. Its art is a crop of the map's own backdrop taken from above the
+   map's horizon (config/maps.js `card:`, cut by compress_backgrounds.py), so
+   every card is the place it plays in — no art was generated for the menu.
+   The header is anchored to the BOTTOM of the strip, where the scrim is
+   darkest, and the whole card's colour comes from the map rather than from
+   ten identical brass rectangles. */
+.map-art {
+  position: relative;
+  padding: 14px 20px 12px;
+  display: flex; flex-direction: column; justify-content: flex-end;
+}
+/* 420x120 is the world-space band the crop is taken from (see CARD_BAND in
+   compress_backgrounds.py) — matching it here means a card at its full 420px
+   width shows the art at 1:1 with no cover-crop. `aspect-ratio` sets the
+   height only while the header FITS: .map-art is a flex item in a column flex
+   container, so its automatic minimum size still wins, and a card with the
+   two-button Continue/New run stack on a narrow phone grows instead of
+   clipping. Without art the strip keeps no aspect at all and is just a header. */
+.map-card.has-art .map-art { aspect-ratio: 420 / 120; }
+
+.map-art-img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;              /* a card narrower than 420px crops the sides */
+  /* Nothing here is decoded until the card scrolls into view (loading="lazy"
+     in welcome.js) — the fade is so a late arrival doesn't snap in. */
+  animation: card-art-in .45s ease-out;
+}
+@keyframes card-art-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .map-art-img { animation: none; } }
+
+/* Scrim: the strip has to stay legible under brass text on any of ten very
+   different backdrops (a noon farm, a night market), and has to hand off to
+   the card body without a seam. Hence bottom-heavy, ending at the body's own
+   colour rather than at transparent. */
+.map-card.has-art .map-art::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(to bottom,
+              rgba(10, 6, 3, .15) 0%, rgba(10, 6, 3, .55) 52%, rgba(10, 6, 3, .93) 100%);
+  pointer-events: none;
+}
+
 .map-header {
-  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  position: relative; z-index: 1;   /* over the art and its scrim */
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 12px;
 }
 
 .map-name {
@@ -112,31 +216,116 @@ html, body {
   font-size: 12px; color: #7a5f3f; letter-spacing: .04em; margin-top: 2px;
 }
 
+/* Over art both lines lift a step: the sublabel's #7a5f3f reads on flat card
+   backing but disappears into a lantern-lit alley. */
+.map-card.has-art .map-name {
+  color: #f0cf94; text-shadow: 0 2px 10px rgba(0, 0, 0, .9), 0 1px 2px rgba(0, 0, 0, .8);
+}
+.map-card.has-art .map-sub {
+  color: #d3ab7b; text-shadow: 0 1px 6px rgba(0, 0, 0, .95);
+}
+.map-card.has-art .play-btn { box-shadow: 0 3px 14px rgba(0, 0, 0, .55); }
+.map-card.has-art .play-btn.ghost {
+  background: rgba(10, 6, 3, .55); border-color: #7a5f3f; color: #f0cf94;
+}
+
 .map-soon {
   font-size: 12px; color: #5a4630; letter-spacing: .06em;
   font-style: italic; margin-top: 4px;
 }
 
-.play-btn {
+/* ── The button language ─────────────────────────────────────
+   ONE brass material, worn by every primary button in the game: Play, Play
+   again, the confirm dialogs, the backup panel. It used to be declared flat
+   and separately in each of those five places, which is both why they drifted
+   apart and why the UI read as bland — a solid fill has no light in it.
+   Now: a vertical gradient (lit top, shaded underside), a hairline dark edge,
+   an inset highlight along the top, and a 2px solid ledge under it that the
+   press collapses. Add a new button by adding its selector HERE, not by
+   copying the block. */
+.play-btn,
+.over-btns button,
+.confirm-btns button,
+.backup-btns button {
   flex-shrink: 0;
-  background: var(--brass); border: none;
-  color: var(--bar-deep); font-family: inherit;
+  background: linear-gradient(180deg, var(--brass-hi) 0%, var(--brass) 45%, var(--brass-lo) 100%);
+  border: 1px solid var(--brass-edge);
+  color: var(--ink); font-family: inherit;
   font-size: 15px; font-weight: bold;
   padding: 9px 28px; border-radius: 999px; cursor: pointer;
-  letter-spacing: .04em; transition: filter .15s;
+  letter-spacing: .04em;
+  text-shadow: 0 1px 0 rgba(255, 244, 214, .5);
+  box-shadow: inset 0 1px 0 rgba(255, 248, 228, .8),
+              inset 0 -2px 3px rgba(122, 85, 34, .35),
+              0 2px 0 var(--brass-edge),
+              0 5px 14px rgba(0, 0, 0, .45);
+  transition: transform .09s ease, box-shadow .12s ease, filter .15s ease;
 }
-
-.play-btn:hover { filter: brightness(1.12); }
+@media (hover: hover) {
+  .play-btn:hover,
+  .over-btns button:hover,
+  .confirm-btns button:hover,
+  .backup-btns button:hover { filter: brightness(1.08); }
+}
+/* The face drops onto its own ledge — see .btn-press. */
+.play-btn:active,
+.over-btns button:active,
+.confirm-btns button:active,
+.backup-btns button:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 1px 0 rgba(255, 248, 228, .55),
+              inset 0 2px 6px rgba(90, 55, 15, .45),
+              0 0 0 var(--brass-edge),
+              0 2px 6px rgba(0, 0, 0, .4);
+}
 .play-btn:focus-visible { outline: 3px solid var(--neon); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .play-btn, .over-btns button, .confirm-btns button, .backup-btns button { transition: none; }
+}
 
 /* A map with a suspended run (suspend.js) shows Continue + New run in the same
    slot the single Play button occupies, stacked so the card width is unchanged. */
 .play-stack { flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; }
 .play-stack .play-btn { padding: 8px 20px; font-size: 14px; }
-/* New run is the secondary action — it throws the parked board away. */
-.play-btn.ghost {
-  background: transparent; border: 1px solid #5a4630; color: var(--brass);
-  font-weight: normal;
+/* The SECONDARY role, sharing the primary's geometry and press so the two read
+   as one family: New run, Menu, the "no" of every confirm, Import code. Dark
+   glass with a brass rim rather than a flat transparent box — over map art or
+   a photo backdrop a bare 1px border reads as nothing. */
+.play-btn.ghost,
+#menu,
+#confirm-no,
+#confirm-new-no,
+#backup-import,
+/* The bug panel holds FIVE buttons; with the new brass material all shouting at
+   once it read as a wall of gold. Only "Copy code" is the panel's purpose — the
+   dismiss and the three sound-check diagnostics are secondary, and demoting
+   them is what makes the one that matters findable. (#sp-close stays primary:
+   it is the only button in the score panel, so there is nothing to rank it
+   against.) */
+#bug-close,
+#bug-beep1,
+#bug-beep2,
+#bug-fixsound {
+  background: linear-gradient(180deg, rgba(46, 30, 14, .92), rgba(20, 12, 6, .92));
+  border: 1px solid var(--line);
+  color: var(--brass); font-weight: normal;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .8);
+  box-shadow: inset 0 1px 0 rgba(255, 225, 170, .16),
+              0 2px 0 rgba(0, 0, 0, .5),
+              0 4px 10px rgba(0, 0, 0, .4);
+}
+@media (hover: hover) {
+  .play-btn.ghost:hover,
+  #menu:hover, #confirm-no:hover, #confirm-new-no:hover, #backup-import:hover,
+  #bug-close:hover, #bug-beep1:hover, #bug-beep2:hover, #bug-fixsound:hover {
+    filter: none; color: var(--foam); border-color: #8a6a3c;
+  }
+}
+.play-btn.ghost:active,
+#menu:active, #confirm-no:active, #confirm-new-no:active, #backup-import:active,
+#bug-close:active, #bug-beep1:active, #bug-beep2:active, #bug-fixsound:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, .6), 0 1px 4px rgba(0, 0, 0, .35);
 }
 .map-saved {
   font-size: 12px; color: var(--neon); letter-spacing: .04em;
@@ -144,17 +333,53 @@ html, body {
 }
 
 /* Per-map option toggles (table size, combo multipliers) */
-.map-options { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.map-options { display: flex; flex-wrap: wrap; gap: 9px 16px; }
 .map-opt-toggle {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 7px;
   font-size: 12px; color: #9a7a52; letter-spacing: .04em;
   cursor: pointer; user-select: none;
 }
-.map-opt-toggle input { accent-color: var(--brass); width: 15px; height: 15px; cursor: pointer; }
+/* Drawn by hand rather than `accent-color`. The native box is a stark white
+   square on every platform — over dark wood and lamplit art it was the
+   brightest, cheapest-looking element on the whole menu. This is the same
+   material as the buttons: an unchecked well sunk into the card, a checked
+   face lit from above, and a tick that springs in. Sized 17px (up from 15px) —
+   it is a touch target on Mai's iPad, but 19px cost Kyoto's three toggles
+   their single row, so the gaps below are part of the same measurement. */
+.map-opt-toggle input {
+  -webkit-appearance: none; appearance: none;
+  width: 17px; height: 17px; flex-shrink: 0; margin: 0;
+  border-radius: 6px; cursor: pointer;
+  background: linear-gradient(180deg, rgba(0, 0, 0, .55), rgba(0, 0, 0, .28));
+  border: 1px solid var(--line);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .65);
+  display: grid; place-content: center;
+  transition: background .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.map-opt-toggle input::after {
+  content: ''; width: 9px; height: 5px;
+  border-left: 2.5px solid var(--ink); border-bottom: 2.5px solid var(--ink);
+  border-radius: 1px;
+  /* -45deg makes a tick out of two edges; the nudge up is optical, since a
+     rotated L sits low in its own box. */
+  transform: translateY(-1.5px) rotate(-45deg) scale(0);
+  transition: transform .16s cubic-bezier(.2, 1.6, .4, 1);
+}
+.map-opt-toggle input:checked {
+  background: linear-gradient(180deg, var(--brass-hi) 0%, var(--brass) 45%, var(--brass-lo) 100%);
+  border-color: var(--brass-edge);
+  box-shadow: inset 0 1px 0 rgba(255, 248, 228, .85), 0 0 10px rgba(230, 180, 90, .3);
+}
+.map-opt-toggle input:checked::after { transform: translateY(-1.5px) rotate(-45deg) scale(1); }
+.map-opt-toggle input:hover { border-color: #8a6a3c; }
+.map-opt-toggle input:focus-visible { outline: 3px solid var(--neon); outline-offset: 2px; }
 .map-opt-toggle:hover { color: var(--brass); }
 /* Combo toggle greys out while Happy Hour is on (they don't stack) */
 .map-opt-toggle input:disabled,
 .map-opt-toggle input:disabled + span { opacity: .4; cursor: default; }
+@media (prefers-reduced-motion: reduce) {
+  .map-opt-toggle input, .map-opt-toggle input::after { transition: none; }
+}
 
 /* Scores inside map card */
 .card-scores { display: flex; flex-direction: column; gap: 6px; }
@@ -163,8 +388,15 @@ html, body {
   display: flex; align-items: center; justify-content: space-between;
 }
 
+.card-scores-header { gap: 10px; }
+/* The label used to float alone above the rows; the hairline gives the block a
+   top edge and ties it to the card's own border. */
+.card-scores-header::after {
+  content: ''; flex: 1; height: 1px;
+  background: linear-gradient(90deg, rgba(200, 155, 90, .28), rgba(200, 155, 90, 0));
+}
 .card-scores-title {
-  font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--brass); opacity: .6;
+  font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--brass); opacity: .75;
 }
 
 /* One row per variant: label on the left, its top-3 scores on the right.
@@ -174,11 +406,23 @@ html, body {
   padding: 2px 6px; margin: 0 -6px; border-radius: 6px;
   font-size: 13px; color: #c8a870;
 }
-.csr-variant.active { background: rgba(230, 190, 120, .12); }
+/* The row you are about to play gets a brass edge, not just a wash: at a
+   glance the eye finds an EDGE far faster than a 12%-alpha background. */
+.csr-variant.active {
+  background: linear-gradient(90deg, rgba(230, 190, 120, .16), rgba(230, 190, 120, .04));
+  box-shadow: inset 3px 0 0 var(--brass);
+  /* Square left corners: an inset shadow follows the border radius, so on a
+     fully rounded row the "edge" curled into a bracket instead of a bar. */
+  border-radius: 0 6px 6px 0;
+}
 .csr-variant.active .cv-label { color: var(--brass); opacity: 1; }
 
 .cv-label  { font-size: 11px; letter-spacing: .02em; color: #9a7a52; white-space: nowrap; }
 .cv-scores { text-align: right; font-variant-numeric: tabular-nums; }
+/* The best score on a row is the one being chased — the two behind it are
+   context, so they step back rather than the leader shouting. */
+.cv-top    { color: var(--foam); font-weight: bold; }
+.csr-variant.active .cv-top { text-shadow: 0 0 10px rgba(255, 220, 150, .45); }
 .csr-sep   { opacity: .3; margin: 0 5px; }
 .csr-empty { opacity: .4; }
 
@@ -365,12 +609,9 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
 .sr-you  { font-size: 10px; color: var(--neon); letter-spacing: .05em; margin-left: 4px; }
 
 .over-btns { display: flex; gap: 10px; margin-top: 6px; }
-.over-btns button {
-  background: var(--brass); border: none; color: var(--bar-deep);
-  font-family: inherit; font-size: 15px; font-weight: bold;
-  padding: 9px 22px; border-radius: 999px; cursor: pointer;
-}
-#menu { background: transparent; border: 1px solid #5a4630; color: var(--brass); }
+/* Look comes from the shared brass/ghost groups near .play-btn — only the
+   overlay's tighter padding is local. */
+.over-btns button { padding: 9px 22px; }
 .over-btns button:focus-visible { outline: 3px solid var(--neon); outline-offset: 2px; }
 
 #confirm-menu {
@@ -385,13 +626,7 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
 /* wrap: the bug panel's sound row carries three buttons, which overflow a
    narrow stage on one line. */
 .confirm-btns  { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 6px; }
-.confirm-btns button {
-  background: var(--brass); border: none; color: var(--bar-deep);
-  font-family: inherit; font-size: 15px; font-weight: bold;
-  padding: 9px 22px; border-radius: 999px; cursor: pointer;
-}
-#confirm-no,
-#confirm-new-no { background: transparent; border: 1px solid #5a4630; color: var(--brass); }
+.confirm-btns button { padding: 9px 22px; }
 
 /* Discard-confirm for "New run" on the welcome screen. Same look as
    #confirm-menu, but FIXED to the viewport: it sits outside #welcome (which
@@ -407,11 +642,17 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
 .hud-btn {
   width: 36px; height: 36px; border-radius: 50%; padding: 0;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(12, 7, 4, .62);
+  /* Dark glass lit from the same direction as the brass controls, so the HUD
+     belongs to the same set as the menu — it was a flat 62% black disc. */
+  background: linear-gradient(180deg, rgba(58, 38, 18, .82), rgba(12, 7, 4, .82));
   border: 1px solid rgba(200, 155, 90, .65);
   color: var(--brass); cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, .35);
+  box-shadow: inset 0 1px 0 rgba(255, 226, 170, .22),
+              0 2px 8px rgba(0, 0, 0, .45);
+  transition: transform .09s ease, box-shadow .12s ease, color .15s ease;
 }
+.hud-btn:active { transform: scale(.92); box-shadow: inset 0 2px 5px rgba(0, 0, 0, .5); }
+@media (prefers-reduced-motion: reduce) { .hud-btn { transition: none; } }
 .hud-btn svg { width: 18px; height: 18px; display: block; }
 .hud-btn .icon-off { display: none; }
 .hud-btn.off .icon-on { display: none; }
@@ -465,13 +706,15 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
 #vol-range::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none;
   width: 16px; height: 16px; margin-top: -6px; border-radius: 50%;
-  background: var(--brass); border: none;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, .5);
+  background: linear-gradient(180deg, var(--brass-hi), var(--brass) 50%, var(--brass-lo));
+  border: 1px solid var(--brass-edge);
+  box-shadow: inset 0 1px 0 rgba(255, 248, 228, .7), 0 1px 4px rgba(0, 0, 0, .5);
 }
 #vol-range::-moz-range-thumb {
   width: 16px; height: 16px; border-radius: 50%;
-  background: var(--brass); border: none;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, .5);
+  background: linear-gradient(180deg, var(--brass-hi), var(--brass) 50%, var(--brass-lo));
+  border: 1px solid var(--brass-edge);
+  box-shadow: inset 0 1px 0 rgba(255, 248, 228, .7), 0 1px 4px rgba(0, 0, 0, .5);
 }
 #vol-range:focus-visible { outline: 3px solid var(--neon); outline-offset: 2px; }
 
@@ -524,32 +767,40 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
   position: absolute; top: 10px; left: 10px;
   width: 34px; height: 34px; border-radius: 50%; padding: 0;
   display: flex; align-items: center; justify-content: center;
-  background: none; border: 1px solid #5a4630; color: var(--brass);
+  /* Same dark-glass disc as .hud-btn — it sits in the same corner language. */
+  background: linear-gradient(180deg, rgba(58, 38, 18, .8), rgba(12, 7, 4, .8));
+  border: 1px solid var(--line); color: var(--brass);
+  box-shadow: inset 0 1px 0 rgba(255, 226, 170, .18), 0 2px 8px rgba(0, 0, 0, .4);
   cursor: pointer;
+  transition: transform .09s ease, color .15s ease;
 }
+#over-close:active { transform: scale(.92); }
+@media (prefers-reduced-motion: reduce) { #over-close { transition: none; } }
 #over-close svg { width: 15px; height: 15px; display: block; }
 #over-close:focus-visible { outline: 3px solid var(--neon); outline-offset: 2px; }
 
 #over-peek {
   position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
   display: none; z-index: 3;
-  background: rgba(12, 7, 4, .72);
+  background: linear-gradient(180deg, rgba(58, 38, 18, .85), rgba(12, 7, 4, .85));
   border: 1px solid rgba(200, 155, 90, .65);
   color: var(--brass); font-family: inherit; font-size: 13px;
   padding: 8px 18px; border-radius: 999px; cursor: pointer;
   letter-spacing: .04em;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, .35);
+  box-shadow: inset 0 1px 0 rgba(255, 226, 170, .2), 0 2px 8px rgba(0, 0, 0, .45);
+  transition: transform .09s ease;
 }
+/* The press has to CARRY the centering transform, or the button would jump to
+   the left edge for the duration of the tap. */
+#over-peek:active { transform: translateX(-50%) translateY(1px); }
+@media (prefers-reduced-motion: reduce) { #over-peek { transition: none; } }
 #over-peek:focus-visible { outline: 3px solid var(--neon); outline-offset: 2px; }
 
 /* ── XP / levels (progress.js) ──────────────────────────────── */
 
 /* Total player level (sum of map levels) under the version line */
-#welcome-level {
-  margin-top: -8px; margin-bottom: 6px;
-  font-size: 13px; letter-spacing: .12em;
-  color: var(--brass); text-shadow: 0 1px 6px rgba(0,0,0,.85);
-}
+/* (#welcome-level's look lives with #welcome-meta near the top of this file —
+   the two chips are one component.) */
 
 /* Level badge next to each map card's name */
 .map-level {
@@ -670,7 +921,9 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
   display: inline-flex; align-items: center; gap: 7px;
   text-decoration: none; font-size: 12px; letter-spacing: .05em;
   padding: 7px 16px; border-radius: 999px;
-  background: rgba(10, 6, 3, .82); border: 1px solid #6b512e; color: var(--brass);
+  background: linear-gradient(180deg, rgba(38, 25, 12, .86), rgba(10, 6, 3, .86));
+  border: 1px solid var(--line); color: var(--brass);
+  box-shadow: inset 0 1px 0 rgba(255, 226, 170, .13), 0 2px 8px rgba(0, 0, 0, .4);
 }
 #source-link svg { width: 14px; height: 14px; display: block; }
 #source-link:hover { color: var(--foam); border-color: #8a6a3c; }
@@ -693,8 +946,9 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
   text-decoration: none; font-size: 12px; padding: 6px 14px; border-radius: 999px;
   /* Same opaque card backing as .map-card: these sit over #welcome-art, and a
      transparent pill with a dim border was unreadable against the art. */
-  background: rgba(10, 6, 3, .82);
-  border: 1px solid #6b512e; color: var(--brass);
+  background: linear-gradient(180deg, rgba(38, 25, 12, .86), rgba(10, 6, 3, .86));
+  border: 1px solid var(--line); color: var(--brass);
+  box-shadow: inset 0 1px 0 rgba(255, 226, 170, .13), 0 2px 8px rgba(0, 0, 0, .4);
 }
 .devtools-links a:hover { color: var(--foam); border-color: #8a6a3c; }
 
@@ -704,11 +958,16 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
    toggles sit over #welcome-art, where a transparent pill with a dim border and
    dim text was effectively invisible against the busier parts of the art. */
 #backup-toggle, #credits-toggle {
-  background: rgba(10, 6, 3, .82); border: 1px solid #6b512e; color: var(--brass);
+  background: linear-gradient(180deg, rgba(38, 25, 12, .86), rgba(10, 6, 3, .86));
+  border: 1px solid var(--line); color: var(--brass);
   font-family: inherit; font-size: 12px; letter-spacing: .05em;
   padding: 7px 18px; border-radius: 999px; cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 226, 170, .13), 0 2px 8px rgba(0, 0, 0, .4);
+  transition: transform .09s ease, color .15s ease, border-color .15s ease;
 }
 #backup-toggle:hover, #credits-toggle:hover { color: var(--foam); border-color: #8a6a3c; }
+#backup-toggle:active, #credits-toggle:active { transform: translateY(1px); }
+@media (prefers-reduced-motion: reduce) { #backup-toggle, #credits-toggle { transition: none; } }
 #backup-panel {
   width: 100%; display: flex; flex-direction: column; gap: 10px;
   background: rgba(10, 6, 3, .82); border: 1px solid #3d2d1a;
@@ -726,12 +985,7 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
   word-break: break-all;
 }
 .backup-btns { display: flex; gap: 8px; }
-.backup-btns button {
-  flex: 1; background: var(--brass); border: none; color: var(--bar-deep);
-  font-family: inherit; font-size: 13px; font-weight: bold;
-  padding: 8px 0; border-radius: 999px; cursor: pointer;
-}
-#backup-import { background: transparent; border: 1px solid #8a6a3c; color: var(--brass); }
+.backup-btns button { flex: 1; font-size: 13px; padding: 8px 0; }
 #backup-status { font-size: 11px; min-height: 14px; color: var(--brass); }
 #backup-status.err { color: #ff8a8a; }
 

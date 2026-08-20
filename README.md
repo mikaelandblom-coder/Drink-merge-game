@@ -80,7 +80,9 @@ stale `config/*.js`, which looks exactly like an edit that didn't work.)
 
 ## Tech
 
-- [Matter.js](https://brm.io/matter-js/) — 2D physics (top-down, gravity off)
+- [Matter.js](https://brm.io/matter-js/) — 2D physics (top-down, gravity off).
+  Vendored in `vendor/`, so the game makes no cross-origin requests at all —
+  a CDN having a bad day can't take it down.
 - Canvas 2D — perspective-rendered table, drinks, particles
 - Web Audio API — all sound effects are synthesised, zero audio files for SFX
 - Python + Pillow + NumPy — asset pipeline for the AI-generated art

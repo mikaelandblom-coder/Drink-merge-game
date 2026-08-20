@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Mixology Merge</title>
 <!-- PNG icons: iOS Safari ignores SVG/data-URI favicons, so a real apple-touch-icon is required -->
-<link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png?v=92">
-<link rel="icon" type="image/png" sizes="192x192" href="assets/images/icon-192.png?v=92">
-<link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=92">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png?v=95">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/images/icon-192.png?v=95">
+<link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=95">
 <meta name="apple-mobile-web-app-title" content="Mixology Merge">
-<link rel="stylesheet" href="style.css?v=92">
+<link rel="stylesheet" href="style.css?v=95">
 </head>
 <body>
 
@@ -19,8 +19,13 @@
   <div id="welcome-ui">
     <div id="welcome-title">MIXOLOGY MERGE</div>
     <div id="welcome-sub">a world tour of flavours</div>
-    <div id="welcome-version"></div>
-    <div id="welcome-level"></div>
+    <!-- One row, two chips: they are both "who/where am I" metadata, and as two
+         stacked centred lines they read as unfinished text. welcome.js still
+         fills each by id, so nothing in JS changes. -->
+    <div id="welcome-meta">
+      <span id="welcome-version"></span>
+      <span id="welcome-level"></span>
+    </div>
     <div id="welcome-howto">Shoot drinks onto the table &mdash; two of a kind merge into a
       bigger one. Don't let the pile overflow the line!</div>
     <!-- Cool mode (30fps cap) â€” shelved for now in favour of the DOM-layer
@@ -239,30 +244,36 @@
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
-<script src="config/constants.js?v=92"></script>
-<script src="config/hitboxes.js?v=92"></script>
-<script src="config/items.js?v=92"></script>
-<script src="config/maps.js?v=92"></script>
+<!-- Physics. VENDORED (vendor/README.md): loading this from cdnjs meant any
+     outage there left the game a blank stage with "Matter is not defined", and
+     it was the last cross-origin request the game made.
+     NO ?v= here, deliberately, and it is the one file that should not have one:
+     the VERSION IS IN THE FILENAME, so an upgrade is already a new URL, while a
+     cache-buster would re-download 79 KB on every deploy that didn't touch it. -->
+<script src="vendor/matter-0.19.0.min.js"></script>
+<script src="config/constants.js?v=95"></script>
+<script src="config/hitboxes.js?v=95"></script>
+<script src="config/items.js?v=95"></script>
+<script src="config/maps.js?v=95"></script>
 <!-- Sound library + the map/event -> sound wiring (both shared with
      tools/sound-lab.html, so auditions there are what the game plays) -->
-<script src="config/sounds.js?v=92"></script>
-<script src="config/soundmap.js?v=92"></script>
-<script src="scores.js?v=92"></script>
-<script src="buglog.js?v=92"></script>
+<script src="config/sounds.js?v=95"></script>
+<script src="config/soundmap.js?v=95"></script>
+<script src="scores.js?v=95"></script>
+<script src="buglog.js?v=95"></script>
 <!-- Suspended runs (menu "Continue"). After buglog.js — it serializes boards
      with BUGLOG.snapDrink so the two can't drift apart. -->
-<script src="suspend.js?v=92"></script>
-<script src="progress.js?v=92"></script>
-<script src="audio.js?v=92"></script>
+<script src="suspend.js?v=95"></script>
+<script src="progress.js?v=95"></script>
+<script src="audio.js?v=95"></script>
 <!-- Ambient background motion. Before render.js (loadMapAssets calls setMapFx)
      and before game.js (fitCanvas calls fxSetScale). -->
-<script src="fx.js?v=92"></script>
-<script src="render.js?v=92"></script>
-<script src="ui.js?v=92"></script>
-<script src="welcome.js?v=92"></script>
-<script src="game.js?v=92"></script>
+<script src="fx.js?v=95"></script>
+<script src="render.js?v=95"></script>
+<script src="ui.js?v=95"></script>
+<script src="welcome.js?v=95"></script>
+<script src="game.js?v=95"></script>
 <!-- Dev-only test harness: inert unless the URL has ?test (see test.js) -->
-<script src="test.js?v=92"></script>
+<script src="test.js?v=95"></script>
 </body>
 </html>

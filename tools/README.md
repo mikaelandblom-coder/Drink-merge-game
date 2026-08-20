@@ -1,7 +1,8 @@
 # Dev tool manuals
 
 Working notes for the three browser tools in this folder — the hitbox editor,
-the sprite editor and the sound lab. **Read the relevant section before editing
+the sprite editor and the sound lab — plus `shot.js`, which is not a browser
+tool but a command line one (see the last section). **Read the relevant section before editing
 anything in `tools/`**: nearly every paragraph here encodes a trap that already
 cost real time once (the `showSaveFilePicker` truncation that wiped
 `config/items.js`, sprite paths that 404 invisibly, a library that goes blank
@@ -412,3 +413,44 @@ everything from it, never `a.currentTime`), plus `tier`/`tiers` for merges,
 current payout shower; audio.js counts the run, so climbing-run voices like
 `coin-pentatonic-run` stay stateless). Connect to `out`, never
 `a.destination` — that is what keeps iOS SFX on the media volume channel.
+
+---
+
+## Screenshots & byte counts — `tools/shot.js`
+
+Not an editor: a command-line harness that opens the real game in headless
+Chromium, screenshots it, and reports what the page said about itself.
+
+```
+python serve.py 5500                              # it talks to the dev server
+node tools/shot.js menu.png --scores              # welcome screen, with fake boards
+node tools/shot.js game.png --map=kyoto           # a started run
+node tools/shot.js all.png  --height=3400         # the whole card list
+node tools/shot.js x.png --width=390 --dsf=2      # a phone
+node tools/shot.js x.png --bytes                  # + first-paint byte report
+node tools/shot.js x.png --eval="ACTIVE_MAP.id"   # + evaluate in the page
+```
+
+It exists because this game's whole point is how it LOOKS, so verifying a UI
+change means rendering it — and that script was being rewritten from scratch
+every session, each time rediscovering the same things:
+
+- **Every run reports `page errors` and any cross-origin request**, and exits
+  non-zero if the page threw. A silent screenshot of a broken page is the
+  failure this guards against — twice, a "working" capture was of a page whose
+  console was full of errors.
+- **`--eval` combines with `?test=1`**, which is the real test rig: the
+  expression runs after the map has started, so `TT.seed/shoot/settle/state`
+  drive a deterministic run and hand back JSON. That is how to check GAMEPLAY
+  headlessly; the screenshot is for judging the LOOK.
+- **There is deliberately no `fullPage`.** `#welcome` is `position:fixed` with
+  its own `overflow-y`, so the document is always exactly one viewport tall and
+  `fullPage` captures nothing extra. Pass `--height=3400` to see the whole menu.
+- **`--bytes` reads response `content-length`,** not file sizes on disk, so it
+  measures what a visitor actually downloads — including which of the lazy card
+  strips the browser chose to fetch. **The dev server does not compress**, so
+  text assets read heavier here than on GitHub Pages (`vendor/matter…js` is
+  79 KB locally, ~24 KB served). Compare like with like.
+- Chromium comes from `$MM_CHROME` or `/opt/pw-browsers/chromium`; the driver
+  library is installed outside the repo by `.claude/hooks/session-start.sh`.
+  See "Working in a cloud session" in `../CLAUDE.md`.

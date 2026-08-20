@@ -54,7 +54,10 @@ render.js             — All canvas drawing (bg, drinks, coins, bag, particles,
                          (see "X-ray" below), separate from the dev `drawHitboxes`
 ui.js                 — Pointer input, HUD buttons, game-over overlay, LAUNCH pos,
                          the in-game score panel (tap the coin bag)
-welcome.js            — Main menu: map cards, size/combo checkboxes, score lists
+welcome.js            — Main menu: map cards, size/combo checkboxes, score lists.
+                         Each card wears a strip of its map's own backdrop
+                         (`card:` in config/maps.js) — see "Map cards wear the
+                         map's own art".
 game.js               — Physics engine, state object, merge logic, render loop
 style.css             — All CSS
 index.html            — Shell: loads scripts in order (constants → hitboxes →
@@ -64,15 +67,30 @@ index.html            — Shell: loads scripts in order (constants → hitboxes 
 process_assets.py     — Asset pipeline: source images → game-ready PNGs
 compress_backgrounds.py — Background/chrome PNG → WebP (~-91%). Separate from
                          process_assets.py because backgrounds need no keying,
-                         only recompression. See "Bandwidth".
+                         only recompression. See "Bandwidth". ALSO cuts each
+                         map's menu-card strip (`CARDS`) out of the same master,
+                         from the band above that map's horizon — see "Map cards
+                         wear the map's own art".
 compress_audio.py     — BGM mp3 → 112 kbps (ran 2026-07-26: 40.8→24.4 MB).
                          `--check` reports the true AVERAGE bitrate with no
                          ffmpeg (these files are VBR, so the first frame header
                          lies); re-encoding needs ffmpeg. Idempotent.
+vendor/             — Third-party code, committed rather than fetched:
+                         matter-0.19.0.min.js (the physics engine). See
+                         vendor/README.md for why it is not on a CDN any more.
+.claude/hooks/
+  session-start.sh    — SessionStart hook: makes a fresh CLOUD container able to
+                         run the asset pipeline, serve the game and render it.
+                         Remote-only; a local checkout is untouched. See
+                         "Working in a cloud session" below.
 tools/
   README.md           — Manuals for the three editors below (hitbox, sprite,
                          sound). READ THE RELEVANT SECTION before editing a tool
                          or hand-touching config/hitboxes.js or config/items.js.
+  shot.js             — Screenshot/measure the real game headlessly (Playwright).
+                         `node tools/shot.js out.png --map=kyoto --bytes`. The
+                         way to verify a UI change, and the way to measure a
+                         page's byte cost.
   hitbox-editor.html  — Visual hitbox editor (manual: tools/README.md)
   sprite-editor.html  — Visual sprite prep: AI sheet -> individual PNGs, then
                          PNGs -> an items.js tier chain (manual: tools/README.md)
@@ -259,6 +277,58 @@ in localStorage and passed into `startGame(map, {size, combos, happyHour})`:
   editing") so this doesn't recur — it defaults to 256 px, which is exactly
   right for this use.
 
+### Map cards wear the map's own art
+
+Every card in the menu is topped by a strip of the map it plays — the tiki bar's
+sunset, Kyoto's lantern alley, Napoli's oven — with the name, level badge and
+Play button sitting on it. **No art was generated for the menu.** The strip is a
+crop of the same background master the map plays on, and **one rule places it on
+every map alike** — `card_band()` in `compress_backgrounds.py`:
+
+> a full-width band **`CARD_BAND` (120) world-px tall, ending at the map's
+> horizon, slid along until it fits inside the frame.**
+
+So a card shows painted backdrop wherever there is enough of it, and the horizon
+is where to put the band *when there is room* — there is no per-map case, and
+adding a map means adding a row to `CARDS`, nothing else. The script writes
+`assets/images/<map>/card.webp` (`CARD_W`, `CARD_Q` size it) and `card:` in
+config/maps.js points at it. A map with no `card:` falls back to the plain
+header the cards used to have, so this can never block a map from shipping.
+
+- **The horizon is READ OUT of config/hitboxes.js, not written down again.** It
+  is dragged in the hitbox editor, so a copy here would silently drift and the
+  strip would start including table. That also fixes the ORDER for a new map:
+  trace its boundary first, then run `compress_backgrounds.py`. The script
+  treats a moved `config/hitboxes.js` as making every card stale, so re-running
+  it after a re-trace is all that's needed; a map with no traced horizon yet is
+  skipped with a note rather than guessed at.
+- **A shallow horizon slides the band down; it does not shrink it.** Mage
+  Tower's horizon is 67.5, so its strip is the top 120px and takes in ~50px of
+  the arcane slab. That is the rule working, not an exception to it. The other
+  reading — keep the band strictly above the horizon and let it shrink — would
+  crop a 6:1 vista down to a keyhole on exactly the maps with the least backdrop
+  to spare, and needs a second rule for what to do about the leftover card
+  height. What a card wants is a full-width strip of the map's own art; not
+  showing an EMPTY play surface is why the horizon is the anchor.
+- **The strips are `<img loading="lazy">`, not CSS backgrounds, and that is the
+  whole reason they're affordable.** Ten cards is ~300 KB of art against a menu
+  that loads in ~510 KB; only an `<img>` can defer. Measured on the built page:
+  first paint 511 KB → **709 KB** (Chrome's lazy lookahead pulls 7 of the 10 on
+  a phone), a full scroll to the bottom 810 KB. A one-map SESSION barely moves
+  (~5.5 → ~5.8 MB), because the map's own background and BGM dominate — it is
+  only a menu-bouncer who pays. If that ever needs cutting, drop `CARD_W` from
+  840 (2× a 420px card) before touching `CARD_Q`: it is a dark, scrimmed,
+  decorative strip, and area beats quality here.
+- **`.map-art` sizes itself with `aspect-ratio: 420/120`, but the header still
+  wins.** It is a flex item in a column flex container, so its automatic minimum
+  size keeps a card with the two-button Continue/New run stack from clipping on
+  a narrow phone — verified at a 320px viewport, where the strip grows to fit
+  instead. Don't replace this with a fixed height.
+- The scrim (`.map-art::after`) is bottom-heavy and ends at the card body's own
+  colour rather than at transparent, so ten very different backdrops (a noon
+  farm, a night market) all stay legible under brass text and the strip hands
+  off to the body with no seam.
+
 **Cool mode (30 fps cap) — built but SHELVED.** The welcome-screen checkbox is
 commented out in index.html (with its wiring in welcome.js), and startGame pins
 `coolMode = false`. The game.js machinery is intact: it halves the render rate
@@ -266,6 +336,50 @@ but keeps the physics step size (twice the substeps per frame), so game speed
 and collision quality are unchanged. Re-enable by restoring the index.html
 block + welcome.js wiring + the localStorage read in startGame. It remains the
 biggest thermal lever if the DOM-layer background isn't enough.
+
+## The button language (style.css)
+
+Every button in the game is one of **three materials**, and each is declared
+**once** — as a selector group, so adding a control means adding its selector to
+the group, never copying the block:
+
+| role | who wears it | look |
+|------|--------------|------|
+| primary | `.play-btn`, `.over-btns button`, `.confirm-btns button`, `.backup-btns button` | brass gradient, dark rim, lit top edge, 2px ledge |
+| secondary | `.play-btn.ghost`, `#menu`, `#confirm-no`, `#confirm-new-no`, `#backup-import` | dark glass, brass rim, same geometry and press |
+| glass | `.hud-btn`, `#over-close`, `#over-peek`, `#backup-toggle`, `#credits-toggle`, `#source-link`, `.devtools-links a` | warm dark gradient, hairline highlight |
+
+This is why the menu read as bland before 2026-08-20, and the fix is structural
+rather than cosmetic: the flat brass pill was declared **five separate times**,
+so no single edit could make the UI feel like one thing, and the five copies had
+already drifted (three different border colours for what was meant to be the
+same secondary button). The `--brass-hi` / `--brass` / `--brass-lo` / `--ink`
+tokens exist so a retune is one edit rather than five.
+
+- **Light comes from above, everywhere.** Every control is a vertical gradient
+  with an inset highlight on its top edge. That is the whole reason a flat fill
+  looks cheap next to it — and why a new control that skips the gradient will
+  look wrong no matter what colour it is.
+- **The press is a real one**: the button sits on a 2px solid "ledge" of its own
+  edge colour and `:active` moves the face down onto it (`transform` +
+  `box-shadow`, both compositor-friendly). The page sets
+  `-webkit-tap-highlight-color: transparent` globally, so **without an `:active`
+  state a control gives NO touch feedback at all** on Mai's iPad. Any new button
+  needs one.
+  A press on a control that is already transformed must carry that transform —
+  `#over-peek` is centred with `translateX(-50%)`, and a bare `translateY` in
+  `:active` threw it to the left edge for the duration of the tap.
+- **The checkboxes are drawn by hand** (`appearance: none` + a `::after` tick),
+  not `accent-color`. The native box renders as a stark white square on every
+  platform and was the single cheapest-looking element on the menu. They are
+  17px, not the 19 they want to be for touch: **19 cost Kyoto's three toggles
+  their single row**, so the box size and `.map-options`' gaps are one
+  measurement — verified at 480/420/390/360px that wrapping is unchanged from
+  before the restyle.
+- **`.cv-top`** marks the leading score in each variant row (welcome.js), so the
+  number being chased is the bright one and the two behind it recede.
+- Everything transitions `transform`/`box-shadow`/`filter` only, and every
+  transition is off under `prefers-reduced-motion: reduce`.
 
 ## XP & levels (progress.js)
 
@@ -722,6 +836,38 @@ URL carries `?dev=1` (the escape hatch for reaching the tools from a phone or
 iPad pointed at the dev server). It only ever shows links, so `?dev=1` is safe
 to leave in place.
 
+### Working in a cloud session (Claude Code on the web)
+
+A cloud container is NOT Mikael's machine, and three gaps cost real time every
+session until `.claude/hooks/session-start.sh` closed them. The hook installs
+Pillow + NumPy (absent from the base image, so `process_assets.py` and
+`compress_backgrounds.py` both die on import), installs the Playwright driver
+for `tools/shot.js`, and starts `serve.py` on 5500. It is **remote-only**
+(`$CLAUDE_CODE_REMOTE`) and idempotent, so it is silent on a local checkout.
+
+Node packages install to `~/.cache/mm-dev`, deliberately OUTSIDE the repo: "no
+build step, no framework" is this project's ethos and a root `package.json` or
+`node_modules/` would be the first crack in it. `NODE_PATH` (set via
+`$CLAUDE_ENV_FILE`) is how `tools/shot.js` finds them.
+
+What still has to be known rather than installed:
+
+- **Outbound HTTPS goes through a filtering proxy, and cdnjs is blocked.** This
+  is what made vendoring Matter.js worth doing on its own merits — before that,
+  no cloud session could start a run at all without intercepting the request.
+  npm and PyPI do work.
+- **The browser is in the image; the npm `playwright` package is not pinned to
+  it.** Its bundled build number won't match, so a launch must pass
+  `executablePath: '/opt/pw-browsers/chromium'` (a symlink straight to the
+  binary). Never run `playwright install` — it re-downloads a browser that is
+  already there.
+- **Background processes need the harness's own backgrounding**, not a
+  `( ... & )` subshell — one launched that way gets reaped when the tool call
+  ends, and the server then vanishes mid-task looking like a flaky sandbox.
+- **The shell's cwd resets to the project root after every command**, so a `cd`
+  followed by `git` in a *later* call runs somewhere else. Use absolute paths or
+  `git -C`.
+
 ### Test mode (?test=1) — USE THIS to verify gameplay changes
 
 **http://localhost:5500/?test=1** loads `test.js`, which installs `window.TT`
@@ -888,6 +1034,12 @@ aren't owed one retroactively.
 5. Add new drink tiers in `config/items.js` (sprite path, r, colors, bodyRatio)
 6. Run `python process_assets.py --map <mapname>`
 7. Set `ACTIVE_MAP = MAPS[n]` in `config/maps.js`
+8. Trace the boundary in tools/hitbox-editor.html, THEN add the map to `CARDS`
+   in `compress_backgrounds.py` and re-run it — the menu-card strip is cut from
+   the band above the horizon you just dragged, so it can't be cut before that
+   exists. Point the map's `card:` at the `assets/images/<map>/card.webp` it
+   writes. (Skipping this is not fatal: a map with no `card:` gets the plain
+   card. See "Map cards wear the map's own art".)
 
 Optional per-map fields (see "Menu options"): `combos: true` to default the combo
 checkbox on; `sizes: {large, small}` + `defaultSize` to offer a Large-table
@@ -991,6 +1143,18 @@ future map needs trimming, shorten the loop rather than dropping the bitrate aga
   `xp-bar-frame` is sliced by `border-image` at fixed pixel offsets). New map or
   framing = drop the PNG master in `assets/source/<map>/`, run the script, point
   `bg:`/`sizes:` at the `.webp`.
+- **Menu card strips are the one piece of map art the menu fetches**, and they
+  are sized to be affordable: ~30 KB each, `loading="lazy"` so the cards below
+  the fold wait, and cropped rather than generated. See "Map cards wear the
+  map's own art" for the measured before/after. Never point a card at a map's
+  full `bg:` — ten full backdrops would be ~2.1 MB and would undo the single
+  biggest saving in this table.
+- **The physics engine is now our bytes, not cdnjs'** (vendored 2026-08-20):
+  79 KB raw, **~24 KB over the wire** once GitHub Pages compresses it, on every
+  uncached visit. That is ~5% of the menu's first load, and it buys the game not
+  going blank when a third party has an outage. NOTE the dev server does NOT
+  compress, so `tools/shot.js --bytes` reports the full 79 KB locally — don't
+  read that number as production.
 - **Item sprites are deliberately still PNG.** Lazy loading already cuts them to
   ~1 MB per map, and lossy WebP with alpha risks haloing the carefully feathered
   edges the pipeline produces. Revisit only with a visual A/B.
@@ -1204,6 +1368,10 @@ Two traps that script now handles, both of which cost real time:
   today's date — shown on the welcome screen so Mai can verify she's current)
   AND every `?v=` cache-buster in index.html. Stale-cache bugs are frequent
   otherwise. localStorage (high scores) survives deploys; never clear it.
+  **One script tag deliberately has no `?v=`** — `vendor/matter-0.19.0.min.js`,
+  whose version is in its FILENAME. An upgrade there is already a new URL, so a
+  buster would only force every returning player to re-fetch an unchanged 79 KB
+  on each deploy. Don't "fix" it.
 - **Hitboxes**: `config/hitboxes.js` is generated by tools/hitbox-editor.html —
   never hand-edit it or the legacy inline `cornerWalls`. The horizon
   (perspective vanishing row) is per-boundary: drag the red line in the editor,
@@ -1273,7 +1441,7 @@ Two traps that script now handles, both of which cost real time:
 
 ## Tech stack
 
-- Matter.js 0.19 (CDN) — physics
+- Matter.js 0.19 (vendored in `vendor/`, not a CDN — see vendor/README.md) — physics
 - Canvas 2D API — rendering
 - Web Audio API — sound effects
 - Python + Pillow + NumPy — asset pipeline
