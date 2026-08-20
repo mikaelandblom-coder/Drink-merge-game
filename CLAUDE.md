@@ -270,10 +270,16 @@ in localStorage and passed into `startGame(map, {size, combos, happyHour})`:
 Every card in the menu is topped by a strip of the map it plays — the tiki bar's
 sunset, Kyoto's lantern alley, Napoli's oven — with the name, level badge and
 Play button sitting on it. **No art was generated for the menu.** The strip is a
-crop of the same background master the map plays on, taken from the 120 world-px
-band that ENDS at that map's horizon: the painted backdrop, never the empty play
-surface below it. `compress_backgrounds.py` cuts it (`CARDS`, `CARD_BAND`,
-`CARD_W`, `CARD_Q`) into `assets/images/<map>/card.webp`, and `card:` in
+crop of the same background master the map plays on, and **one rule places it on
+every map alike** — `card_band()` in `compress_backgrounds.py`:
+
+> a full-width band **`CARD_BAND` (120) world-px tall, ending at the map's
+> horizon, slid along until it fits inside the frame.**
+
+So a card shows painted backdrop wherever there is enough of it, and the horizon
+is where to put the band *when there is room* — there is no per-map case, and
+adding a map means adding a row to `CARDS`, nothing else. The script writes
+`assets/images/<map>/card.webp` (`CARD_W`, `CARD_Q` size it) and `card:` in
 config/maps.js points at it. A map with no `card:` falls back to the plain
 header the cards used to have, so this can never block a map from shipping.
 
@@ -284,11 +290,14 @@ header the cards used to have, so this can never block a map from shipping.
   treats a moved `config/hitboxes.js` as making every card stale, so re-running
   it after a re-trace is all that's needed; a map with no traced horizon yet is
   skipped with a note rather than guessed at.
-- **The band dips below the horizon on a shallow-backdrop map.** Mage Tower's
-  horizon is 67.5, so its strip is the top 120px and takes in ~50px of the
-  arcane slab. The alternative — keeping the rule pure by cropping a 6:1 vista
-  down to a keyhole — looked far worse. The rule is about not showing an EMPTY
-  play surface, not about the number.
+- **A shallow horizon slides the band down; it does not shrink it.** Mage
+  Tower's horizon is 67.5, so its strip is the top 120px and takes in ~50px of
+  the arcane slab. That is the rule working, not an exception to it. The other
+  reading — keep the band strictly above the horizon and let it shrink — would
+  crop a 6:1 vista down to a keyhole on exactly the maps with the least backdrop
+  to spare, and needs a second rule for what to do about the leftover card
+  height. What a card wants is a full-width strip of the map's own art; not
+  showing an EMPTY play surface is why the horizon is the anchor.
 - **The strips are `<img loading="lazy">`, not CSS backgrounds, and that is the
   whole reason they're affordable.** Ten cards is ~300 KB of art against a menu
   that loads in ~510 KB; only an `<img>` can defer. Measured on the built page:

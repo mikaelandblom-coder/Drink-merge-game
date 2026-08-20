@@ -79,13 +79,11 @@ TARGETS = [
 # re-tracing a boundary moves the band the card shows. Re-run this script after
 # moving a horizon.
 #
-# CARD_BAND is in WORLD px against the 620-tall physics stage, which is what the
+# Which rows get cut is card_band()'s single rule, applied to every map alike.
+# The units are WORLD px against the 620-tall physics stage, which is what the
 # horizon is measured in; `#stage-bg` stretches the master over the stage with
 # `background-size: 100% 100%`, so world y maps linearly onto image height.
-# A map whose horizon is SHALLOWER than the band (Mage, at 67.5) gets the top
-# CARD_BAND px instead, dipping a little below its horizon -- better than
-# cropping a wide vista down to a keyhole to keep the rule pure.
-CARD_BAND = 120        # world px tall, full 420-wide -- a 3.5:1 strip
+CARD_BAND = 120        # world px tall, full 420-wide -- a 3.5:1 strip. See card_band()
 CARD_W = 840           # output px: 2x the 420 CSS px a card is at most wide
 CARD_Q = 76            # ~30 KB each; see CLAUDE.md "Bandwidth" for the budget
 
@@ -126,14 +124,31 @@ def read_horizons():
     return out
 
 
+def card_band(horizon: float):
+    """The world rows a card strip is cut from. THE rule, for every map:
+
+        a full-width band CARD_BAND px tall, ending at the horizon,
+        slid along until it fits inside the frame.
+
+    One expression, no per-map cases. Deep horizon (Paris, 335.7) -> pure
+    backdrop. SHALLOW horizon (Mage Tower, 67.5) -> the same band slid down
+    until it fits, i.e. the top CARD_BAND px, which takes in ~50px of the
+    arcane slab. That is the rule working rather than an exception to it: what
+    a card wants is a full-width strip of the map's own art, and the horizon is
+    where to put it WHEN THERE IS ROOM. The alternative reading -- keep the
+    band strictly above the horizon and let it shrink -- would crop a 6:1 vista
+    down to a keyhole on exactly the maps with the least backdrop to spare.
+    """
+    y0 = min(max(0.0, horizon - CARD_BAND), STAGE_H - CARD_BAND)
+    return y0, y0 + CARD_BAND
+
+
 def make_card(map_id, src: Path, out: Path, horizon: float, check: bool):
     """Crop one map's backdrop band and write it as a small WebP."""
     im = Image.open(src).convert('RGB')
-    # Bottom of the band sits ON the horizon; a shallow horizon starts at the
-    # top of the frame instead (see CARD_BAND above).
-    y0 = max(0.0, horizon - CARD_BAND)
+    y0, y1 = card_band(horizon)
     box = (0, round(y0 / STAGE_H * im.height),
-           im.width, round((y0 + CARD_BAND) / STAGE_H * im.height))
+           im.width, round(y1 / STAGE_H * im.height))
     if check:
         return (src.stat().st_size, None)
     band = im.crop(box).resize((CARD_W, round(CARD_W * CARD_BAND / 420)), Image.LANCZOS)
@@ -166,16 +181,15 @@ def build_cards(force: bool, check: bool):
             total += out.stat().st_size
             skipped += 1
             continue
+        y0, y1 = card_band(horizon)
         _, out_b = make_card(map_id, src, out, horizon, check)
         if check:
-            print('  would crop y %.0f..%.0f of %s' % (max(0, horizon - CARD_BAND),
-                                                       max(0, horizon - CARD_BAND) + CARD_BAND, src_s))
+            print('  would crop y %.0f..%.0f of %s' % (y0, y1, src_s))
             continue
         total += out_b
         wrote += 1
-        print('  band y %3.0f..%3.0f -> %5.1f KB  %s'
-              % (max(0, horizon - CARD_BAND), max(0, horizon - CARD_BAND) + CARD_BAND,
-                 out_b / 1024, out_s))
+        print('  band y %3.0f..%3.0f (horizon %5.1f) -> %5.1f KB  %s'
+              % (y0, y1, horizon, out_b / 1024, out_s))
     if not check:
         print('  Wrote %d, up-to-date %d, skipped %d — %.0f KB of card art total'
               % (wrote, skipped, missing, total / 1024))

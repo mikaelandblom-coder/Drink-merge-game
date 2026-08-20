@@ -1,7 +1,9 @@
 // A map entry's `card:` is the strip of art its menu card wears (welcome.js).
 // It is NOT new art: compress_backgrounds.py crops it out of the same master
-// `bg:` points at, from the 120 world-px band that ENDS at the map's horizon —
-// the painted backdrop, never the empty play surface. Re-run that script after
+// `bg:` points at. One rule for every map (card_band() there): a full-width
+// band 120 world-px tall, ending at the map's horizon, slid along to stay
+// inside the frame — so a card shows painted backdrop wherever there is enough
+// of it. Re-run that script after
 // dragging a horizon in the hitbox editor, or the strip stops matching the map.
 // A map with no `card:` simply gets a plain card, as they all used to be.
 const MAPS = [
