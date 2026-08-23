@@ -34,6 +34,41 @@ function drawDangerLine(dangerWY) {
   ctx.setLineDash([]);
 }
 
+// ---------- rapid fire launcher readout ----------
+// Both halves are load-bearing rather than decorative. The aim line is STANDING
+// STATE in rapid — there is no press to reveal it, so it has to be on screen at
+// all times or the player is steering blind. And the ring is the only warning
+// of when the shot leaves: without it the cadence reads as random, which makes
+// the mode feel unfair rather than fast.
+const RF_REACH = 140;   // world px of drawn aim line
+
+function drawRapidAim(sl, tilt) {
+  const tp = persp(LAUNCH.x + Math.sin(tilt) * RF_REACH,
+                   LAUNCH.y - Math.cos(tilt) * RF_REACH);
+  // Dashed and dimmer than the classic aim line, which appears only under the
+  // finger and should stay the more emphatic of the two.
+  ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.setLineDash([7, 8]);
+  ctx.beginPath(); ctx.moveTo(sl.x, sl.y); ctx.lineTo(tp.x, tp.y); ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+// Drawn AFTER the launcher's drink so the ring reads as a collar around it
+// rather than a disc behind it. charge runs 0 (just fired) -> 1 (firing now).
+function drawRapidCharge(sl, charge) {
+  const c = Math.max(0, Math.min(1, charge));
+  const R = 30 * sl.s;
+  ctx.lineWidth = 4; ctx.lineCap = 'butt';
+  ctx.strokeStyle = 'rgba(20,10,2,.35)';
+  ctx.beginPath(); ctx.arc(sl.x, sl.y, R, 0, Math.PI * 2); ctx.stroke();
+  // Goes brass in the last ~15% so the beat is readable peripherally, while the
+  // player is watching the field rather than the launcher.
+  ctx.strokeStyle = c > 0.85 ? 'rgba(255,206,110,.95)' : 'rgba(255,255,255,.78)';
+  ctx.beginPath();
+  ctx.arc(sl.x, sl.y, R, -Math.PI / 2, -Math.PI / 2 + c * Math.PI * 2);
+  ctx.stroke();
+}
+
 function drawAimLine(aiming, gameOver, launchScreen, aimX, aimY) {
   if (!aiming || gameOver) return;
   ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 3; ctx.lineCap = 'round';

@@ -36,6 +36,18 @@ function setMapHH(mapId, on) {
   localStorage.setItem('mm_hh_' + mapId, on ? '1' : '0');
 }
 
+// Rapid fire (quick mode) preference per map, remembered across visits. Always
+// defaults OFF. Mutually exclusive with Happy Hour, and it forces combos ON —
+// both enforced in startGame, so a stale preference can never produce a
+// combination the menu would not let you tick.
+function getMapRapid(map) {
+  return localStorage.getItem('mm_rapid_' + map.id) === '1';
+}
+
+function setMapRapid(mapId, on) {
+  localStorage.setItem('mm_rapid_' + mapId, on ? '1' : '0');
+}
+
 // Every playable size/combo combination for a map, default first, each with a
 // short label and its storage key. Maps without size variants only vary by
 // combo (2 rows); size maps have 4.
@@ -53,9 +65,11 @@ function mapVariants(map) {
       parts.push(c ? 'Combo' : 'No combo');
       out.push({ key: scoreKey(map, s, c), label: parts.join(' · ') });
     }
-    // Happy Hour is its own variant per size (combos are always off in it).
-    const hhLabel = (s ? (s === 'large' ? 'Large · ' : 'Small · ') : '') + 'Happy Hour';
-    out.push({ key: scoreKey(map, s, false, true), label: hhLabel });
+    // Happy Hour and Rapid fire are each their own variant per size — combos
+    // are pinned in both (off / on respectively), so neither multiplies out.
+    const prefix = s ? (s === 'large' ? 'Large · ' : 'Small · ') : '';
+    out.push({ key: scoreKey(map, s, false, true), label: prefix + 'Happy Hour' });
+    out.push({ key: scoreKey(map, s, true, false, true), label: prefix + 'Rapid fire' });
   }
   return out;
 }
@@ -64,7 +78,8 @@ function mapVariants(map) {
 // every high score is visible without toggling. The row matching the current
 // selection is highlighted; refreshScoreList() moves that highlight on toggle.
 function buildScoreRows(map) {
-  const activeKey = scoreKey(map, getMapSize(map), getMapCombos(map), getMapHH(map));
+  const activeKey = scoreKey(map, getMapSize(map), getMapCombos(map),
+                             getMapHH(map), getMapRapid(map));
   return mapVariants(map).map(v => {
     const top = getScores(v.key).slice(0, 3);
     // The row's BEST is marked up separately (.cv-top): it is the number the
@@ -94,7 +109,8 @@ function refreshScoreList(map) {
 function savedRunLabel(map, s) {
   const bits = [];
   if (map.sizes && s.size) bits.push(s.size === 'large' ? 'Large' : 'Small');
-  if (s.happyHour) bits.push('Happy Hour');
+  if (s.rapid) bits.push('Rapid fire');
+  else if (s.happyHour) bits.push('Happy Hour');
   else if (s.combos) bits.push('Combo');
   bits.push(fmtScore(s.score || 0) + ' coins');
   return bits.join(' · ');
@@ -120,16 +136,27 @@ function buildWelcomeCards() {
            <span>Large table</span>
          </label>`
       : '';
+    // Rapid pins combos ON and Happy Hour pins them OFF, so the combo box shows
+    // the pinned value and greys out under either — it never claims a setting
+    // the run will not use.
+    const rapid = getMapRapid(map), hh = getMapHH(map);
+    const comboOn = rapid ? true : hh ? false : getMapCombos(map);
     const comboToggle =
       `<label class="map-opt-toggle" title="Chain merges quickly for score multipliers">
          <input type="checkbox" class="map-combo-cb" data-id="${map.id}"
-                ${getMapCombos(map) ? 'checked' : ''} ${getMapHH(map) ? 'disabled' : ''}>
+                ${comboOn ? 'checked' : ''} ${(hh || rapid) ? 'disabled' : ''}>
          <span>Combo multipliers</span>
+       </label>`;
+    const rapidToggle =
+      `<label class="map-opt-toggle" title="The launcher fires itself, faster and faster — steer it and keep the chain alive. A short run.">
+         <input type="checkbox" class="map-rapid-cb" data-id="${map.id}"
+                ${rapid ? 'checked' : ''} ${hh ? 'disabled' : ''}>
+         <span>Rapid fire</span>
        </label>`;
     const hhToggle =
       `<label class="map-opt-toggle" title="Customers order drinks off your table — serve them for coins and merge the receipts">
          <input type="checkbox" class="map-hh-cb" data-id="${map.id}"
-                ${getMapHH(map) ? 'checked' : ''}>
+                ${hh ? 'checked' : ''} ${rapid ? 'disabled' : ''}>
          <span>Happy Hour</span>
        </label>`;
     // A parked run (suspend.js) turns the single Play button into Continue +
@@ -170,7 +197,7 @@ function buildWelcomeCards() {
       </div>
       <div class="map-body">
         ${savedRow}
-        <div class="map-options">${sizeToggle}${comboToggle}${hhToggle}</div>
+        <div class="map-options">${sizeToggle}${comboToggle}${hhToggle}${rapidToggle}</div>
         <div class="card-scores">
           <div class="card-scores-header">
             <span class="card-scores-title">Top scores</span>
@@ -209,13 +236,38 @@ function wireWelcomeEvents() {
     cb.onclick = e => e.stopPropagation();
     cb.onchange = () => {
       setMapHH(cb.dataset.id, cb.checked);
-      // Happy Hour runs without combo multipliers — grey the combo toggle out
-      // while it's on (the saved combo preference is kept for when it's off).
-      const comboCb = document.querySelector(`.map-combo-cb[data-id="${cb.dataset.id}"]`);
-      if (comboCb) comboCb.disabled = cb.checked;
+      syncModeToggles(map);
       refreshScoreList(map);
     };
   });
+
+  document.querySelectorAll('.map-rapid-cb').forEach(cb => {
+    const map = MAPS.find(m => m.id === cb.dataset.id);
+    cb.onclick = e => e.stopPropagation();
+    cb.onchange = () => {
+      setMapRapid(cb.dataset.id, cb.checked);
+      syncModeToggles(map);
+      refreshScoreList(map);
+    };
+  });
+
+  // Happy Hour and Rapid fire each pin the combo setting and exclude the other,
+  // so one pass re-derives all three boxes from the stored preferences. Doing it
+  // in one place is what keeps the menu agreeing with startGame, which enforces
+  // the same exclusions independently.
+  function syncModeToggles(map) {
+    const rapid = getMapRapid(map), hh = getMapHH(map);
+    const q = sel => document.querySelector(`${sel}[data-id="${map.id}"]`);
+    const comboCb = q('.map-combo-cb'), hhCb = q('.map-hh-cb'), rapidCb = q('.map-rapid-cb');
+    if (comboCb) {
+      comboCb.disabled = hh || rapid;
+      // The saved combo preference is untouched — it comes back when the run
+      // is a plain one again.
+      comboCb.checked  = rapid ? true : hh ? false : getMapCombos(map);
+    }
+    if (hhCb)    hhCb.disabled    = rapid;
+    if (rapidCb) rapidCb.disabled = hh;
+  }
 
   document.querySelectorAll('.play-btn').forEach(btn => {
     btn.onclick = () => {
@@ -238,8 +290,10 @@ function launchMap(map, resume) {
   // checkboxes read now: the parked board was traced against that framing's
   // boundary, and its receipts/customers only exist in Happy Hour.
   const opts = resume
-    ? { size: resume.size, combos: !!resume.combos, happyHour: !!resume.happyHour, resume }
-    : { size: getMapSize(map), combos: getMapCombos(map), happyHour: getMapHH(map) };
+    ? { size: resume.size, combos: !!resume.combos, happyHour: !!resume.happyHour,
+        rapid: !!resume.rapid, resume }
+    : { size: getMapSize(map), combos: getMapCombos(map),
+        happyHour: getMapHH(map), rapid: getMapRapid(map) };
   startGame(map, opts);
 }
 

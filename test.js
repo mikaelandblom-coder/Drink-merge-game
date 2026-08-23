@@ -17,6 +17,9 @@
 //
 // Quick tour (see TT.help()):
 //   await TT.start('tikibar', {seed:42, happyHour:true});  // bypass menu, audio
+//   await TT.start('hawaii',  {seed:42, rapid:true});      // rapid fire: TT.step()
+//                                                          // alone plays it — the
+//                                                          // cadence is frame-counted
 //                             // muted, rAF loop OFF, sprites loaded; the seed
 //                             // covers the opening tiers resetState() rolls
 //   TT.seed(42);                    // (or reseed mid-session — re-rolls the
@@ -55,7 +58,7 @@ if (/[?&]test\b/.test(location.search)) {
   const TT = {};
 
   // ---- run control -------------------------------------------------------
-  // opts: {size, combos, happyHour, seed} — seed is TT's own (see below).
+  // opts: {size, combos, happyHour, rapid, seed} — seed is TT's own (see below).
   TT.start = function (mapId, opts = {}) {
     const map = MAPS.find(m => m.id === mapId);
     if (!map) throw new Error('unknown map "' + mapId + '" — ids: ' + MAPS.map(m => m.id).join(', '));
@@ -312,7 +315,7 @@ if (/[?&]test\b/.test(location.search)) {
 
   TT.help = function () {
     return [
-      "await TT.start(mapId, {seed, size, combos, happyHour}) — bypass menu; muted; rAF OFF; waits for sprites",
+      "await TT.start(mapId, {seed, size, combos, happyHour, rapid}) — bypass menu; muted; rAF OFF; waits for sprites",
       "TT.seed(n)                — deterministic Math.random; re-rolls the pending tiers",
       "TT.shoot(tx, ty, tier?)   — fire nextTier (or tier) at physics point; returns body id",
       "TT.spawn(tier, x, y, kind='drink'|'receipt') — place a body directly",

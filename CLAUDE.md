@@ -277,6 +277,106 @@ in localStorage and passed into `startGame(map, {size, combos, happyHour})`:
   editing") so this doesn't recur — it defaults to 256 px, which is exactly
   right for this use.
 
+## Rapid fire (quick mode) — PLAYTEST BUILD, not deployed
+
+A per-map checkbox that answers "rounds take too long" (raised 2026-08-23: Mai
+happily plays a map for 30 minutes, other people want something much shorter).
+**The launcher fires itself** on a cadence that accelerates with the shot count,
+so a run ends on its own instead of lasting as long as the player's skill does.
+A random-steering bot dies in **~3 minutes**.
+
+It is a change to WHEN a shot happens, not to what a shot is — `fireShot` in
+ui.js is shared with the classic release-to-shoot gesture, so the two can never
+disagree. **Verified: classic play is bit-for-bit unchanged** (seeded 8-shot runs
+on hawaii/kyoto/melody, identical board digests before and after).
+
+### The player still aims — the cannon chases the finger
+
+`CANNON` (ui.js) is a carriage that springs toward the finger with momentum, and
+**the residual offset between the two IS the shot angle**. That is not a new
+mechanic: `updateAim` has always lerped `LAUNCH` toward the finger at 0.35/frame
+and fired along `finger − LAUNCH`, so classic play already aims by releasing
+during the catch-up transient. Rapid just never stops. One rule gives all three
+behaviours:
+
+| input | result |
+|-------|--------|
+| moving fast | the carriage lags → a tilted shot |
+| held still | it catches up, offset decays → straight up |
+| finger past the table edge | the carriage clamps, the finger doesn't → a **held** angle |
+
+That third row is the one worth protecting. Pure velocity-derived tilt cannot
+hold an angle at all (you would have to keep moving), and the edge is exactly
+where a sustained angle is wanted — firing into the far corner. It needs
+`setPointerCapture` so the finger can track outside the canvas; without that,
+edge tilt caps at the launcher's own margin.
+
+- **`RF_TILT_MAX` (0.70 rad ≈ 40°) is a hard bound**: at full tilt the vertical
+  component is still `cos(0.70) = 0.76` of the speed, so a rapid shot can never
+  be horizontal or backwards however hard the player swipes.
+- **`cannonMargin()` is pinned to the widest tier the mode can deal**, not the
+  tier currently loaded. Classic's per-tier margin only matters while a finger
+  is down; in rapid the carriage sits parked against an edge and would twitch
+  sideways on every shot as the queue dealt a different-sized item.
+
+### Two things measured, both of which caught the first build out
+
+**`RF_DROP_MAX` is the strongest lever on run length — much stronger than the
+cadence.** A wider spread makes two neighbouring drinks less likely to match, so
+the board stops clearing itself. Against a random-steering bot: 3 tiers → the run
+*never ended* (9 min, 134 drinks still on the field); 4 → ~4.4 min; 5 → ~3 min;
+6 → ~2.2 min. Shipped at **5**. The first build set it to 3 on the assumption
+that narrowing the deal would stop the board filling with big items — it made
+merges so easy that nothing ever accumulated.
+
+**Rapid needs its own game-over test.** The classic rule wants a drink over the
+danger line AND at rest (`speed < 0.15`), but a shot every 0.35–1.4s keeps the
+whole board permanently jostling, so almost nothing settles — a run reached 90
+drinks and 4 minutes with no end in sight, a jammed board the game could not see
+was jammed. Rapid asks how long a drink has **dwelt** in the zone instead
+(`plugin.overSince`, `RF_OVER_MS` = 1200), with no speed test. Tracking dwell per
+body (rather than just dropping the speed test) is what stops a drink knocked
+BACK into the zone ending the run the instant it arrives.
+
+### The rest
+
+- **Combos are forced ON, and the per-throw reset is dropped.** `fireShot` does
+  `state.combo = 0` on every classic throw; at rapid's cadence against a 1.4s
+  `COMBO_WINDOW` that would stop a chain surviving even one shot, leaving the
+  forced combos very nearly inert. Letting the window alone govern the chain is
+  what turns the cadence into something that *sustains* a streak. Because combos
+  are pinned, `scoreKey` folds rapid and combo into one variant part
+  (`mm_s_<map>__rapid`) rather than multiplying them.
+- **Mutually exclusive with Happy Hour**, and not merely by taste: HH's
+  tap-to-serve gesture lives exactly where rapid's steering drag does. HH wins
+  the tie in `startGame` so a stale rapid preference can't disable a mode the
+  player did tick.
+- **The cadence is counted in FRAMES, not wall time.** `stepPhysics()` is one
+  60Hz frame for both `loop()` and `TT.step()`, so `TT.step()` alone plays the
+  mode deterministically — and there is no `performance.now()` stamp for
+  `setPaused` to be wrong about, so the score panel's freeze can neither bank
+  free time nor skip a shot. (`plugin.overSince` IS such a stamp and is pushed
+  forward with the rest.)
+- `sceneBusy()` returns true for the whole mode: the charge ring is always
+  filling, so the idle-frame skip must not park the loop between shots.
+- **The aim line is standing state** and is always drawn (`drawRapidAim`), since
+  there is no press to reveal it. `drawRapidCharge` is the only warning of when
+  the shot leaves — without it the cadence reads as random, which makes the mode
+  feel unfair rather than fast.
+
+### Open, for after the playtest
+
+- **The 4th checkbox costs Kyoto its single row of toggles** — CLAUDE.md's note
+  about 17px boxes was written for exactly this. It wraps cleanly to two rows at
+  360/390/430px (verified, nothing clipped), but the real fix is that Classic /
+  Happy Hour / Rapid are **mutually exclusive** and should be a segmented mode
+  control, not N checkboxes that each disable the others.
+- **No launcher art yet.** The charge ring is the whole indicator. A two-part
+  brass cradle + base plate was generated 2026-08-23 (prompt in
+  assets/ART-PROMPTS.md terms: shared chrome family, not map-themed) but the
+  head sprite came back with its own base plate baked in, so it needs cropping
+  at the spring before it can tilt. Only the head rotates; the plate never does.
+
 ### Map cards wear the map's own art
 
 Every card in the menu is topped by a strip of the map it plays — the tiki bar's
