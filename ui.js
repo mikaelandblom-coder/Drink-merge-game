@@ -125,9 +125,13 @@ function fireShot(state, dirX, dirY) {
   shoot();
   recoil = 6;
   if (RAPID_FIRE) {
-    // The cadence IS the rate limit in rapid, and it ramps below the classic
-    // 500ms lock. Roll now so the launcher is never drawn empty between beats.
-    rollNext();
+    // Empty the cradle and let stepPhysics roll the next tier in when the
+    // reload lands. Rolling HERE — which the first build did, on the grounds
+    // that the cadence is the only rate limit rapid needs — put the next drink
+    // in the cradle on the very frame the last one left it, so the shot never
+    // appeared to come OUT of the launcher.
+    state.canShoot = false;
+    state.rfReload = rfReloadMs();
   } else {
     state.canShoot = false;
     setTimeout(() => { rollNext(); state.canShoot = true; }, 500);

@@ -261,6 +261,22 @@ const RF_RAMP_SHOTS    = 50;    // shots taken to travel from START to END
 // hands the player mid-chain items from the first shot, which suits a short
 // run — the top tiers are reachable inside one.
 const RF_DROP_MAX      = 5;
+// After a shot the cradle stands EMPTY for a moment before the next drink
+// loads. Without it the next drink appears in the same frame the last one
+// leaves, and the launcher reads as a picture of what is coming rather than as
+// a thing that shoots (Mikael, on a phone, 2026-08-23).
+//
+// Capped as a FRACTION of the beat as well as in ms: 170ms is a good pause at
+// the start of a run but is half the cycle once the ramp reaches 350ms, and a
+// cradle that is empty half the time reads as broken rather than as busy.
+const RF_RELOAD_MS   = 170;    // cradle empty
+const RF_LOAD_MS     = 90;     // then the next drink scales into it
+const RF_RELOAD_FRAC = 0.35;   // ...but never more than this much of the beat
+
+function rfReloadMs() {
+  return Math.min(RF_RELOAD_MS, rfCadence() * RF_RELOAD_FRAC) + RF_LOAD_MS;
+}
+
 // How long a drink may DWELL in the danger zone before the run ends. Used in
 // place of BOTH the classic "settled above the line" test and its 1.5s birth
 // grace — see checkOver for why stacking the two was wrong.
@@ -295,9 +311,11 @@ const state = {
   // Happy Hour
   customers:  [],   // { slot, art, tier, bornAt, leaveAt }
   shotsFired: 0,
-  // Rapid fire: ms of game time until the launcher fires itself (frame-counted,
-  // see the RF_* block above). Unused in every other mode.
+  // Rapid fire: ms of game time until the launcher fires itself, and until the
+  // next drink has finished loading into the cradle (both frame-counted — see
+  // the RF_* block above). Unused in every other mode.
   rfTimer:    0,
+  rfReload:   0,
   nextCustomerAtShot: HH_FIRST_SHOT,
   // XP earned this run (1/shot; committed to storage per shot by progress.js —
   // this counter only feeds the game-over "+N XP" recap)
@@ -425,6 +443,7 @@ function resetState() {
   LAUNCH.x = W / 2;
   resetCannon();                                    // ui.js — steering state
   state.rfTimer = RAPID_FIRE ? RF_CADENCE_START : 0;
+  state.rfReload = 0;
   rollFreshTiers();
   BUGLOG.run();    // fresh bug-report ring for the new run (buglog.js)
   idleFrames = 0;  // ensure the fresh board draws even if we were idle
@@ -683,7 +702,11 @@ function render(dt) {
     // throat through the wind-up instead of hovering above a sinking cradle.
     const lift = RAPID_FIRE ? LAUNCHER_LIFT * launcherSquash(rfCharge) : 0;
     if (RAPID_FIRE) drawLauncher(sl, CANNON.tilt, rfCharge);
-    if (state.canShoot) drawDrink(sl.x, sl.y + recoil - lift, ITEMS[state.nextTier], 1, wob,
+    // Scales in as it loads, so the next drink ARRIVES in the cradle instead of
+    // blinking into it at full size.
+    const load = (RAPID_FIRE && state.rfReload > 0)
+      ? 0.72 + 0.28 * (1 - state.rfReload / RF_LOAD_MS) : 1;
+    if (state.canShoot) drawDrink(sl.x, sl.y + recoil - lift, ITEMS[state.nextTier], load, wob,
                                   undefined, FLAT_ENABLED);
   }
 
@@ -833,8 +856,19 @@ function stepPhysics() {
   // than in loop()) is what lets TT.step() drive the mode synchronously.
   if (RAPID_FIRE && !state.gameOver) {
     updateCannon();                    // ui.js — one 60Hz frame of steering
+    if (state.rfReload > 0) {
+      state.rfReload -= FRAME_MS;
+      // canShoot flips with RF_LOAD_MS still on the clock: that tail is the
+      // drink scaling into the cradle, drawn by render().
+      if (state.rfReload <= RF_LOAD_MS && !state.canShoot) {
+        rollNext(); state.canShoot = true;
+      }
+    }
     state.rfTimer -= FRAME_MS;
     if (state.rfTimer <= 0) {
+      // Never fire an empty cradle. rfReloadMs() is capped well under the beat
+      // so this is a guard against a future retune, not a path the mode takes.
+      if (!state.canShoot) { rollNext(); state.canShoot = true; state.rfReload = 0; }
       fireCannon();                    // ui.js — shoots along the current tilt
       state.rfTimer = rfCadence();     // recomputed AFTER the shot: countShot()
     }                                  // has just advanced the ramp by one

@@ -380,6 +380,16 @@ in **817ms**, and classic still takes its full 1500ms.
   there is no press to reveal it. The mode still needs *some* warning of when
   the shot leaves, or the cadence reads as random and feels unfair rather than
   fast — see the charge readout below.
+- **The cradle stands EMPTY between shots** (`RF_RELOAD_MS` + `RF_LOAD_MS`,
+  frame-counted like the cadence). The first build rolled the next tier inside
+  `fireShot`, so the next drink appeared in the cradle on the very frame the
+  last one left it and the launcher read as *a picture of what is coming* rather
+  than a thing that shoots (Mikael, 2026-08-23). The pause is capped at
+  `RF_RELOAD_FRAC` of the beat as well as in ms — 170ms is right at the start of
+  a run but is half the cycle once the ramp reaches 350ms, and a cradle empty
+  half the time reads as broken rather than busy. The drink then scales in over
+  `RF_LOAD_MS` so it arrives rather than blinking in. Purely visual: verified by
+  all 35 board digests being unchanged.
 - **The charge readout is the launcher itself, not a gauge.** The spring winds
   up: the head compresses toward its hub (`RF_SQUASH`, cubed so nearly all the
   travel is in the last third of the beat) and the loaded drink rides down with

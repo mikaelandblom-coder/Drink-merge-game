@@ -513,6 +513,14 @@ Shipping a `config/*.js` change without a bump does not deploy it — it ARMS it
 for the next deploy, which then gets the blame. That is exactly how the 9→18
 customer cast landed, and it cost a real debugging session.
 
+- **Re-deploying the SAME branch needs its own bump each time, and the
+  preflight cannot see that.** It compares against `origin/main`, so once a
+  branch has moved 95 -> 96 it reads as bumped forever, while the phone that
+  already loaded 96 keeps serving that cache. For an iterative playtest deploy,
+  bump on every push and pass `--base=<the ref you last deployed>` if you want
+  the check to reason about it. (`GAME_VERSION` is a date, so a same-day second
+  deploy wants a suffix — `v2026-08-23b` — or the welcome-screen pill cannot
+  tell you which build you are on, which is the one thing it is for.)
 - **Advisory by default, blocking under `--deploy`.** Ordinary branch work is
   *expected* to sit unbumped for a while; only a deploy can actually be broken
   by it. A check that cried wolf on every commit would be ignored by the time
