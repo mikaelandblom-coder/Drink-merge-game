@@ -116,7 +116,7 @@ function fireShot(state, dirX, dirY) {
   Body.setVelocity(d, { x: dirX / len * speed, y: dirY / len * speed });
   BUGLOG.shot(d);   // bug-report ring: shot + the board it flew into
   // Classic: each throw starts a fresh combo chain. Rapid: it must NOT. Shots
-  // land every 0.4-1.5s and COMBO_WINDOW is 1.4s, so resetting per throw would
+  // land every 0.35-2.2s and COMBO_WINDOW is 1.4s, so resetting per throw would
   // stop a chain surviving even ONE shot — the mode's forced combos would be
   // very nearly inert. Letting the 1.4s window alone govern it is what turns
   // the cadence into something that sustains a streak instead of killing it.

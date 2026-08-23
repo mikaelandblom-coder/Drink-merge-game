@@ -291,7 +291,8 @@ A per-map checkbox that answers "rounds take too long" (raised 2026-08-23: Mai
 happily plays a map for 30 minutes, other people want something much shorter).
 **The launcher fires itself** on a cadence that accelerates with the shot count,
 so a run ends on its own instead of lasting as long as the player's skill does.
-A random-steering bot dies in **~3 minutes**.
+A random-steering bot dies in **~6 minutes** — against the 30 a map can absorb
+in classic.
 
 It is a change to WHEN a shot happens, not to what a shot is — `fireShot` in
 ui.js is shared with the classic release-to-shoot gesture, so the two can never
@@ -333,12 +334,42 @@ edge tilt caps at the launcher's own margin.
 cadence.** A wider spread makes two neighbouring drinks less likely to match, so
 the board stops clearing itself. Against a random-steering bot: 3 tiers → the run
 *never ended* (9 min, 134 drinks still on the field); 4 → ~4.4 min; 5 → ~3 min;
-6 → ~2.2 min. Shipped at **5**. The first build set it to 3 on the assumption
-that narrowing the deal would stop the board filling with big items — it made
-merges so easy that nothing ever accumulated.
+6 → ~2.2 min. The first build set it to 3 on the assumption that narrowing the
+deal would stop the board filling with big items — it made merges so easy that
+nothing ever accumulated.
+
+Shipped at **4**, the same deal classic uses — see the bot-proxy warning below
+for why the measured optimum (5) was the wrong choice anyway.
+
+### The bot is a proxy for TERMINATION, never for feel (learned 2026-08-23)
+
+Every number above came from a random-steering bot, and the first shipped tuning
+was chosen to kill that bot in ~3 minutes. Mai then played it: *"way too quick,
+not able to play strategically at all."*
+
+The mistake is worth stating plainly, because the tooling makes it easy to
+repeat: **a random bot dies of chaos, not of time pressure.** It never plans, so
+it cannot tell you whether a person has time to. Tuning against it optimised the
+one quantity it can measure and silently wrecked the one it cannot.
+
+Two things fell out of re-reading the numbers with that in mind:
+
+- **The ramp SHAPE mattered more than the ceiling.** On the shipped build the
+  beat was 0.77s by shot 30 and 0.35s by shot 60 — full speed arrived about a
+  minute in, so the strategic phase barely existed. `RF_RAMP_FROM` now holds the
+  opening beat for the first 12 shots and `RF_RAMP_SHOTS` stretches the ramp to
+  110: 2.2s / 1.9s / 1.4s / 0.9s at shots 1 / 30 / 60 / 90, and ~168s before it
+  is fully frantic.
+- **Being handed a big drink you did not plan for is what stops a player
+  building anything** — and the bot had no plans to ruin, which is exactly why
+  `RF_DROP_MAX` 5 measured well and played badly.
+
+Rapid is still not the mode Mai wants (she is happy with 30-minute classic runs,
+and this was built for the people who are not). Her feedback is not a demand to
+make it slow; it is evidence that the early game gave *nobody* a foothold.
 
 **Rapid needs its own game-over test.** The classic rule wants a drink over the
-danger line AND at rest (`speed < 0.15`), but a shot every 0.35–1.4s keeps the
+danger line AND at rest (`speed < 0.15`), but a shot every 0.35–2.2s keeps the
 whole board permanently jostling, so almost nothing settles — a run reached 90
 drinks and 4 minutes with no end in sight, a jammed board the game could not see
 was jammed. Rapid asks how long a drink has **dwelt** in the zone instead

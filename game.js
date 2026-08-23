@@ -244,9 +244,22 @@ const HH_CASHOUT_COINS = 25;    // golden receipt's bonus payout when it forms (
 // on resume; this timer simply stops counting when frames stop, so pausing can
 // neither bank free time nor skip a shot.
 let RAPID_FIRE = false;
-const RF_CADENCE_START = 1400;  // ms between shots on shot 0
+// RETUNED 2026-08-23 after Mai played it: "way too quick, not able to play
+// strategically at all". The first numbers were tuned against a RANDOM-STEERING
+// BOT, and that was the mistake — a bot dies of chaos, not of time pressure, so
+// "kills the bot in 3 minutes" said nothing about whether a person can think
+// between shots. Measured on the shipped build, the beat was 0.77s by shot 30
+// and 0.35s by shot 60: full speed arrived about a minute in, so the strategic
+// phase barely existed at all.
+//
+// The shape matters more than the ceiling. RF_RAMP_FROM holds the opening beat
+// for the first stretch so there is a calm phase to build a board in, and the
+// ramp is then long enough that getting frantic feels earned rather than
+// immediate. Beat at shot 1 / 30 / 60 is now 2.2s / 2.0s / 1.5s.
+const RF_CADENCE_START = 2200;  // ms between shots on shot 0
 const RF_CADENCE_END   = 350;   // ms between shots once the ramp is done
-const RF_RAMP_SHOTS    = 50;    // shots taken to travel from START to END
+const RF_RAMP_FROM     = 12;    // shots held at START before the ramp begins
+const RF_RAMP_SHOTS    = 110;   // ...then this many to travel from START to END
 // Shootable tiers in rapid, in place of DROP_MAX (4). This is MEASURED, and it
 // is by far the strongest lever on how long a run lasts — much stronger than
 // the cadence. A wider spread makes two neighbouring drinks less likely to
@@ -257,10 +270,13 @@ const RF_RAMP_SHOTS    = 50;    // shots taken to travel from START to END
 //
 // It is counter-intuitive, and it caught the first build of this mode out:
 // NARROWING the deal was meant to stop the board filling with big items, and
-// instead made merges so easy that nothing ever accumulated. Widening it also
-// hands the player mid-chain items from the first shot, which suits a short
-// run — the top tiers are reachable inside one.
-const RF_DROP_MAX      = 5;
+// instead made merges so easy that nothing ever accumulated.
+//
+// Back to 4 — the same deal classic uses — as part of the same retune as the
+// cadence above. 5 shortened runs by handing out mid-chain items, but being
+// handed a big drink you did not plan for is exactly what stops a player
+// building anything, and the bot those numbers came from had no plans to ruin.
+const RF_DROP_MAX      = 4;
 // After a shot the cradle stands EMPTY for a moment before the next drink
 // loads. Without it the next drink appears in the same frame the last one
 // leaves, and the launcher reads as a picture of what is coming rather than as
@@ -284,7 +300,7 @@ const RF_OVER_MS       = 800;
 
 // ms until the next automatic shot, given how far into the ramp the run is.
 function rfCadence() {
-  const t = Math.min(1, state.shotsFired / RF_RAMP_SHOTS);
+  const t = Math.max(0, Math.min(1, (state.shotsFired - RF_RAMP_FROM) / RF_RAMP_SHOTS));
   return RF_CADENCE_START + (RF_CADENCE_END - RF_CADENCE_START) * t;
 }
 
@@ -595,7 +611,7 @@ function checkOver() {
     if (RAPID_FIRE) {
       // Rapid needs a different end condition, and this was measured rather
       // than guessed: the classic test asks for a drink that is over the line
-      // AND has come to rest (speed < 0.15), but a shot every 0.4-1.5s keeps
+      // AND has come to rest (speed < 0.15), but a shot every 0.35-2.2s keeps
       // the whole board permanently jostling, so almost nothing ever settles.
       // A run reached 90 drinks on the field and 4 minutes with no end in
       // sight — a jammed board that the game could not see was jammed.
