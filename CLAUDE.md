@@ -334,9 +334,18 @@ danger line AND at rest (`speed < 0.15`), but a shot every 0.35–1.4s keeps the
 whole board permanently jostling, so almost nothing settles — a run reached 90
 drinks and 4 minutes with no end in sight, a jammed board the game could not see
 was jammed. Rapid asks how long a drink has **dwelt** in the zone instead
-(`plugin.overSince`, `RF_OVER_MS` = 1200), with no speed test. Tracking dwell per
+(`plugin.overSince`, `RF_OVER_MS` = 800), with no speed test. Tracking dwell per
 body (rather than just dropping the speed test) is what stops a drink knocked
 BACK into the zone ending the run the instant it arrives.
+
+**The dwell REPLACES the 1.5s birth grace; it must not stack with it.** The
+first build ran the birth check first, so a drink could sit behind the line for
+1.5 + 1.2 = **2.7s** — which read on a phone as the game being slow to notice
+(Mikael, 2026-08-23). The birth grace exists to let a shot cross the zone it is
+launched from, and the dwell already does that job: a shot clears the line in
+~55ms (90 world px at speed 27), so even at 800ms the dwell is ~15× the transit
+at full tilt. Measured after the fix: a drink settling in the zone ends the run
+in **817ms**, and classic still takes its full 1500ms.
 
 ### The rest
 
@@ -360,9 +369,17 @@ BACK into the zone ending the run the instant it arrives.
 - `sceneBusy()` returns true for the whole mode: the charge ring is always
   filling, so the idle-frame skip must not park the loop between shots.
 - **The aim line is standing state** and is always drawn (`drawRapidAim`), since
-  there is no press to reveal it. `drawRapidCharge` is the only warning of when
-  the shot leaves — without it the cadence reads as random, which makes the mode
-  feel unfair rather than fast.
+  there is no press to reveal it. The mode still needs *some* warning of when
+  the shot leaves, or the cadence reads as random and feels unfair rather than
+  fast — see the charge readout below.
+- **The charge readout is the launcher itself, not a gauge.** The spring winds
+  up: the head compresses toward its hub (`RF_SQUASH`, cubed so nearly all the
+  travel is in the last third of the beat) and the loaded drink rides down with
+  it, then both snap back on the shot. The aim line brightens into the beat as a
+  second cue, sitting where the player is already looking. The first build drew
+  a ring around the cradle instead, and it **buried the art it was reporting
+  on** while fighting the XP bar for the same strip of screen (Mikael, on a
+  phone, 2026-08-23). Two cues, neither of them a new element.
 
 ### Open, for after the playtest
 
@@ -371,9 +388,10 @@ BACK into the zone ending the run the instant it arrives.
   360/390/430px (verified, nothing clipped), but the real fix is that Classic /
   Happy Hour / Rapid are **mutually exclusive** and should be a segmented mode
   control, not N checkboxes that each disable the others.
-- **The charge ring and the cradle are two round things in the same place.**
-  Legible, but they compete a little — if the ring has to go, the mode still
-  needs *some* readout of when the shot leaves.
+- **Is the spring wind-up loud enough on a small screen?** It replaced the
+  charge ring for good reasons, but it is a subtler cue by design. If it proves
+  too quiet, the next thing to try is the aim line (brightness, or dashes that
+  march) rather than putting a gauge back on the launcher.
 
 ### The launcher art — two sprites, because only the head turns
 
@@ -401,11 +419,13 @@ and in a mage tower alike. Generated white-on-transparent as one sheet
   plate and reads as having fallen over — the head sprite is wider than the base
   to begin with. The aim line carries the true direction; the art only has to
   lean into it. 0.6 still overhung; the range was rendered to pick this.
-- **`LAUNCHER_DY` and `LAUNCHER_LIFT` are one measurement.** LAUNCH sits close
-  enough to the near edge that a plate centred on it hangs into the XP bar, so
-  the assembly is raised — and the loaded drink is raised by the matching amount
-  so it still sits in the cradle's throat rather than in front of it. Move one
-  and the other must move.
+- **`LAUNCHER_DY` and `LAUNCHER_LIFT` are one measurement, and it is against
+  the XP BAR.** The horizontal bar occupies the bottom ~42 world px of the
+  stage, and a plate whose hub sits on LAUNCH has its lower third behind it —
+  the second half of the phone-test clutter. −22 clears it with margin on every
+  map (the bar's geometry is map-independent), and the loaded drink is raised by
+  the matching amount so it still sits in the cradle's throat rather than in
+  front of it. Move one and the other must move.
 - **`cannonMargin()` accounts for the ART, not the drink.** The cradle is wider
   than anything it can hold, so in rapid the carriage has to stop before the
   cradle would hang off the table.

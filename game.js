@@ -262,8 +262,9 @@ const RF_RAMP_SHOTS    = 50;    // shots taken to travel from START to END
 // run — the top tiers are reachable inside one.
 const RF_DROP_MAX      = 5;
 // How long a drink may DWELL in the danger zone before the run ends. Used in
-// place of the classic "settled above the line" test — see checkOver.
-const RF_OVER_MS       = 1200;
+// place of BOTH the classic "settled above the line" test and its 1.5s birth
+// grace — see checkOver for why stacking the two was wrong.
+const RF_OVER_MS       = 800;
 
 // ms until the next automatic shot, given how far into the ramp the run is.
 function rfCadence() {
@@ -571,7 +572,6 @@ function checkOver() {
   if (state.gameOver) return;
   const now = performance.now();
   for (const d of state.drinks) {
-    if (now - d.plugin.born < 1500) continue;
     const over = d.position.y + d.plugin.item.physR > DANGER_WY;
     if (RAPID_FIRE) {
       // Rapid needs a different end condition, and this was measured rather
@@ -588,10 +588,20 @@ function checkOver() {
       // than dropping the speed test outright) is what keeps a drink knocked
       // BACK into the zone from ending the run the instant it arrives — it gets
       // its own grace, the same as a fresh shot.
+      //
+      // The dwell REPLACES the 1.5s birth grace rather than stacking on top of
+      // it, which is what the first build did — 1.5s then 1.2s meant a drink
+      // could sit behind the line for 2.7s before the run ended, and it read on
+      // a phone as the game being slow to notice (Mikael, 2026-08-23). The
+      // birth grace exists to let a shot cross the zone it is launched from,
+      // and the dwell already does exactly that job: a shot clears the line in
+      // about 55ms (90 world px at speed 27), so RF_OVER_MS is ~15x the transit
+      // even at full tilt. Stacking a second grace on top bought nothing.
       if (!over) { d.plugin.overSince = 0; continue; }
       if (!d.plugin.overSince) { d.plugin.overSince = now; continue; }
       if (now - d.plugin.overSince < RF_OVER_MS) continue;
     } else {
+      if (now - d.plugin.born < 1500) continue;
       const speed = Math.hypot(d.velocity.x, d.velocity.y);
       if (!(over && speed < 0.15)) continue;
     }
@@ -650,8 +660,11 @@ function render(dt) {
   drawDangerLine(DANGER_WY);
 
   const sl = persp(LAUNCH.x, LAUNCH.y);
+  // 0 just after a shot, 1 at the instant the next one leaves. Drives every
+  // part of the launcher's readout (see RF_SQUASH in render.js).
+  const rfCharge = RAPID_FIRE ? 1 - state.rfTimer / rfCadence() : 0;
   drawAimLine(aiming, state.gameOver, sl, aimX, aimY);
-  if (RAPID_FIRE && !state.gameOver) drawRapidAim(sl, CANNON.tilt, LAUNCHER_LIFT);
+  if (RAPID_FIRE && !state.gameOver) drawRapidAim(sl, CANNON.tilt, LAUNCHER_LIFT, rfCharge);
 
   const sorted = [...state.drinks].sort((a, b) => a.position.y - b.position.y);
   for (const d of sorted) {
@@ -666,11 +679,12 @@ function render(dt) {
     // Launcher art under the loaded drink, so the drink sits IN the cradle. The
     // drink is lifted to the cradle's throat (LAUNCHER_LIFT) — purely a drawing
     // offset; shots still spawn off LAUNCH exactly as they always have.
-    const lift = RAPID_FIRE ? LAUNCHER_LIFT : 0;
-    if (RAPID_FIRE) drawLauncher(sl, CANNON.tilt);
+    // The drink rides the spring down, so it stays seated in the cradle's
+    // throat through the wind-up instead of hovering above a sinking cradle.
+    const lift = RAPID_FIRE ? LAUNCHER_LIFT * launcherSquash(rfCharge) : 0;
+    if (RAPID_FIRE) drawLauncher(sl, CANNON.tilt, rfCharge);
     if (state.canShoot) drawDrink(sl.x, sl.y + recoil - lift, ITEMS[state.nextTier], 1, wob,
                                   undefined, FLAT_ENABLED);
-    if (RAPID_FIRE) drawRapidCharge(sl, 1 - state.rfTimer / rfCadence(), lift);
   }
 
   drawParticles(state.particles, dt);

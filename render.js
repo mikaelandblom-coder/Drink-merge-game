@@ -72,16 +72,34 @@ const LB_HUB   = { x: 0.514, y: 0.368 };
 // lip and into the XP bar. LAUNCHER_LIFT then raises the loaded DRINK by the
 // same geometry, so it still sits in the cradle's throat rather than in front
 // of it — the two numbers are one measurement and must move together.
-const LAUNCHER_DY   = -8;
-const LAUNCHER_LIFT = 26;
+// Measured, not eyeballed: the horizontal XP bar occupies the bottom ~42 world
+// px of the stage, and a plate whose hub sits on LAUNCH has its lower third
+// behind it. -22 puts the plate's bottom edge clear of the bar with a little
+// margin, on every map (the bar's geometry is the same for all of them).
+const LAUNCHER_DY   = -22;
+const LAUNCHER_LIFT = 40;
 // The head is drawn at a FRACTION of the shot's tilt. At the full 40 degrees a
 // horseshoe pivoting down at its spring swings clear off its own base plate and
 // reads as having fallen over — the head sprite is wider than the base to start
 // with. The aim line carries the true direction; the launcher only has to lean
 // into it, and 0.45 was picked by rendering the range (0.6 still overhung).
 const LAUNCHER_TILT_K = 0.45;
+// The charge readout, and the ONLY one: the spring winds up and the cradle
+// sinks as the beat approaches, then snaps back on the shot. A ring drawn
+// around the cradle was the first attempt and it buried the art it was
+// reporting on — it and the XP bar were fighting for the same strip of screen
+// (Mikael, on a phone, 2026-08-23). The launcher reports its own state instead
+// of wearing a gauge. CUBED, so nearly all the travel happens in the last third
+// of the beat: that is what makes it read as a warning rather than a slow
+// drift, and it is why 14% of height is enough to notice.
+const RF_SQUASH = 0.14;
 
-function drawLauncher(sl, tilt) {
+function launcherSquash(charge) {
+  const c = Math.max(0, Math.min(1, charge));
+  return 1 - RF_SQUASH * c * c * c;
+}
+
+function drawLauncher(sl, tilt, charge) {
   const base = LAUNCHER_IMGS.base, head = LAUNCHER_IMGS.head;
   if (!base || !base.complete || !base.naturalWidth) return;
   // ONE scale for both parts — they are exported at a common scale precisely so
@@ -95,6 +113,7 @@ function drawLauncher(sl, tilt) {
   ctx.save();
   ctx.translate(ax, ay);
   ctx.rotate(tilt * LAUNCHER_TILT_K);
+  ctx.scale(1, launcherSquash(charge));   // compresses toward the hub
   ctx.drawImage(head, -LH_PIVOT.x * hw, -LH_PIVOT.y * hh, hw, hh);
   ctx.restore();
 }
@@ -107,41 +126,24 @@ function drawLauncher(sl, tilt) {
 // the mode feel unfair rather than fast.
 const RF_REACH = 140;   // world px of drawn aim line
 
-function drawRapidAim(sl, tilt, lift = 0) {
+function drawRapidAim(sl, tilt, lift = 0, charge = 0) {
   const tp = persp(LAUNCH.x + Math.sin(tilt) * RF_REACH,
                    LAUNCH.y - Math.cos(tilt) * RF_REACH);
   // Start at the cradle's throat, not at LAUNCH: with the launcher art drawn,
   // a line from the launch point begins underneath the loaded drink and its
   // first stretch is invisible.
-  const sy = sl.y - lift * sl.s;
+  const sy = sl.y - lift * launcherSquash(charge) * sl.s;
   // Dashed and dimmer than the classic aim line, which appears only under the
-  // finger and should stay the more emphatic of the two.
-  ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  // finger and should stay the more emphatic of the two — but it BRIGHTENS into
+  // the beat, so the timing has a second cue sitting where the player is already
+  // looking (down the line, not at the launcher) and neither cue is a new
+  // element on screen.
+  const c = Math.max(0, Math.min(1, charge));
+  ctx.strokeStyle = `rgba(255,240,205,${(0.3 + 0.55 * c * c).toFixed(3)})`;
+  ctx.lineWidth = 3 + c; ctx.lineCap = 'round';
   ctx.setLineDash([7, 8]);
   ctx.beginPath(); ctx.moveTo(sl.x, sy); ctx.lineTo(tp.x, tp.y); ctx.stroke();
   ctx.setLineDash([]);
-}
-
-// Drawn AFTER the launcher's drink so the ring reads as a collar around it
-// rather than a disc behind it. charge runs 0 (just fired) -> 1 (firing now).
-function drawRapidCharge(sl, charge, lift = 0) {
-  const c = Math.max(0, Math.min(1, charge));
-  const R = 30 * sl.s;
-  // Lifted off the launch point rather than centred on it. LAUNCH sits low
-  // enough that a ring centred there is sliced by the table's near lip, and the
-  // drink is drawn bottom-anchored ABOVE the point anyway — so the collar reads
-  // as being around the loaded item, and clears the frame. Scaled by sl.s like
-  // everything else, or it would drift off the launcher on a phone.
-  const cy = sl.y - (11 + lift) * sl.s;
-  ctx.lineWidth = 4; ctx.lineCap = 'butt';
-  ctx.strokeStyle = 'rgba(20,10,2,.35)';
-  ctx.beginPath(); ctx.arc(sl.x, cy, R, 0, Math.PI * 2); ctx.stroke();
-  // Goes brass in the last ~15% so the beat is readable peripherally, while the
-  // player is watching the field rather than the launcher.
-  ctx.strokeStyle = c > 0.85 ? 'rgba(255,206,110,.95)' : 'rgba(255,255,255,.78)';
-  ctx.beginPath();
-  ctx.arc(sl.x, cy, R, -Math.PI / 2, -Math.PI / 2 + c * Math.PI * 2);
-  ctx.stroke();
 }
 
 function drawAimLine(aiming, gameOver, launchScreen, aimX, aimY) {
