@@ -766,9 +766,35 @@ function drawTextPops(pops, dt) {
   ctx.globalAlpha = 1;
 }
 
+// Coins fly to the bag at a fixed rate, EXCEPT that a crowded screen clears
+// faster. In late rapid fire a merge lands every few hundred ms, and the coins
+// stop reading as a reward and start being a curtain over the table (Mikael,
+// on a phone, 2026-08-23).
+//
+// The multiplier scales the WHOLE flight, including each coin's negative
+// stagger — the speed-up is applied before the `t < 0` test, so a big burst
+// still launches as a burst rather than all at once, it just gets out of the
+// way. And it is derived from the live length each frame, so it eases back off
+// as the crowd drains instead of latching.
+// Tuned against a REALISTIC crowd, which took two goes to measure properly. A
+// single spawnCoins call is capped at ~20 coins, so a screenful is never one
+// huge burst — it is ten small overlapping ones, a merge every ~350ms. Tuning
+// against a synthetic 140-coin burst pointed at the wrong lever entirely (that
+// burst is dominated by its own 14 t-units of stagger, which no real batch has).
+//
+// Measured on ten 18-coin merges, one every 350ms:
+//   fixed speed   peak 136 on screen, 2.0s to fall under 20
+//   crowd-scaled  peak  65 on screen, 0.6s
+// A normal burst of 8 is untouched, since it never crosses COIN_RUSH_FROM.
+const COIN_RUSH_FROM = 10;   // coins in flight before any speed-up at all
+const COIN_RUSH_SPAN = 25;   // ...and how many more each +1x takes
+const COIN_RUSH_MAX  = 4;    // hard cap, i.e. never faster than 5x normal
+
 function updateCoins(coins, dt, onCoinLand) {
+  const rush = 1 + Math.max(0, Math.min(COIN_RUSH_MAX,
+                (coins.length - COIN_RUSH_FROM) / COIN_RUSH_SPAN));
   for (const c of coins) {
-    c.t += 0.010 * dt;
+    c.t += 0.010 * dt * rush;
     if (c.t < 0) continue;
     if (c.t >= 1) { coinPop = 0.35; onCoinLand(); }
   }

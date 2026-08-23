@@ -423,6 +423,28 @@ read as the item shrinking the instant it left the launcher.
 non-rapid board digests are unchanged — but it IS a thing Mai could notice, so
 it is written down here rather than buried in the rapid-fire section.
 
+### Two things rapid fire changed for every mode
+
+- **Coins clear faster when the screen is crowded** (`COIN_RUSH_*`, render.js).
+  In late rapid fire a merge lands every few hundred ms and the coins stop
+  reading as a reward and become a curtain over the table. `updateCoins` scales
+  the whole flight — including each coin's negative stagger, since the speed-up
+  is applied before the `t < 0` test — by the live number in flight, so it eases
+  off again as the crowd drains. Measured on ten 18-coin merges 350ms apart:
+  peak on screen **136 → 65**, and 2.0s → **0.6s** to fall back under 20. A
+  normal burst never reaches `COIN_RUSH_FROM` and is untouched.
+  Tune it against a realistic crowd, not one big `spawnCoins` call: a single
+  call is capped at ~20 coins, and a synthetic 140-coin burst is dominated by
+  its own stagger, which sent the first tuning after the wrong lever.
+- **The quit confirm now FREEZES the run**, like the score panel. It was left
+  running because it was judged "rare or terminal" — it is neither. It is the
+  only pause this game has, and people use it as one when they need to put the
+  phone down (Mikael, 2026-08-23). Rapid made that reasoning plainly wrong,
+  since the cannon keeps firing on its own and a run dies behind the overlay,
+  but `checkOver`'s danger-line grace was counting in every other mode too. Both
+  exits unfreeze explicitly: a `paused` that outlived the run would freeze the
+  NEXT one at birth.
+
 ### Open, for after the playtest
 
 - **The 4th checkbox costs Kyoto its single row of toggles** — CLAUDE.md's note

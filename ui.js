@@ -326,17 +326,30 @@ function wireHUD(state) {
     if (e.target === scorePanel) hideScorePanel();
   });
 
+  // The quit confirm FREEZES the run, like the score panel does. It was left
+  // running on the grounds that it is "rare or terminal" — but it is neither:
+  // it is the only pause this game has, and people use it as one when they need
+  // to put the phone down for a moment (Mikael, 2026-08-23). In rapid that
+  // reasoning was actively wrong, since the cannon keeps firing on its own and
+  // a run would die behind the overlay; in every other mode checkOver's
+  // danger-line grace keeps counting just the same.
   const confirmOverlay = document.getElementById('confirm-menu');
   document.getElementById('menuBtn').onclick = () => {
     confirmOverlay.style.display = 'flex';
+    setPaused(true);
   };
   document.getElementById('confirm-yes').onclick = () => {
     confirmOverlay.style.display = 'none';
     peek.style.display = 'none';
+    // Unfreeze BEFORE leaving: `paused` outliving the run would freeze the next
+    // one at birth. (startGame's hideScorePanel() clears it too — belt and
+    // braces, same as that path.)
+    setPaused(false);
     returnToMenu();
   };
   document.getElementById('confirm-no').onclick = () => {
     confirmOverlay.style.display = 'none';
+    setPaused(false);
   };
 
   // Bug report (🐞): show the MMB1. code for the current run's last shots.
