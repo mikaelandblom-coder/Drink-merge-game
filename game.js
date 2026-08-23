@@ -687,26 +687,34 @@ function render(dt) {
 
   const sorted = [...state.drinks].sort((a, b) => a.position.y - b.position.y);
   for (const d of sorted) {
-    const born   = (performance.now() - d.plugin.born) / 200;
-    const growth = Math.min(1, 0.6 + born * 0.4);
+    // The sprite tracks the BODY's scale, never the body's age. Only merge
+    // products grow in (makeDrink's growIn flag is what sets plugin.scale, and
+    // stepPhysics advances it); a shot's body is full size from birth, so
+    // drawing it from 0.6 made the item visibly SHRINK the moment it left the
+    // launcher — sprite and hitbox disagreeing for 200ms. Mikael saw it in
+    // rapid, where the eye follows the projectile out of the cradle, but it was
+    // true of every shot on every map.
+    const growth = d.plugin.scale || 1;
     const p      = persp(d.position.x, d.position.y);
     drawDrink(p.x, p.y, d.plugin.item, p.s * growth, wob + d.id, drawnSpin(d), FLAT_ENABLED);
   }
 
   if (!state.gameOver) {
     recoil *= Math.pow(0.82, dt);
-    // Launcher art under the loaded drink, so the drink sits IN the cradle. The
-    // drink is lifted to the cradle's throat (LAUNCHER_LIFT) — purely a drawing
-    // offset; shots still spawn off LAUNCH exactly as they always have.
-    // The drink rides the spring down, so it stays seated in the cradle's
-    // throat through the wind-up instead of hovering above a sinking cradle.
-    const lift = RAPID_FIRE ? LAUNCHER_LIFT * launcherSquash(rfCharge) : 0;
+    // Launcher art under the loaded drink, so the drink sits IN the cradle.
     if (RAPID_FIRE) drawLauncher(sl, CANNON.tilt, rfCharge);
     // Scales in as it loads, so the next drink ARRIVES in the cradle instead of
     // blinking into it at full size.
     const load = (RAPID_FIRE && state.rfReload > 0)
       ? 0.72 + 0.28 * (1 - state.rfReload / RF_LOAD_MS) : 1;
-    if (state.canShoot) drawDrink(sl.x, sl.y + recoil - lift, ITEMS[state.nextTier], load, wob,
+    // Rapid places the preview through persp() at its real world point — the
+    // one loadedDrinkWY names — rather than by subtracting screen px, so the
+    // preview and the body it becomes are drawn at the same place AND the same
+    // perspective scale. Classic is left exactly as it was.
+    const lp = RAPID_FIRE ? persp(LAUNCH.x, LAUNCH.y - LAUNCHER_LIFT * launcherSquash(rfCharge))
+                          : sl;
+    if (state.canShoot) drawDrink(lp.x, lp.y + recoil, ITEMS[state.nextTier],
+                                  RAPID_FIRE ? lp.s * load : 1, wob,
                                   undefined, FLAT_ENABLED);
   }
 

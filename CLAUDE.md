@@ -380,6 +380,15 @@ in **817ms**, and classic still takes its full 1500ms.
   there is no press to reveal it. The mode still needs *some* warning of when
   the shot leaves, or the cadence reads as random and feels unfair rather than
   fast — see the charge readout below.
+- **`loadedDrinkWY()` (render.js) is where the loaded drink is, and BOTH the
+  preview and the spawn read it.** They used to disagree: the preview sat at the
+  cradle's throat while `fireShot` spawned the body at `LAUNCH.y - physR - 4`,
+  ~20px lower — and since field drinks are drawn BEHIND the launcher art, a shot
+  visibly dropped back behind the cradle for a frame before flying (Mikael,
+  2026-08-23). Rapid now spawns at full spring compression, i.e. exactly where
+  the drink was drawn on the frame before firing, so the spring releasing is the
+  only movement. Measured at a 0.01px gap. Classic keeps its original expression
+  to the letter and is untouched.
 - **The cradle stands EMPTY between shots** (`RF_RELOAD_MS` + `RF_LOAD_MS`,
   frame-counted like the cadence). The first build rolled the next tier inside
   `fireShot`, so the next drink appeared in the cradle on the very frame the
@@ -399,13 +408,34 @@ in **817ms**, and classic still takes its full 1500ms.
   on** while fighting the XP bar for the same strip of screen (Mikael, on a
   phone, 2026-08-23). Two cues, neither of them a new element.
 
+### A sprite's scale tracks its BODY, not its age (fixed 2026-08-23)
+
+`render()` used to draw **every** drink growing from 0.6 to full over 200ms off
+`plugin.born`. Only merge products actually grow — `makeDrink`'s `growIn` flag
+is what sets `plugin.scale`, and `stepPhysics` advances it — so a *shot*, whose
+body is full size from birth, was drawn at 60% of its own hitbox for 200ms. It
+read as the item shrinking the instant it left the launcher.
+
+`const growth = d.plugin.scale || 1` makes the sprite track the body exactly.
+
+**This changes classic too**, and deliberately: every shot on every map loses a
+200ms grow-in pop that never matched its physics. It is visual only — all 25
+non-rapid board digests are unchanged — but it IS a thing Mai could notice, so
+it is written down here rather than buried in the rapid-fire section.
+
 ### Open, for after the playtest
 
 - **The 4th checkbox costs Kyoto its single row of toggles** — CLAUDE.md's note
   about 17px boxes was written for exactly this. It wraps cleanly to two rows at
   360/390/430px (verified, nothing clipped), but the real fix is that Classic /
-  Happy Hour / Rapid are **mutually exclusive** and should be a segmented mode
-  control, not N checkboxes that each disable the others.
+  Happy Hour / Rapid are **mutually exclusive** and want a segmented mode
+  control rather than N checkboxes.
+  Until then, **neither mode box is ever disabled**: ticking one UNTICKS the
+  other (`syncModeToggles` in welcome.js). A disabled box is a dead end — you
+  have to work out for yourself which other control is holding it down, and on a
+  phone it just reads as broken (Mikael, 2026-08-23). The COMBO box is still
+  disabled under either mode, and that is a different thing: it is not excluded
+  by the mode, it is PINNED by it, so showing the pinned value is honest.
 - **Is the spring wind-up loud enough on a small screen?** It replaced the
   charge ring for good reasons, but it is a subtler cue by design. If it proves
   too quiet, the next thing to try is the aim line (brightness, or dashes that

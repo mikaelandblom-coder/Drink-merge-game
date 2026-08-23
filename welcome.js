@@ -150,13 +150,13 @@ function buildWelcomeCards() {
     const rapidToggle =
       `<label class="map-opt-toggle" title="The launcher fires itself, faster and faster — steer it and keep the chain alive. A short run.">
          <input type="checkbox" class="map-rapid-cb" data-id="${map.id}"
-                ${rapid ? 'checked' : ''} ${hh ? 'disabled' : ''}>
+                ${rapid ? 'checked' : ''}>
          <span>Rapid fire</span>
        </label>`;
     const hhToggle =
       `<label class="map-opt-toggle" title="Customers order drinks off your table — serve them for coins and merge the receipts">
          <input type="checkbox" class="map-hh-cb" data-id="${map.id}"
-                ${hh ? 'checked' : ''} ${rapid ? 'disabled' : ''}>
+                ${hh ? 'checked' : ''}>
          <span>Happy Hour</span>
        </label>`;
     // A parked run (suspend.js) turns the single Play button into Continue +
@@ -236,6 +236,11 @@ function wireWelcomeEvents() {
     cb.onclick = e => e.stopPropagation();
     cb.onchange = () => {
       setMapHH(cb.dataset.id, cb.checked);
+      // The two modes are mutually exclusive, so ticking one UNTICKS the other
+      // rather than greying it out. A disabled box is a dead end: you have to
+      // work out for yourself which other control is holding it down, and on a
+      // phone it just reads as broken (Mikael, 2026-08-23).
+      if (cb.checked) setMapRapid(cb.dataset.id, false);
       syncModeToggles(map);
       refreshScoreList(map);
     };
@@ -246,6 +251,7 @@ function wireWelcomeEvents() {
     cb.onclick = e => e.stopPropagation();
     cb.onchange = () => {
       setMapRapid(cb.dataset.id, cb.checked);
+      if (cb.checked) setMapHH(cb.dataset.id, false);   // see the note above
       syncModeToggles(map);
       refreshScoreList(map);
     };
@@ -255,6 +261,12 @@ function wireWelcomeEvents() {
   // so one pass re-derives all three boxes from the stored preferences. Doing it
   // in one place is what keeps the menu agreeing with startGame, which enforces
   // the same exclusions independently.
+  //
+  // NEITHER mode box is ever disabled — the handlers above untick the other one
+  // instead, so both are always pressable and a tap always does something. Only
+  // the COMBO box is disabled, and that is a different thing: it is not excluded
+  // by the mode, it is PINNED by it, and showing the pinned value is honest
+  // rather than a dead end.
   function syncModeToggles(map) {
     const rapid = getMapRapid(map), hh = getMapHH(map);
     const q = sel => document.querySelector(`${sel}[data-id="${map.id}"]`);
@@ -265,8 +277,8 @@ function wireWelcomeEvents() {
       // is a plain one again.
       comboCb.checked  = rapid ? true : hh ? false : getMapCombos(map);
     }
-    if (hhCb)    hhCb.disabled    = rapid;
-    if (rapidCb) rapidCb.disabled = hh;
+    if (hhCb)    hhCb.checked    = hh;
+    if (rapidCb) rapidCb.checked = rapid;
   }
 
   document.querySelectorAll('.play-btn').forEach(btn => {

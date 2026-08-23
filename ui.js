@@ -111,8 +111,7 @@ function fireCannon() {
 // disagree about what a shot IS — only about when one happens.
 function fireShot(state, dirX, dirY) {
   const len = Math.max(1e-6, Math.hypot(dirX, dirY));
-  const d = makeDrink(LAUNCH.x, LAUNCH.y - ITEMS[state.nextTier].physR - 4,
-                      state.nextTier, true);
+  const d = makeDrink(LAUNCH.x, loadedDrinkWY(state.nextTier), state.nextTier, true);
   const speed = 27;
   Body.setVelocity(d, { x: dirX / len * speed, y: dirY / len * speed });
   BUGLOG.shot(d);   // bug-report ring: shot + the board it flew into

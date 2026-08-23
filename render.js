@@ -99,6 +99,22 @@ function launcherSquash(charge) {
   return 1 - RF_SQUASH * c * c * c;
 }
 
+// Where the loaded drink sits, in WORLD coords. The single source of truth for
+// both the preview render() draws and the body fireShot spawns — if those two
+// disagree the shot JUMPS the instant one replaces the other, which is exactly
+// what it did: the preview sat at the cradle's throat while the body spawned
+// ~20px lower, so a rapid shot dropped back behind the launcher art for a frame
+// before flying off (Mikael, 2026-08-23).
+//
+// Rapid spawns at FULL compression — where the drink was drawn on the frame
+// before firing — so the spring then releasing upward is the only movement.
+// Classic keeps its original expression to the letter, so its shots are
+// untouched; only rapid, which has a cradle to sit in, moves.
+function loadedDrinkWY(tier) {
+  return RAPID_FIRE ? LAUNCH.y - LAUNCHER_LIFT * launcherSquash(1)
+                    : LAUNCH.y - ITEMS[tier].physR - 4;
+}
+
 function drawLauncher(sl, tilt, charge) {
   const base = LAUNCHER_IMGS.base, head = LAUNCHER_IMGS.head;
   if (!base || !base.complete || !base.naturalWidth) return;
