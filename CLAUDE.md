@@ -371,11 +371,44 @@ BACK into the zone ending the run the instant it arrives.
   360/390/430px (verified, nothing clipped), but the real fix is that Classic /
   Happy Hour / Rapid are **mutually exclusive** and should be a segmented mode
   control, not N checkboxes that each disable the others.
-- **No launcher art yet.** The charge ring is the whole indicator. A two-part
-  brass cradle + base plate was generated 2026-08-23 (prompt in
-  assets/ART-PROMPTS.md terms: shared chrome family, not map-themed) but the
-  head sprite came back with its own base plate baked in, so it needs cropping
-  at the spring before it can tilt. Only the head rotates; the plate never does.
+- **The charge ring and the cradle are two round things in the same place.**
+  Legible, but they compete a little — if the ring has to go, the mode still
+  needs *some* readout of when the shot leaves.
+
+### The launcher art — two sprites, because only the head turns
+
+`assets/images/shared/launcher-head.png` + `-base.png`: a brass cradle on a
+spring, and the plate it is mounted on. **Shared chrome, not map art** — the
+same reasoning as the coin and the moneybag, since it has to sit on a tiki bar
+and in a mage tower alike. Generated white-on-transparent as one sheet
+(`assets/source/shared/launcher.png`).
+
+- **It is two sprites because a one-piece launcher tips over when it tilts.**
+  The head rotates about the point where its spring meets the hub; the plate
+  never rotates at all.
+- **The cut is a `boxes` entry, not a grid.** The generator drew the cradle
+  already standing on its own base plate, and the spring runs down BEHIND that
+  plate's rim — so the boundary between the two parts is a horizontal cut
+  partway through one drawn object, and `split_alpha_grid` has no gutter to
+  find. `handle_boxes` takes explicit source rectangles instead. The head is cut
+  at y=500, just above where the plate first flares.
+- **`max_height` scales the whole SHEET by one factor, never each sprite to the
+  same height.** These parts are drawn assembled: capping each to 256px
+  independently resized them 3% relative to each other, which is enough to leave
+  the cradle sitting proud of its hub.
+- **The head is drawn at 0.45× the shot's tilt** (`LAUNCHER_TILT_K`). At the
+  full 40° a horseshoe pivoting down at its spring swings clear off its own
+  plate and reads as having fallen over — the head sprite is wider than the base
+  to begin with. The aim line carries the true direction; the art only has to
+  lean into it. 0.6 still overhung; the range was rendered to pick this.
+- **`LAUNCHER_DY` and `LAUNCHER_LIFT` are one measurement.** LAUNCH sits close
+  enough to the near edge that a plate centred on it hangs into the XP bar, so
+  the assembly is raised — and the loaded drink is raised by the matching amount
+  so it still sits in the cradle's throat rather than in front of it. Move one
+  and the other must move.
+- **`cannonMargin()` accounts for the ART, not the drink.** The cradle is wider
+  than anything it can hold, so in rapid the carriage has to stop before the
+  cradle would hang off the table.
 
 ### Map cards wear the map's own art
 
@@ -1051,6 +1084,7 @@ Each map lists its source files. Entry types:
 | `single` | one item per file (preferred) |
 | `pair` | two items side by side (coin + bag) |
 | `spritesheet` | grid of items; use `separator` for reliable splits |
+| `boxes` | explicit pixel rectangles, for parts a grid cannot separate |
 
 Backgrounds are not PIPELINE entries — they need no keying, only recompression,
 so they have their own script: `python compress_backgrounds.py` turns each

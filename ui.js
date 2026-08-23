@@ -77,7 +77,7 @@ function startCannonDrag(p, e, canvas) {
 // constant for a whole run. (Classic's updateAim keeps its per-tier margin: it
 // only matters while a finger is down, and it is verified unchanged.)
 function cannonMargin() {
-  let r = 0;
+  let r = LAUNCHER_HALF_W;   // the cradle is wider than anything it can hold
   for (let t = 0; t < dropMax(); t++) r = Math.max(r, ITEMS[t].physR);
   return r + 14;
 }

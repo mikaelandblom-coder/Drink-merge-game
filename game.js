@@ -651,7 +651,7 @@ function render(dt) {
 
   const sl = persp(LAUNCH.x, LAUNCH.y);
   drawAimLine(aiming, state.gameOver, sl, aimX, aimY);
-  if (RAPID_FIRE && !state.gameOver) drawRapidAim(sl, CANNON.tilt);
+  if (RAPID_FIRE && !state.gameOver) drawRapidAim(sl, CANNON.tilt, LAUNCHER_LIFT);
 
   const sorted = [...state.drinks].sort((a, b) => a.position.y - b.position.y);
   for (const d of sorted) {
@@ -663,9 +663,14 @@ function render(dt) {
 
   if (!state.gameOver) {
     recoil *= Math.pow(0.82, dt);
-    if (state.canShoot) drawDrink(sl.x, sl.y + recoil, ITEMS[state.nextTier], 1, wob,
+    // Launcher art under the loaded drink, so the drink sits IN the cradle. The
+    // drink is lifted to the cradle's throat (LAUNCHER_LIFT) — purely a drawing
+    // offset; shots still spawn off LAUNCH exactly as they always have.
+    const lift = RAPID_FIRE ? LAUNCHER_LIFT : 0;
+    if (RAPID_FIRE) drawLauncher(sl, CANNON.tilt);
+    if (state.canShoot) drawDrink(sl.x, sl.y + recoil - lift, ITEMS[state.nextTier], 1, wob,
                                   undefined, FLAT_ENABLED);
-    if (RAPID_FIRE) drawRapidCharge(sl, 1 - state.rfTimer / rfCadence());
+    if (RAPID_FIRE) drawRapidCharge(sl, 1 - state.rfTimer / rfCadence(), lift);
   }
 
   drawParticles(state.particles, dt);
@@ -940,6 +945,7 @@ function startGame(map, opts = {}) {
   // 2-4 minute run has no room to develop. HH wins the tie so a stale rapid
   // preference can never quietly disable a mode the player did tick.
   RAPID_FIRE = !!opts.rapid && !HAPPY_HOUR;
+  if (RAPID_FIRE) loadLauncherSprites();   // shared chrome, fetched only for this mode
   // Combo multipliers: per-run override from the menu, else the map's default.
   // Rapid FORCES them on — the mode is built around sustaining a chain through
   // the cadence (see fireShot in ui.js), so its scores are only comparable to

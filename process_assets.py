@@ -76,6 +76,22 @@ PIPELINE = {
             'names':        ['shared/coin', 'shared/moneybag'],
             'white_thresh': 245,   # gold edges are close to white; be strict
         },
+        # Rapid fire's launcher (shared chrome, not map-themed — it has to sit on
+        # a tiki bar and in a mage tower alike, so it is brass like the coin and
+        # the moneybag rather than dressed for any one map). TWO sprites because
+        # only the head rotates: see handle_boxes for why the split is a box cut
+        # and not a grid, and drawLauncher (render.js) for the anchors.
+        {
+            'file':  'launcher.png',
+            'type':  'boxes',
+            'names': ['shared/launcher-head', 'shared/launcher-base'],
+            # head: cut at y=500, just above where the plate's rim first appears
+            # (the widest cradle row is 89, the spring narrows to ~245px by 433,
+            # and the plate flares from 497). base: the right-hand sprite whole.
+            'boxes': [(103, 0, 812, 500), (1011, 0, 1663, 887)],
+            'max_height': 256,
+        },
+
         # Happy Hour mode: customer cast (shared across all maps)
         {
             'file':   'customers.png',
@@ -1085,10 +1101,53 @@ def handle_single(src: Path, cfg: dict):
     print(f"    {cfg['name']}.png")
 
 
+def handle_boxes(src: Path, cfg: dict):
+    """Cut named sprites from EXPLICIT pixel rectangles of a transparent sheet.
+
+    For art whose parts cannot be separated by a grid. The rapid-fire launcher
+    is the case it exists for: the generator drew the cradle already sitting on
+    its own base plate, and the two must become separate sprites because only
+    the cradle rotates. But the spring runs down BEHIND the plate's rim, so the
+    boundary between them is a horizontal cut partway through one drawn object
+    rather than a gutter — and split_alpha_grid finds gutters, of which there is
+    none to find. Boxes are (left, top, right, bottom) in SOURCE pixels; each is
+    then trimmed to its own alpha like every other output.
+
+    'max_height' downscales the result (same reasoning as the sprite editor's
+    cap — see the customer-cast note in CLAUDE.md: art that draws at ~60px does
+    not need to ship at 900).
+    """
+    img = Image.open(src).convert("RGBA")
+    cells = []
+    for name, box in zip(cfg['names'], cfg['boxes']):
+        cell = img.crop(tuple(box))
+        a = np.array(cell)[:, :, 3] > 32
+        if not a.any():
+            print(f"    !! {name}: box {tuple(box)} contains nothing"); continue
+        ys, xs = np.where(a)
+        p = TRIM_PAD
+        cells.append((name, cell.crop((max(0, xs.min() - p), max(0, ys.min() - p),
+                                       min(cell.width,  xs.max() + p + 1),
+                                       min(cell.height, ys.max() + p + 1)))))
+    # ONE scale for the whole sheet, not one per sprite. These parts are drawn
+    # assembled, so capping each to the same pixel height would silently resize
+    # them relative to each other by however much their source heights differ —
+    # 3% for the launcher, enough to leave the cradle sitting proud of its hub.
+    cap = cfg.get('max_height')
+    k = min(1.0, cap / max(c.height for _, c in cells)) if cap else 1.0
+    for name, cell in cells:
+        if k < 1.0:
+            cell = cell.resize((max(1, round(cell.width * k)),
+                                max(1, round(cell.height * k))), Image.LANCZOS)
+        cell.save(out_path(name), "PNG")
+        print(f"    {name}.png  {cell.width}x{cell.height}")
+
+
 HANDLERS = {
     'spritesheet': handle_spritesheet,
     'pair':        handle_pair,
     'single':      handle_single,
+    'boxes':       handle_boxes,
 }
 
 

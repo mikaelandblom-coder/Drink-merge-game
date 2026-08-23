@@ -34,6 +34,71 @@ function drawDangerLine(dangerWY) {
   ctx.setLineDash([]);
 }
 
+// ---------- rapid fire launcher art ----------
+// TWO sprites, because only the HEAD turns: a brass cradle on a spring that
+// leans with the aim, and a base plate that never moves. They are shared chrome
+// rather than map art (the same reasoning as the coin and the moneybag — this
+// has to sit on a tiki bar and in a mage tower alike), and they are loaded
+// lazily, so a classic run never pays for art it cannot draw.
+const LAUNCHER_IMGS = { head: null, base: null };
+let launcherLoading = false;
+
+function loadLauncherSprites() {
+  if (launcherLoading) return;
+  launcherLoading = true;
+  for (const part of ['head', 'base']) {
+    const img = new Image();
+    // A sprite landing on an already-settled board would otherwise not be
+    // painted until the next shot (the same reason bakeCustomer wakes it).
+    img.onload = () => wakeRender();
+    img.src = `assets/images/shared/launcher-${part}.png`;
+    LAUNCHER_IMGS[part] = img;
+  }
+}
+
+const LAUNCHER_W = 92;      // world px across the base plate
+// Half the HEAD's drawn width (the cradle is wider than the plate). ui.js uses
+// it to stop the carriage before the cradle would hang off the table — in rapid
+// the art, not the drink, is the widest thing on the launcher.
+const LAUNCHER_HALF_W = 50;
+// Anchors measured off the extracted sprites (the 'boxes' entry in
+// process_assets.py): where the spring's axis meets the cut edge of the head,
+// and the centre of the base's hub bore. Fractions, not pixels, so re-cutting
+// the art at another size keeps them correct.
+const LH_PIVOT = { x: 0.508, y: 0.992 };
+const LB_HUB   = { x: 0.514, y: 0.368 };
+// World px the assembly sits below the launch point. Negative: LAUNCH is close
+// enough to the near edge of the table that a plate centred on it hangs over the
+// lip and into the XP bar. LAUNCHER_LIFT then raises the loaded DRINK by the
+// same geometry, so it still sits in the cradle's throat rather than in front
+// of it — the two numbers are one measurement and must move together.
+const LAUNCHER_DY   = -8;
+const LAUNCHER_LIFT = 26;
+// The head is drawn at a FRACTION of the shot's tilt. At the full 40 degrees a
+// horseshoe pivoting down at its spring swings clear off its own base plate and
+// reads as having fallen over — the head sprite is wider than the base to start
+// with. The aim line carries the true direction; the launcher only has to lean
+// into it, and 0.45 was picked by rendering the range (0.6 still overhung).
+const LAUNCHER_TILT_K = 0.45;
+
+function drawLauncher(sl, tilt) {
+  const base = LAUNCHER_IMGS.base, head = LAUNCHER_IMGS.head;
+  if (!base || !base.complete || !base.naturalWidth) return;
+  // ONE scale for both parts — they are exported at a common scale precisely so
+  // they can be assembled, so deriving k from the base sizes the head too.
+  const k  = (LAUNCHER_W / base.naturalWidth) * sl.s;
+  const bw = base.naturalWidth * k, bh = base.naturalHeight * k;
+  const ax = sl.x, ay = sl.y + LAUNCHER_DY * sl.s;
+  ctx.drawImage(base, ax - LB_HUB.x * bw, ay - LB_HUB.y * bh, bw, bh);
+  if (!head || !head.complete || !head.naturalWidth) return;
+  const hw = head.naturalWidth * k, hh = head.naturalHeight * k;
+  ctx.save();
+  ctx.translate(ax, ay);
+  ctx.rotate(tilt * LAUNCHER_TILT_K);
+  ctx.drawImage(head, -LH_PIVOT.x * hw, -LH_PIVOT.y * hh, hw, hh);
+  ctx.restore();
+}
+
 // ---------- rapid fire launcher readout ----------
 // Both halves are load-bearing rather than decorative. The aim line is STANDING
 // STATE in rapid — there is no press to reveal it, so it has to be on screen at
@@ -42,20 +107,24 @@ function drawDangerLine(dangerWY) {
 // the mode feel unfair rather than fast.
 const RF_REACH = 140;   // world px of drawn aim line
 
-function drawRapidAim(sl, tilt) {
+function drawRapidAim(sl, tilt, lift = 0) {
   const tp = persp(LAUNCH.x + Math.sin(tilt) * RF_REACH,
                    LAUNCH.y - Math.cos(tilt) * RF_REACH);
+  // Start at the cradle's throat, not at LAUNCH: with the launcher art drawn,
+  // a line from the launch point begins underneath the loaded drink and its
+  // first stretch is invisible.
+  const sy = sl.y - lift * sl.s;
   // Dashed and dimmer than the classic aim line, which appears only under the
   // finger and should stay the more emphatic of the two.
   ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
   ctx.setLineDash([7, 8]);
-  ctx.beginPath(); ctx.moveTo(sl.x, sl.y); ctx.lineTo(tp.x, tp.y); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(sl.x, sy); ctx.lineTo(tp.x, tp.y); ctx.stroke();
   ctx.setLineDash([]);
 }
 
 // Drawn AFTER the launcher's drink so the ring reads as a collar around it
 // rather than a disc behind it. charge runs 0 (just fired) -> 1 (firing now).
-function drawRapidCharge(sl, charge) {
+function drawRapidCharge(sl, charge, lift = 0) {
   const c = Math.max(0, Math.min(1, charge));
   const R = 30 * sl.s;
   // Lifted off the launch point rather than centred on it. LAUNCH sits low
@@ -63,7 +132,7 @@ function drawRapidCharge(sl, charge) {
   // drink is drawn bottom-anchored ABOVE the point anyway — so the collar reads
   // as being around the loaded item, and clears the frame. Scaled by sl.s like
   // everything else, or it would drift off the launcher on a phone.
-  const cy = sl.y - 11 * sl.s;
+  const cy = sl.y - (11 + lift) * sl.s;
   ctx.lineWidth = 4; ctx.lineCap = 'butt';
   ctx.strokeStyle = 'rgba(20,10,2,.35)';
   ctx.beginPath(); ctx.arc(sl.x, cy, R, 0, Math.PI * 2); ctx.stroke();
