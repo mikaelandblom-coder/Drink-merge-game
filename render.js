@@ -58,14 +58,20 @@ function drawRapidAim(sl, tilt) {
 function drawRapidCharge(sl, charge) {
   const c = Math.max(0, Math.min(1, charge));
   const R = 30 * sl.s;
+  // Lifted off the launch point rather than centred on it. LAUNCH sits low
+  // enough that a ring centred there is sliced by the table's near lip, and the
+  // drink is drawn bottom-anchored ABOVE the point anyway — so the collar reads
+  // as being around the loaded item, and clears the frame. Scaled by sl.s like
+  // everything else, or it would drift off the launcher on a phone.
+  const cy = sl.y - 11 * sl.s;
   ctx.lineWidth = 4; ctx.lineCap = 'butt';
   ctx.strokeStyle = 'rgba(20,10,2,.35)';
-  ctx.beginPath(); ctx.arc(sl.x, sl.y, R, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(sl.x, cy, R, 0, Math.PI * 2); ctx.stroke();
   // Goes brass in the last ~15% so the beat is readable peripherally, while the
   // player is watching the field rather than the launcher.
   ctx.strokeStyle = c > 0.85 ? 'rgba(255,206,110,.95)' : 'rgba(255,255,255,.78)';
   ctx.beginPath();
-  ctx.arc(sl.x, sl.y, R, -Math.PI / 2, -Math.PI / 2 + c * Math.PI * 2);
+  ctx.arc(sl.x, cy, R, -Math.PI / 2, -Math.PI / 2 + c * Math.PI * 2);
   ctx.stroke();
 }
 
