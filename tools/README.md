@@ -1,8 +1,8 @@
 # Dev tool manuals
 
 Working notes for the three browser tools in this folder — the hitbox editor,
-the sprite editor and the sound lab — plus `shot.js`, which is not a browser
-tool but a command line one (see the last section). **Read the relevant section before editing
+the sprite editor and the sound lab — plus the two command line ones,
+`shot.js` and `check.js` (see the last two sections). **Read the relevant section before editing
 anything in `tools/`**: nearly every paragraph here encodes a trap that already
 cost real time once (the `showSaveFilePicker` truncation that wiped
 `config/items.js`, sprite paths that 404 invisibly, a library that goes blank
@@ -454,3 +454,69 @@ every session, each time rediscovering the same things:
 - Chromium comes from `$MM_CHROME` or `/opt/pw-browsers/chromium`; the driver
   library is installed outside the repo by `.claude/hooks/session-start.sh`.
   See "Working in a cloud session" in `../CLAUDE.md`.
+
+---
+
+## Regression checks — `tools/check.js`
+
+```
+python serve.py 5500                 # it talks to the dev server
+node tools/check.js                  # board digests + an advisory preflight
+node tools/check.js --deploy         # preflight becomes a hard failure
+node tools/check.js --only=boards    # or --only=preflight
+node tools/check.js --update         # regenerate the board goldens
+```
+
+Runs in ~6s and exits non-zero on failure, so it can gate a commit or a deploy.
+
+### Board digests
+
+Seeded runs across every non-locked map × `default` / `happyhour` / `rapid`,
+plus the non-default framing for maps with size variants — 35 scenarios,
+compared against `tools/golden/board-digests.json`.
+
+**It exists because of this project's shape, not for coverage.** Every feature
+so far — size variants, combos, Happy Hour, `spin`, `flat`, rapid fire — is
+another flag threaded through the same handful of shared functions, and there
+are 60 live score variants. The risk is never "does the new thing work", it is
+"did the new flag quietly move a map nobody was looking at".
+
+- **Score, item count, the tier multiset and the Happy Hour queue are compared
+  EXACTLY. Positions get 1px of tolerance** (`POS_TOL`) — `TT.state()` already
+  rounds to whole world px, and a real behavioural change moves items far
+  further than a rounding boundary or a different Chromium's last-bit drift.
+- **Regenerate with `--update` only when a gameplay change is intended, and
+  read the diff.** A golden that is refreshed reflexively protects nothing.
+- **The rapid scenario steers through every regime on purpose** — pinned at
+  each edge, centred, swept fast, and released to glide. A gentle sine wave was
+  the first version and it was worthless: a mutation test (`RF_TILT_MAX`
+  0.70 → 0.60) went entirely unnoticed, because the carriage keeps up with a
+  slow finger and the offset never reaches the clamp. Mutation-test any new
+  scenario before trusting it. With the pattern above, that same mutation fails
+  exactly the 9 rapid scenarios and nothing else; a global physics nudge
+  (`restitution` 0.02 → 0.03) fails 34 of 35.
+- **`TT.settle()` is only called for boards that CAN settle.** In rapid the
+  launcher keeps firing inside `TT.step`, so settle would just burn its
+  1800-frame cap; there the fixed frame count is the whole scenario.
+- **This is what caught the virtual clock leaking real time** — see "Test mode"
+  in `../CLAUDE.md`. 9 of 35 scenarios differed on a re-run against completely
+  unchanged code, which is how a "reproducible most of the time" harness
+  finally became visible.
+
+### Deploy preflight
+
+The CLAUDE.md deploy checklist, as a check: it diffs against `origin/main`
+(`--base=` to change) and reports any file `index.html` serves that changed
+without its `?v=` moving, plus a `?v=` bump that forgot `GAME_VERSION`.
+
+Shipping a `config/*.js` change without a bump does not deploy it — it ARMS it
+for the next deploy, which then gets the blame. That is exactly how the 9→18
+customer cast landed, and it cost a real debugging session.
+
+- **Advisory by default, blocking under `--deploy`.** Ordinary branch work is
+  *expected* to sit unbumped for a while; only a deploy can actually be broken
+  by it. A check that cried wolf on every commit would be ignored by the time
+  it mattered.
+- **A served file with no `?v=` at all is reported too** — `vendor/matter-…js`
+  carries its version in its filename, so editing it in place ships to nobody.
+  An upgrade there is a rename.

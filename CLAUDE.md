@@ -91,6 +91,14 @@ tools/
                          `node tools/shot.js out.png --map=kyoto --bytes`. The
                          way to verify a UI change, and the way to measure a
                          page's byte cost.
+  check.js            — Regression checks, ~6s, exits non-zero. Seeded board
+                         digests across every map × mode (goldens in
+                         tools/golden/) + a deploy preflight for the `?v=` /
+                         GAME_VERSION checklist. `node tools/check.js`,
+                         `--deploy` to enforce the preflight, `--update` to
+                         regenerate goldens. Manual in tools/README.md.
+  golden/             — Committed board digests for check.js. Regenerate ONLY
+                         for an intended gameplay change, and read the diff.
   hitbox-editor.html  — Visual hitbox editor (manual: tools/README.md)
   sprite-editor.html  — Visual sprite prep: AI sheet -> individual PNGs, then
                          PNGs -> an items.js tier chain (manual: tools/README.md)
@@ -1025,8 +1033,8 @@ What still has to be known rather than installed:
 
 **http://localhost:5500/?test=1** loads `test.js`, which installs `window.TT`
 (the file is inert without the flag — Mai's game never runs it). It is the
-fast path for verification: it wraps `performance.now()` with a virtual offset
-and steps the game **synchronously** (same per-frame code as live play:
+fast path for verification: it replaces `performance.now()` with a **fully
+virtual clock** and steps the game **synchronously** (same per-frame code as live play:
 `checkOver` + `stepPhysics` + `render`), so merges, the 1.5s game-over grace,
 combo windows and coin flights all fast-forward deterministically — hidden
 preview tab or not. No rAF, no real-time waits, no pointer-event simulation.
@@ -1057,6 +1065,17 @@ before `startGame`, and `TT.seed()` now re-rolls `next`/`queuedTier` through
 orderings consume the same two rolls and give the same run. An UNSEEDED run is
 still non-reproducible by design; seed every run you intend to compare. Any new
 code that draws the starting pair must go through `rollFreshTiers()` too.
+
+**The clock advances ONLY in `TT.step`, and that is load-bearing.** It used to
+be `realNow() + skew`, which let the few real milliseconds a batch of steps
+takes to execute leak into every `now - born` comparison in the game — enough to
+flip a 200ms merge grow-in or a 1400ms combo window between two runs of an
+identical script, and once one merge lands differently the whole board diverges.
+Seeded runs were therefore reproducible only MOST of the time, which is the
+worst kind of flaky. `tools/check.js` is what made it visible (9 of 35 board
+digests differed on a re-run against unchanged code) and it is the reason the
+golden digests are worth anything. Anything that needs to advance game time must
+go through `TT.step`.
 
 Notes: high-score saves are stubbed in test mode (localStorage boards stay
 clean); map ids are `hawaii/saigon/kyoto/mage/teddy/melody` (TT.start errors

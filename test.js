@@ -36,9 +36,18 @@ if (/[?&]test\b/.test(location.search)) {
   // Everything time-based in the game reads performance.now(), so skewing it
   // is all it takes to fast-forward merges, game-over grace, combo expiry and
   // customer walk-ins deterministically.
+  // The clock is FULLY virtual: it advances only when TT.step advances it, and
+  // never on its own. It used to be realNow() + skew, which let real wall-clock
+  // time — the few ms a batch of steps actually takes to execute — leak into
+  // every `now - born` comparison in the game. That is enough to flip a 200ms
+  // merge grow-in or a 1400ms combo window between two runs of an identical
+  // script, and once one merge lands differently the whole board diverges. So
+  // seeded runs were reproducible only MOST of the time, which is the worst
+  // kind: tools/check.js made it plain, with 9 of 35 board digests differing on
+  // a re-run against completely unchanged code.
   const realNow = performance.now.bind(performance);
-  let clockSkew = 0;
-  performance.now = () => realNow() + clockSkew;
+  let vClock = realNow();          // start at a plausible value, then freeze
+  performance.now = () => vClock;
 
   // High scores: a test run must never write into the real local boards.
   saveScore = () => ({ inTop: false, rank: 0 });
@@ -156,7 +165,13 @@ if (/[?&]test\b/.test(location.search)) {
     const len = Math.max(1, Math.hypot(dx, dy));
     Body.setVelocity(d, { x: dx / len * 27, y: dy / len * 27 });
     BUGLOG.shot(d);   // record like a real pointerup shot (round-trip testing)
-    state.combo = 0;
+    // Matches fireShot's rule rather than restating it: rapid deliberately does
+    // NOT reset the chain per throw (its cadence is faster than COMBO_WINDOW),
+    // so a scripted shot must not either, or a rapid test would measure a combo
+    // behaviour the real mode does not have. The rest of this function still
+    // duplicates fireShot on purpose — it skips the canShoot lock so a script
+    // can fire on demand — but the two must not disagree about SCORING.
+    if (!RAPID_FIRE) state.combo = 0;
     rollNext();
     return d.id;
   };
@@ -243,7 +258,7 @@ if (/[?&]test\b/.test(location.search)) {
   // always current.
   TT.step = function (n = 1) {
     for (let i = 0; i < n; i++) {
-      clockSkew += FRAME_MS;
+      vClock += FRAME_MS;
       checkOver();
       if (state.combo > 0 && performance.now() - state.lastMergeAt > COMBO_WINDOW) state.combo = 0;
       stepPhysics();
