@@ -34,6 +34,134 @@ function drawDangerLine(dangerWY) {
   ctx.setLineDash([]);
 }
 
+// ---------- rapid fire launcher art ----------
+// TWO sprites, because only the HEAD turns: a brass cradle on a spring that
+// leans with the aim, and a base plate that never moves. They are shared chrome
+// rather than map art (the same reasoning as the coin and the moneybag — this
+// has to sit on a tiki bar and in a mage tower alike), and they are loaded
+// lazily, so a classic run never pays for art it cannot draw.
+const LAUNCHER_IMGS = { head: null, base: null };
+let launcherLoading = false;
+
+function loadLauncherSprites() {
+  if (launcherLoading) return;
+  launcherLoading = true;
+  for (const part of ['head', 'base']) {
+    const img = new Image();
+    // A sprite landing on an already-settled board would otherwise not be
+    // painted until the next shot (the same reason bakeCustomer wakes it).
+    img.onload = () => wakeRender();
+    img.src = `assets/images/shared/launcher-${part}.png`;
+    LAUNCHER_IMGS[part] = img;
+  }
+}
+
+const LAUNCHER_W = 92;      // world px across the base plate
+// Half the HEAD's drawn width (the cradle is wider than the plate). ui.js uses
+// it to stop the carriage before the cradle would hang off the table — in rapid
+// the art, not the drink, is the widest thing on the launcher.
+const LAUNCHER_HALF_W = 50;
+// Anchors measured off the extracted sprites (the 'boxes' entry in
+// process_assets.py): where the spring's axis meets the cut edge of the head,
+// and the centre of the base's hub bore. Fractions, not pixels, so re-cutting
+// the art at another size keeps them correct.
+const LH_PIVOT = { x: 0.508, y: 0.992 };
+const LB_HUB   = { x: 0.514, y: 0.368 };
+// World px the assembly sits below the launch point. Negative: LAUNCH is close
+// enough to the near edge of the table that a plate centred on it hangs over the
+// lip and into the XP bar. LAUNCHER_LIFT then raises the loaded DRINK by the
+// same geometry, so it still sits in the cradle's throat rather than in front
+// of it — the two numbers are one measurement and must move together.
+// Measured, not eyeballed: the horizontal XP bar occupies the bottom ~42 world
+// px of the stage, and a plate whose hub sits on LAUNCH has its lower third
+// behind it. -22 puts the plate's bottom edge clear of the bar with a little
+// margin, on every map (the bar's geometry is the same for all of them).
+const LAUNCHER_DY   = -22;
+const LAUNCHER_LIFT = 40;
+// The head is drawn at a FRACTION of the shot's tilt. At the full 40 degrees a
+// horseshoe pivoting down at its spring swings clear off its own base plate and
+// reads as having fallen over — the head sprite is wider than the base to start
+// with. The aim line carries the true direction; the launcher only has to lean
+// into it, and 0.45 was picked by rendering the range (0.6 still overhung).
+const LAUNCHER_TILT_K = 0.45;
+// The charge readout, and the ONLY one: the spring winds up and the cradle
+// sinks as the beat approaches, then snaps back on the shot. A ring drawn
+// around the cradle was the first attempt and it buried the art it was
+// reporting on — it and the XP bar were fighting for the same strip of screen
+// (Mikael, on a phone, 2026-08-23). The launcher reports its own state instead
+// of wearing a gauge. CUBED, so nearly all the travel happens in the last third
+// of the beat: that is what makes it read as a warning rather than a slow
+// drift, and it is why 14% of height is enough to notice.
+const RF_SQUASH = 0.14;
+
+function launcherSquash(charge) {
+  const c = Math.max(0, Math.min(1, charge));
+  return 1 - RF_SQUASH * c * c * c;
+}
+
+// Where the loaded drink sits, in WORLD coords. The single source of truth for
+// both the preview render() draws and the body fireShot spawns — if those two
+// disagree the shot JUMPS the instant one replaces the other, which is exactly
+// what it did: the preview sat at the cradle's throat while the body spawned
+// ~20px lower, so a rapid shot dropped back behind the launcher art for a frame
+// before flying off (Mikael, 2026-08-23).
+//
+// Rapid spawns at FULL compression — where the drink was drawn on the frame
+// before firing — so the spring then releasing upward is the only movement.
+// Classic keeps its original expression to the letter, so its shots are
+// untouched; only rapid, which has a cradle to sit in, moves.
+function loadedDrinkWY(tier) {
+  return RAPID_FIRE ? LAUNCH.y - LAUNCHER_LIFT * launcherSquash(1)
+                    : LAUNCH.y - ITEMS[tier].physR - 4;
+}
+
+function drawLauncher(sl, tilt, charge) {
+  const base = LAUNCHER_IMGS.base, head = LAUNCHER_IMGS.head;
+  if (!base || !base.complete || !base.naturalWidth) return;
+  // ONE scale for both parts — they are exported at a common scale precisely so
+  // they can be assembled, so deriving k from the base sizes the head too.
+  const k  = (LAUNCHER_W / base.naturalWidth) * sl.s;
+  const bw = base.naturalWidth * k, bh = base.naturalHeight * k;
+  const ax = sl.x, ay = sl.y + LAUNCHER_DY * sl.s;
+  ctx.drawImage(base, ax - LB_HUB.x * bw, ay - LB_HUB.y * bh, bw, bh);
+  if (!head || !head.complete || !head.naturalWidth) return;
+  const hw = head.naturalWidth * k, hh = head.naturalHeight * k;
+  ctx.save();
+  ctx.translate(ax, ay);
+  ctx.rotate(tilt * LAUNCHER_TILT_K);
+  ctx.scale(1, launcherSquash(charge));   // compresses toward the hub
+  ctx.drawImage(head, -LH_PIVOT.x * hw, -LH_PIVOT.y * hh, hw, hh);
+  ctx.restore();
+}
+
+// ---------- rapid fire launcher readout ----------
+// Both halves are load-bearing rather than decorative. The aim line is STANDING
+// STATE in rapid — there is no press to reveal it, so it has to be on screen at
+// all times or the player is steering blind. And the ring is the only warning
+// of when the shot leaves: without it the cadence reads as random, which makes
+// the mode feel unfair rather than fast.
+const RF_REACH = 140;   // world px of drawn aim line
+
+function drawRapidAim(sl, tilt, lift = 0, charge = 0) {
+  const tp = persp(LAUNCH.x + Math.sin(tilt) * RF_REACH,
+                   LAUNCH.y - Math.cos(tilt) * RF_REACH);
+  // Start at the cradle's throat, not at LAUNCH: with the launcher art drawn,
+  // a line from the launch point begins underneath the loaded drink and its
+  // first stretch is invisible.
+  const sy = sl.y - lift * launcherSquash(charge) * sl.s;
+  // Dashed and dimmer than the classic aim line, which appears only under the
+  // finger and should stay the more emphatic of the two — but it BRIGHTENS into
+  // the beat, so the timing has a second cue sitting where the player is already
+  // looking (down the line, not at the launcher) and neither cue is a new
+  // element on screen.
+  const c = Math.max(0, Math.min(1, charge));
+  ctx.strokeStyle = `rgba(255,240,205,${(0.3 + 0.55 * c * c).toFixed(3)})`;
+  ctx.lineWidth = 3 + c; ctx.lineCap = 'round';
+  ctx.setLineDash([7, 8]);
+  ctx.beginPath(); ctx.moveTo(sl.x, sy); ctx.lineTo(tp.x, tp.y); ctx.stroke();
+  ctx.setLineDash([]);
+}
+
 function drawAimLine(aiming, gameOver, launchScreen, aimX, aimY) {
   if (!aiming || gameOver) return;
   ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
@@ -638,9 +766,35 @@ function drawTextPops(pops, dt) {
   ctx.globalAlpha = 1;
 }
 
+// Coins fly to the bag at a fixed rate, EXCEPT that a crowded screen clears
+// faster. In late rapid fire a merge lands every few hundred ms, and the coins
+// stop reading as a reward and start being a curtain over the table (Mikael,
+// on a phone, 2026-08-23).
+//
+// The multiplier scales the WHOLE flight, including each coin's negative
+// stagger — the speed-up is applied before the `t < 0` test, so a big burst
+// still launches as a burst rather than all at once, it just gets out of the
+// way. And it is derived from the live length each frame, so it eases back off
+// as the crowd drains instead of latching.
+// Tuned against a REALISTIC crowd, which took two goes to measure properly. A
+// single spawnCoins call is capped at ~20 coins, so a screenful is never one
+// huge burst — it is ten small overlapping ones, a merge every ~350ms. Tuning
+// against a synthetic 140-coin burst pointed at the wrong lever entirely (that
+// burst is dominated by its own 14 t-units of stagger, which no real batch has).
+//
+// Measured on ten 18-coin merges, one every 350ms:
+//   fixed speed   peak 136 on screen, 2.0s to fall under 20
+//   crowd-scaled  peak  65 on screen, 0.6s
+// A normal burst of 8 is untouched, since it never crosses COIN_RUSH_FROM.
+const COIN_RUSH_FROM = 10;   // coins in flight before any speed-up at all
+const COIN_RUSH_SPAN = 25;   // ...and how many more each +1x takes
+const COIN_RUSH_MAX  = 4;    // hard cap, i.e. never faster than 5x normal
+
 function updateCoins(coins, dt, onCoinLand) {
+  const rush = 1 + Math.max(0, Math.min(COIN_RUSH_MAX,
+                (coins.length - COIN_RUSH_FROM) / COIN_RUSH_SPAN));
   for (const c of coins) {
-    c.t += 0.010 * dt;
+    c.t += 0.010 * dt * rush;
     if (c.t < 0) continue;
     if (c.t >= 1) { coinPop = 0.35; onCoinLand(); }
   }

@@ -19,6 +19,124 @@ function updateAim(p, nextTier) {
   LAUNCH.x += (Math.max(margin, Math.min(W - margin, p.x)) - LAUNCH.x) * 0.35;
 }
 
+// ---------- rapid fire: the self-firing launcher ----------
+// The cannon CHASES the finger, and the residual offset between the two IS the
+// shot angle. That is not a new mechanic — it is the aim model this game has
+// always had, made explicit and continuous. updateAim() above lerps LAUNCH
+// toward the finger at 0.35/frame and then fires along (finger - LAUNCH), so
+// classic play already aims by releasing during the catch-up transient. Rapid
+// simply never stops, and the release no longer fires.
+//
+// One rule gives all three behaviours the mode needs:
+//   moving fast   -> the carriage lags behind the finger -> a tilted shot
+//   held still    -> it catches up, the offset decays    -> straight up
+//   pushed to the -> the carriage clamps at the table edge while the finger
+//   table edge       does not, so the offset PERSISTS -> a held angle, exactly
+//                    where a player most wants one (firing into the far corner)
+//
+// That third case is why pointer capture matters below: the finger has to be
+// able to travel outside the canvas, or edge tilt caps at the launcher's own
+// margin and the one place you need a sustained angle is the one place you
+// cannot get one.
+const RF_ACCEL       = 0.028;  // px/frame^2 per px of offset (spring to finger)
+const RF_FRICTION    = 0.86;   // per-frame decay -> ~14px/frame carriage top speed
+const RF_TILT_MAX    = 0.70;   // rad (~40 deg) from vertical — the hard bound
+const RF_TILT_PER_PX = 0.010;  // rad of tilt per px of finger-to-cannon offset
+const RF_TILT_LERP   = 0.22;   // per-frame easing toward the offset's tilt
+const RF_FINGER_MAX  = 90;     // px the finger may track beyond the world edge
+
+const CANNON = { vx: 0, tilt: 0, fingerX: W / 2, dragging: false };
+
+function resetCannon() {
+  CANNON.vx = 0; CANNON.tilt = 0; CANNON.fingerX = W / 2; CANNON.dragging = false;
+}
+
+// Clamped so a pointer flung far off-screen can't wind the spring up absurdly.
+// The tilt is bounded either way; this bounds the ACCELERATION too.
+function setCannonFinger(x) {
+  CANNON.fingerX = Math.max(-RF_FINGER_MAX, Math.min(W + RF_FINGER_MAX, x));
+}
+
+function startCannonDrag(p, e, canvas) {
+  CANNON.dragging = true;
+  setCannonFinger(p.x);
+  // See the edge-tilt note above — without capture the finger stops steering
+  // the moment it leaves the canvas.
+  if (e.pointerId !== undefined && canvas.setPointerCapture) {
+    try { canvas.setPointerCapture(e.pointerId); } catch {}
+  }
+}
+
+// One 60Hz frame of steering. Called from stepPhysics (game.js) so live play
+// and TT.step advance the launcher identically — the same contract loop() and
+// test mode already share for the physics itself.
+// The carriage's edge limit must NOT depend on the tier currently loaded, or it
+// would twitch sideways every time the queue deals a different-sized item —
+// which in rapid is every shot, with the carriage often parked against an edge.
+// Pinning it to the widest item the mode can deal keeps the reachable span
+// constant for a whole run. (Classic's updateAim keeps its per-tier margin: it
+// only matters while a finger is down, and it is verified unchanged.)
+function cannonMargin() {
+  let r = LAUNCHER_HALF_W;   // the cradle is wider than anything it can hold
+  for (let t = 0; t < dropMax(); t++) r = Math.max(r, ITEMS[t].physR);
+  return r + 14;
+}
+
+function updateCannon() {
+  const margin = cannonMargin();
+  if (CANNON.dragging) CANNON.vx += (CANNON.fingerX - LAUNCH.x) * RF_ACCEL;
+  CANNON.vx *= RF_FRICTION;   // released, the carriage GLIDES to a stop
+  LAUNCH.x  += CANNON.vx;
+  // The table edge stops the carriage dead. The finger may keep going, and the
+  // offset that leaves behind is what holds an angle there.
+  if (LAUNCH.x < margin)     { LAUNCH.x = margin;     if (CANNON.vx < 0) CANNON.vx = 0; }
+  if (LAUNCH.x > W - margin) { LAUNCH.x = W - margin; if (CANNON.vx > 0) CANNON.vx = 0; }
+  // Not dragging -> no offset -> the tilt eases back to vertical rather than
+  // snapping, so a flick's angle outlives the flick by a beat or so.
+  const off  = CANNON.dragging ? CANNON.fingerX - LAUNCH.x : 0;
+  const want = Math.max(-RF_TILT_MAX, Math.min(RF_TILT_MAX, off * RF_TILT_PER_PX));
+  CANNON.tilt += (want - CANNON.tilt) * RF_TILT_LERP;
+}
+
+// Fire along the current tilt. Straight up is tilt 0, and RF_TILT_MAX keeps the
+// vertical component at cos(0.70) = 0.76 of the speed — so a rapid shot can
+// never be horizontal or backwards however hard the player swipes. (The classic
+// path's `dy > -10` guard is unreachable from here; it stays as a backstop.)
+function fireCannon() {
+  fireShot(state, Math.sin(CANNON.tilt), -Math.cos(CANNON.tilt));
+}
+
+// One shot from the launcher, in a given direction. Shared by the classic
+// release-to-shoot gesture and by rapid fire's cadence, so the two can never
+// disagree about what a shot IS — only about when one happens.
+function fireShot(state, dirX, dirY) {
+  const len = Math.max(1e-6, Math.hypot(dirX, dirY));
+  const d = makeDrink(LAUNCH.x, loadedDrinkWY(state.nextTier), state.nextTier, true);
+  const speed = 27;
+  Body.setVelocity(d, { x: dirX / len * speed, y: dirY / len * speed });
+  BUGLOG.shot(d);   // bug-report ring: shot + the board it flew into
+  // Classic: each throw starts a fresh combo chain. Rapid: it must NOT. Shots
+  // land every 0.35-2.2s and COMBO_WINDOW is 1.4s, so resetting per throw would
+  // stop a chain surviving even ONE shot — the mode's forced combos would be
+  // very nearly inert. Letting the 1.4s window alone govern it is what turns
+  // the cadence into something that sustains a streak instead of killing it.
+  if (!RAPID_FIRE) state.combo = 0;
+  shoot();
+  recoil = 6;
+  if (RAPID_FIRE) {
+    // Empty the cradle and let stepPhysics roll the next tier in when the
+    // reload lands. Rolling HERE — which the first build did, on the grounds
+    // that the cadence is the only rate limit rapid needs — put the next drink
+    // in the cradle on the very frame the last one left it, so the shot never
+    // appeared to come OUT of the launcher.
+    state.canShoot = false;
+    state.rfReload = rfReloadMs();
+  } else {
+    state.canShoot = false;
+    setTimeout(() => { rollNext(); state.canShoot = true; }, 500);
+  }
+}
+
 // A press that STARTED on the coin readout and hasn't travelled far enough to
 // be a drag. The score sits in a corner that is also a legal aim direction, so
 // the panel is claimed by a tap only: move past the slop and this clears, the
@@ -55,6 +173,10 @@ function wireInput(canvas, state) {
     // except inside the strip, where nothing may ever start an aim.
     if (bagHit(p)) { bagTap = { x: p.x, y: p.y, strip: inStrip }; return; }
     if (inStrip) return;
+    // Rapid: a press steers the carriage, it never arms a shot — the cadence
+    // owns firing. Everything above (volume popover, score readout) is
+    // deliberately unchanged, so the mode inherits those gestures intact.
+    if (RAPID_FIRE) { startCannonDrag(p, e, canvas); return; }
     aiming = true;
     updateAim(p, state.nextTier);
   });
@@ -68,32 +190,31 @@ function wireInput(canvas, state) {
       const strip = bagTap.strip;
       bagTap = null;
       if (strip) return;
-      aiming = true;
+      if (RAPID_FIRE) startCannonDrag(p, e, canvas);
+      else aiming = true;
     }
+    if (RAPID_FIRE) { if (CANNON.dragging) setCannonFinger(p.x); return; }
     if (aiming) updateAim(p, state.nextTier);
   });
 
   canvas.addEventListener('pointerup', e => {
     if (bagTap) { bagTap = null; showScorePanel(state); return; }
+    // Rapid: letting go hands the carriage back to its own momentum (it glides
+    // to a stop, the tilt eases to vertical). It does not fire — that is the
+    // whole mode.
+    if (RAPID_FIRE) { CANNON.dragging = false; return; }
     if (!aiming) return;
     aiming = false;
     if (state.gameOver || !state.canShoot) return;
     const target = unpersp(aimX, aimY);
     const dx = target.x - LAUNCH.x, dy = target.y - LAUNCH.y;
-    const len = Math.max(1, Math.hypot(dx, dy));
     if (dy > -10) return;
-    const d = makeDrink(LAUNCH.x, LAUNCH.y - ITEMS[state.nextTier].physR - 4, state.nextTier, true);
-    const speed = 27;
-    Body.setVelocity(d, { x: dx / len * speed, y: dy / len * speed });
-    BUGLOG.shot(d);   // bug-report ring: shot + the board it flew into
-    state.combo = 0;  // each throw starts a fresh combo chain
-    shoot();
-    recoil = 6;
-    state.canShoot = false;
-    setTimeout(() => { rollNext(); state.canShoot = true; }, 500);
+    fireShot(state, dx, dy);
   });
 
-  canvas.addEventListener('pointercancel', () => { aiming = false; bagTap = null; });
+  canvas.addEventListener('pointercancel', () => {
+    aiming = false; bagTap = null; CANNON.dragging = false;
+  });
 }
 
 // ---------- in-game score panel (tap the coin bag) ----------
@@ -205,17 +326,30 @@ function wireHUD(state) {
     if (e.target === scorePanel) hideScorePanel();
   });
 
+  // The quit confirm FREEZES the run, like the score panel does. It was left
+  // running on the grounds that it is "rare or terminal" — but it is neither:
+  // it is the only pause this game has, and people use it as one when they need
+  // to put the phone down for a moment (Mikael, 2026-08-23). In rapid that
+  // reasoning was actively wrong, since the cannon keeps firing on its own and
+  // a run would die behind the overlay; in every other mode checkOver's
+  // danger-line grace keeps counting just the same.
   const confirmOverlay = document.getElementById('confirm-menu');
   document.getElementById('menuBtn').onclick = () => {
     confirmOverlay.style.display = 'flex';
+    setPaused(true);
   };
   document.getElementById('confirm-yes').onclick = () => {
     confirmOverlay.style.display = 'none';
     peek.style.display = 'none';
+    // Unfreeze BEFORE leaving: `paused` outliving the run would freeze the next
+    // one at birth. (startGame's hideScorePanel() clears it too — belt and
+    // braces, same as that path.)
+    setPaused(false);
     returnToMenu();
   };
   document.getElementById('confirm-no').onclick = () => {
     confirmOverlay.style.display = 'none';
+    setPaused(false);
   };
 
   // Bug report (🐞): show the MMB1. code for the current run's last shots.

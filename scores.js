@@ -36,14 +36,19 @@ function fmtScore(n) {
 // NOTE: this couples key identity to the map's current defaults — changing a
 // map's defaultSize / combos default would re-point the legacy key. Defaults
 // are stable, so this is intentional (and what keeps Mai's scores intact).
-function scoreKey(map, size, combos, happyHour) {
+function scoreKey(map, size, combos, happyHour, rapid) {
   const parts = [];
   if (map.sizes) {
     const defSize = map.defaultSize || 'large';
     const s = size || defSize;
     if (s !== defSize) parts.push(s);
   }
-  if (happyHour) {
+  if (rapid) {
+    // Rapid fire forces combos ON (the mode is built around sustaining a chain
+    // through the cadence), so like happyhour it replaces the combo part rather
+    // than multiplying with it: the variant is just size × rapid.
+    parts.push('rapid');
+  } else if (happyHour) {
     // Happy Hour implies combos-off, so the combo part is skipped entirely —
     // the variant is just size × happyhour (mm_s_kyoto__small_happyhour).
     parts.push('happyhour');

@@ -8,7 +8,7 @@
 // Hour queue — plus the save/clear lifecycle.
 //
 // ONE save per map (`mm_run_<mapId>`). It carries the VARIANT it was played on
-// (size / combos / Happy Hour), because the parked board only makes sense under
+// (size / combos / Happy Hour / Rapid fire), because the parked board only makes sense under
 // the boundary and mode it was played with — resuming replays that variant even
 // if the menu checkboxes have moved on since. Starting a new run on the same map
 // replaces it.
@@ -48,6 +48,11 @@ const SUSPEND = (() => {
         size: ACTIVE_SIZE || undefined,
         combos: COMBOS_ENABLED || undefined,
         happyHour: HAPPY_HOUR || undefined,
+        rapid: RAPID_FIRE || undefined,
+        // Shot count is a top-level field, not a Happy Hour one, because rapid
+        // fire's cadence ramp reads it: resuming has to come back at the SPEED
+        // the run had reached, or quitting would be a way to slow the game down.
+        shots: state.shotsFired || undefined,
         // Coins still flying to the bag are not in coinCount yet. Settle them
         // exactly as checkOver() does, so Continue resumes on the number the
         // player last watched ticking up rather than one short per coin.
@@ -132,9 +137,17 @@ const SUSPEND = (() => {
       state.queuedTier = p.queued;
       state.runXp      = p.xp || 0;
       if (p.launchX !== undefined) LAUNCH.x = p.launchX;
+      if (RAPID_FIRE) {
+        // Restore the ramp, then hand the player a FULL beat before the first
+        // shot: they are looking at a board they last saw minutes ago, and
+        // resuming into an immediate shot would cost them the run for nothing.
+        // (A whole cadence of grace is at most 1.5s — it cannot be farmed.)
+        state.shotsFired = p.shots || 0;
+        state.rfTimer    = rfCadence();
+      }
       if (HAPPY_HOUR && p.hh) {
         const now = performance.now();
-        state.shotsFired         = p.hh.shots  || 0;
+        state.shotsFired         = p.hh.shots  || p.shots || 0;
         state.nextCustomerAtShot = p.hh.nextAt || HH_FIRST_SHOT;
         const cast = Math.max(1, CUSTOMER_IMGS.length);
         state.customers = (p.hh.queue || []).map(([slot, art, tier]) => ({

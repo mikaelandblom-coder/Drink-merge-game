@@ -226,6 +226,92 @@ const HH_SHOTS_BETWEEN = 6;     // further arrivals every N shots (if the queue 
 const HH_LEAVE_MS      = 420;   // served customer's walk-out animation
 const HH_CASHOUT_COINS = 25;    // golden receipt's bonus payout when it forms (10 points per coin)
 
+// ---------- Rapid fire (quick mode) ----------
+// The launcher fires itself on a cadence that ACCELERATES with the shot count,
+// so a run ends on its own rather than lasting as long as the player's skill
+// does — which is the whole point of the mode. A fixed cadence would not do
+// that: item income would be constant, a good player would reach equilibrium
+// and the mode would just be classic play with the thinking time removed.
+//
+// The player still aims. Rapid changes WHEN a shot happens, not what a shot is
+// (see CANNON in ui.js for the steering model, and fireShot for the shot).
+//
+// The countdown is measured in FRAMES, not wall time. stepPhysics() is exactly
+// one 60Hz frame of game time for both loop() and TT.step(), so a frame-counted
+// timer fast-forwards deterministically under test mode — and, the reason it
+// matters in play, it has no wall-clock stamp to be wrong about. The score
+// panel's freeze (setPaused) has to push every performance.now() stamp forward
+// on resume; this timer simply stops counting when frames stop, so pausing can
+// neither bank free time nor skip a shot.
+let RAPID_FIRE = false;
+// RETUNED 2026-08-23 after Mai played it: "way too quick, not able to play
+// strategically at all". The first numbers were tuned against a RANDOM-STEERING
+// BOT, and that was the mistake — a bot dies of chaos, not of time pressure, so
+// "kills the bot in 3 minutes" said nothing about whether a person can think
+// between shots. Measured on the shipped build, the beat was 0.77s by shot 30
+// and 0.35s by shot 60: full speed arrived about a minute in, so the strategic
+// phase barely existed at all.
+//
+// The shape matters more than the ceiling. RF_RAMP_FROM holds the opening beat
+// for the first stretch so there is a calm phase to build a board in, and the
+// ramp is then long enough that getting frantic feels earned rather than
+// immediate. Beat at shot 1 / 30 / 60 is now 2.2s / 2.0s / 1.5s.
+const RF_CADENCE_START = 2200;  // ms between shots on shot 0
+const RF_CADENCE_END   = 350;   // ms between shots once the ramp is done
+const RF_RAMP_FROM     = 12;    // shots held at START before the ramp begins
+const RF_RAMP_SHOTS    = 110;   // ...then this many to travel from START to END
+// Shootable tiers in rapid, in place of DROP_MAX (4). This is MEASURED, and it
+// is by far the strongest lever on how long a run lasts — much stronger than
+// the cadence. A wider spread makes two neighbouring drinks less likely to
+// match, so the board stops clearing itself. Against a random-steering bot:
+//
+//   3 tiers -> the run never ended (9 min, 134 drinks still on the field)
+//   4 tiers -> ~4.4 min      5 tiers -> ~3 min      6 tiers -> ~2.2 min
+//
+// It is counter-intuitive, and it caught the first build of this mode out:
+// NARROWING the deal was meant to stop the board filling with big items, and
+// instead made merges so easy that nothing ever accumulated.
+//
+// Back to 4 — the same deal classic uses — as part of the same retune as the
+// cadence above. 5 shortened runs by handing out mid-chain items, but being
+// handed a big drink you did not plan for is exactly what stops a player
+// building anything, and the bot those numbers came from had no plans to ruin.
+const RF_DROP_MAX      = 4;
+// After a shot the cradle stands EMPTY for a moment before the next drink
+// loads. Without it the next drink appears in the same frame the last one
+// leaves, and the launcher reads as a picture of what is coming rather than as
+// a thing that shoots (Mikael, on a phone, 2026-08-23).
+//
+// Capped as a FRACTION of the beat as well as in ms: 170ms is a good pause at
+// the start of a run but is half the cycle once the ramp reaches 350ms, and a
+// cradle that is empty half the time reads as broken rather than as busy.
+const RF_RELOAD_MS   = 170;    // cradle empty
+const RF_LOAD_MS     = 90;     // then the next drink scales into it
+const RF_RELOAD_FRAC = 0.35;   // ...but never more than this much of the beat
+
+function rfReloadMs() {
+  return Math.min(RF_RELOAD_MS, rfCadence() * RF_RELOAD_FRAC) + RF_LOAD_MS;
+}
+
+// How long a drink may DWELL in the danger zone before the run ends. Used in
+// place of BOTH the classic "settled above the line" test and its 1.5s birth
+// grace — see checkOver for why stacking the two was wrong.
+const RF_OVER_MS       = 800;
+
+// ms until the next automatic shot, given how far into the ramp the run is.
+function rfCadence() {
+  const t = Math.max(0, Math.min(1, (state.shotsFired - RF_RAMP_FROM) / RF_RAMP_SHOTS));
+  return RF_CADENCE_START + (RF_CADENCE_END - RF_CADENCE_START) * t;
+}
+
+// Tiers the launcher may deal. Rapid narrows the spread; every other mode is
+// unchanged, so this is the only place the two differ.
+// Clamped to the chain: a future map with a short item list must not be dealt
+// a tier it does not have.
+function dropMax() {
+  return RAPID_FIRE ? Math.min(RF_DROP_MAX, ITEMS.length) : DROP_MAX;
+}
+
 const state = {
   drinks:     [],
   particles:  [],
@@ -241,6 +327,11 @@ const state = {
   // Happy Hour
   customers:  [],   // { slot, art, tier, bornAt, leaveAt }
   shotsFired: 0,
+  // Rapid fire: ms of game time until the launcher fires itself, and until the
+  // next drink has finished loading into the cradle (both frame-counted — see
+  // the RF_* block above). Unused in every other mode.
+  rfTimer:    0,
+  rfReload:   0,
   nextCustomerAtShot: HH_FIRST_SHOT,
   // XP earned this run (1/shot; committed to storage per shot by progress.js —
   // this counter only feeds the game-over "+N XP" recap)
@@ -255,7 +346,7 @@ const state = {
 // Happy Hour) is decided at startGame, so this is stable for the whole run — the
 // game-over save, the in-game readout and the score panel must all agree on it.
 function currentScoreKey() {
-  return scoreKey(ACTIVE_MAP, ACTIVE_SIZE, COMBOS_ENABLED, HAPPY_HOUR);
+  return scoreKey(ACTIVE_MAP, ACTIVE_SIZE, COMBOS_ENABLED, HAPPY_HOUR, RAPID_FIRE);
 }
 
 // The line under the coin pill: how far this run is from the record. Rebuilt
@@ -340,7 +431,7 @@ function makeDrink(x, y, tier, shot = false, growIn = false, kind = 'drink') {
 
 function rollNext() {
   state.nextTier   = state.queuedTier;
-  state.queuedTier = Math.floor(Math.random() * DROP_MAX);
+  state.queuedTier = Math.floor(Math.random() * dropMax());
 }
 
 // Draw a fresh pair of upcoming tiers off the CURRENT Math.random. Split out of
@@ -348,7 +439,7 @@ function rollNext() {
 // (TT.seed in test.js) — keep this the only place the starting pair is drawn,
 // so seeding before startGame and seeding after it consume the same two rolls.
 function rollFreshTiers() {
-  state.queuedTier = Math.floor(Math.random() * DROP_MAX);
+  state.queuedTier = Math.floor(Math.random() * dropMax());
   rollNext();
 }
 
@@ -366,6 +457,9 @@ function resetState() {
   state.beatBest = false;
   bestLineFor = -1;
   LAUNCH.x = W / 2;
+  resetCannon();                                    // ui.js — steering state
+  state.rfTimer = RAPID_FIRE ? RF_CADENCE_START : 0;
+  state.rfReload = 0;
   rollFreshTiers();
   BUGLOG.run();    // fresh bug-report ring for the new run (buglog.js)
   idleFrames = 0;  // ensure the fresh board draws even if we were idle
@@ -378,8 +472,11 @@ function resetState() {
 // has drawing switched off (a timer arrival would go invisible until the next
 // interaction).
 function countShot() {
-  if (!HAPPY_HOUR) return;
+  // Counted in EVERY mode, not just Happy Hour: rapid fire's cadence ramp reads
+  // it, and "shots fired this run" is what the name has always claimed. Harmless
+  // elsewhere — nothing but these two modes looks at it.
   state.shotsFired++;
+  if (!HAPPY_HOUR) return;
   if (state.customers.length >= HH_QUEUE_MAX) {
     // Queue full: the arrival clock idles instead of accruing a backlog, so a
     // freed slot still costs HH_SHOTS_BETWEEN shots before the next walk-in —
@@ -510,27 +607,56 @@ function checkOver() {
   if (state.gameOver) return;
   const now = performance.now();
   for (const d of state.drinks) {
-    if (now - d.plugin.born < 1500) continue;
-    const speed = Math.hypot(d.velocity.x, d.velocity.y);
-    if (d.position.y + d.plugin.item.physR > DANGER_WY && speed < 0.15) {
-      state.gameOver = true;
-      // The run is over, so its parked copy (if any) is dead — drop it before
-      // anything can offer to "continue" a board that just lost.
-      SUSPEND.clear(ACTIVE_MAP.id);
-      // Bug-report ring: which drink ended the run, and where it sat.
-      BUGLOG.event('gameover', {
-        tier: d.plugin.tier, kind: d.plugin.kind,
-        x: Math.round(d.position.x), y: Math.round(d.position.y),
-        ghost: d.plugin.ghost ? 1 : undefined,
-      });
-      // Coins still flying to the bag haven't landed, so their value isn't in
-      // coinCount yet. Settle them now so the saved/displayed score matches what
-      // the player earned (otherwise the bag keeps ticking up behind the overlay
-      // while the recorded high score is short by 10 per in-flight coin).
-      state.coinCount += state.coins.length * 10;
-      state.coins = [];
-      showGameOver(state, currentScoreKey());
+    const over = d.position.y + d.plugin.item.physR > DANGER_WY;
+    if (RAPID_FIRE) {
+      // Rapid needs a different end condition, and this was measured rather
+      // than guessed: the classic test asks for a drink that is over the line
+      // AND has come to rest (speed < 0.15), but a shot every 0.35-2.2s keeps
+      // the whole board permanently jostling, so almost nothing ever settles.
+      // A run reached 90 drinks on the field and 4 minutes with no end in
+      // sight — a jammed board that the game could not see was jammed.
+      //
+      // So rapid asks how long a drink has DWELT in the zone instead, with no
+      // speed test at all. A shot crossing the zone is out of it in ~0.2s, far
+      // inside RF_OVER_MS, while a drink that is stuck there is caught however
+      // hard its neighbours are shoving it. Tracking the dwell per body (rather
+      // than dropping the speed test outright) is what keeps a drink knocked
+      // BACK into the zone from ending the run the instant it arrives — it gets
+      // its own grace, the same as a fresh shot.
+      //
+      // The dwell REPLACES the 1.5s birth grace rather than stacking on top of
+      // it, which is what the first build did — 1.5s then 1.2s meant a drink
+      // could sit behind the line for 2.7s before the run ended, and it read on
+      // a phone as the game being slow to notice (Mikael, 2026-08-23). The
+      // birth grace exists to let a shot cross the zone it is launched from,
+      // and the dwell already does exactly that job: a shot clears the line in
+      // about 55ms (90 world px at speed 27), so RF_OVER_MS is ~15x the transit
+      // even at full tilt. Stacking a second grace on top bought nothing.
+      if (!over) { d.plugin.overSince = 0; continue; }
+      if (!d.plugin.overSince) { d.plugin.overSince = now; continue; }
+      if (now - d.plugin.overSince < RF_OVER_MS) continue;
+    } else {
+      if (now - d.plugin.born < 1500) continue;
+      const speed = Math.hypot(d.velocity.x, d.velocity.y);
+      if (!(over && speed < 0.15)) continue;
     }
+    state.gameOver = true;
+    // The run is over, so its parked copy (if any) is dead — drop it before
+    // anything can offer to "continue" a board that just lost.
+    SUSPEND.clear(ACTIVE_MAP.id);
+    // Bug-report ring: which drink ended the run, and where it sat.
+    BUGLOG.event('gameover', {
+      tier: d.plugin.tier, kind: d.plugin.kind,
+      x: Math.round(d.position.x), y: Math.round(d.position.y),
+      ghost: d.plugin.ghost ? 1 : undefined,
+    });
+    // Coins still flying to the bag haven't landed, so their value isn't in
+    // coinCount yet. Settle them now so the saved/displayed score matches what
+    // the player earned (otherwise the bag keeps ticking up behind the overlay
+    // while the recorded high score is short by 10 per in-flight coin).
+    state.coinCount += state.coins.length * 10;
+    state.coins = [];
+    showGameOver(state, currentScoreKey());
   }
 }
 
@@ -569,19 +695,42 @@ function render(dt) {
   drawDangerLine(DANGER_WY);
 
   const sl = persp(LAUNCH.x, LAUNCH.y);
+  // 0 just after a shot, 1 at the instant the next one leaves. Drives every
+  // part of the launcher's readout (see RF_SQUASH in render.js).
+  const rfCharge = RAPID_FIRE ? 1 - state.rfTimer / rfCadence() : 0;
   drawAimLine(aiming, state.gameOver, sl, aimX, aimY);
+  if (RAPID_FIRE && !state.gameOver) drawRapidAim(sl, CANNON.tilt, LAUNCHER_LIFT, rfCharge);
 
   const sorted = [...state.drinks].sort((a, b) => a.position.y - b.position.y);
   for (const d of sorted) {
-    const born   = (performance.now() - d.plugin.born) / 200;
-    const growth = Math.min(1, 0.6 + born * 0.4);
+    // The sprite tracks the BODY's scale, never the body's age. Only merge
+    // products grow in (makeDrink's growIn flag is what sets plugin.scale, and
+    // stepPhysics advances it); a shot's body is full size from birth, so
+    // drawing it from 0.6 made the item visibly SHRINK the moment it left the
+    // launcher — sprite and hitbox disagreeing for 200ms. Mikael saw it in
+    // rapid, where the eye follows the projectile out of the cradle, but it was
+    // true of every shot on every map.
+    const growth = d.plugin.scale || 1;
     const p      = persp(d.position.x, d.position.y);
     drawDrink(p.x, p.y, d.plugin.item, p.s * growth, wob + d.id, drawnSpin(d), FLAT_ENABLED);
   }
 
   if (!state.gameOver) {
     recoil *= Math.pow(0.82, dt);
-    if (state.canShoot) drawDrink(sl.x, sl.y + recoil, ITEMS[state.nextTier], 1, wob,
+    // Launcher art under the loaded drink, so the drink sits IN the cradle.
+    if (RAPID_FIRE) drawLauncher(sl, CANNON.tilt, rfCharge);
+    // Scales in as it loads, so the next drink ARRIVES in the cradle instead of
+    // blinking into it at full size.
+    const load = (RAPID_FIRE && state.rfReload > 0)
+      ? 0.72 + 0.28 * (1 - state.rfReload / RF_LOAD_MS) : 1;
+    // Rapid places the preview through persp() at its real world point — the
+    // one loadedDrinkWY names — rather than by subtracting screen px, so the
+    // preview and the body it becomes are drawn at the same place AND the same
+    // perspective scale. Classic is left exactly as it was.
+    const lp = RAPID_FIRE ? persp(LAUNCH.x, LAUNCH.y - LAUNCHER_LIFT * launcherSquash(rfCharge))
+                          : sl;
+    if (state.canShoot) drawDrink(lp.x, lp.y + recoil, ITEMS[state.nextTier],
+                                  RAPID_FIRE ? lp.s * load : 1, wob,
                                   undefined, FLAT_ENABLED);
   }
 
@@ -630,6 +779,11 @@ let idleFrames = 0;
 function wakeRender() { idleFrames = 0; }
 function sceneBusy() {
   if (showXray) return true;   // keep the diagnostic live while a settled board idles
+  // Rapid fire is never idle by construction: the charge ring is always filling
+  // and the cannon is always steerable, so the idle-frame skip must not park the
+  // loop between shots. It costs nothing in practice — the longest gap the mode
+  // ever has is RF_CADENCE_START, and a shot is in flight for most of it.
+  if (RAPID_FIRE && !state.gameOver) return true;
   if (aiming || !state.canShoot) return true;
   if (state.coins.length || state.particles.length || state.textPops.length) return true;
   if (recoil > 0.1) return true;
@@ -674,7 +828,13 @@ function setPaused(on) {
   // animation instead of snapping to full size. (Same idea as the deliberate
   // BACKDATING in SUSPEND.apply, pointed the other way.)
   const held = performance.now() - pausedAt;
-  for (const d of state.drinks) d.plugin.born += held;
+  for (const d of state.drinks) {
+    d.plugin.born += held;
+    // Rapid's danger-zone dwell is a performance.now() stamp like the rest, so
+    // it has to move too — otherwise unfreezing would instantly bill a drink
+    // for the whole time the panel was open.
+    if (d.plugin.overSince) d.plugin.overSince += held;
+  }
   for (const c of state.customers) {
     c.bornAt += held;
     if (c.leaveAt) c.leaveAt += held;
@@ -714,6 +874,29 @@ function loop(ts) {
 // Extracted from loop() so test mode (test.js, ?test=1) can step the game
 // synchronously without rAF — behaviour must stay identical to live play.
 function stepPhysics() {
+  // Rapid fire: steer the launcher and fire on the beat BEFORE the physics
+  // substeps, so a shot made this frame is simulated this frame — exactly where
+  // a pointer-released shot would have entered the world. Living here (rather
+  // than in loop()) is what lets TT.step() drive the mode synchronously.
+  if (RAPID_FIRE && !state.gameOver) {
+    updateCannon();                    // ui.js — one 60Hz frame of steering
+    if (state.rfReload > 0) {
+      state.rfReload -= FRAME_MS;
+      // canShoot flips with RF_LOAD_MS still on the clock: that tail is the
+      // drink scaling into the cradle, drawn by render().
+      if (state.rfReload <= RF_LOAD_MS && !state.canShoot) {
+        rollNext(); state.canShoot = true;
+      }
+    }
+    state.rfTimer -= FRAME_MS;
+    if (state.rfTimer <= 0) {
+      // Never fire an empty cradle. rfReloadMs() is capped well under the beat
+      // so this is a guard against a future retune, not a path the mode takes.
+      if (!state.canShoot) { rollNext(); state.canShoot = true; state.rfReload = 0; }
+      fireCannon();                    // ui.js — shoots along the current tilt
+      state.rfTimer = rfCadence();     // recomputed AFTER the shot: countShot()
+    }                                  // has just advanced the ramp by one
+  }
   // In cool mode each drawn frame covers two 60Hz frames of game time, so run
   // twice the substeps at the unchanged step size (bigger steps would tunnel).
   const steps = coolMode ? SUBSTEPS * 2 : SUBSTEPS;
@@ -828,8 +1011,20 @@ function startGame(map, opts = {}) {
   // the receipt chain is its own scoring layer, so the two don't stack.
   HAPPY_HOUR = !!opts.happyHour;
   if (HAPPY_HOUR) { loadItemSprites(RECEIPT_ITEMS); loadCustomerSprites(); }
+  // Rapid fire (quick mode). Mutually exclusive with Happy Hour, and not merely
+  // by preference: HH's tap-to-serve gesture lives exactly where rapid's
+  // steering drag does, and its receipt chain is a second scoring layer a
+  // 2-4 minute run has no room to develop. HH wins the tie so a stale rapid
+  // preference can never quietly disable a mode the player did tick.
+  RAPID_FIRE = !!opts.rapid && !HAPPY_HOUR;
+  if (RAPID_FIRE) loadLauncherSprites();   // shared chrome, fetched only for this mode
   // Combo multipliers: per-run override from the menu, else the map's default.
+  // Rapid FORCES them on — the mode is built around sustaining a chain through
+  // the cadence (see fireShot in ui.js), so its scores are only comparable to
+  // each other with combos in. That is also why scoreKey folds rapid and combo
+  // into one variant part rather than multiplying them.
   COMBOS_ENABLED = HAPPY_HOUR ? false
+    : RAPID_FIRE ? true
     : (opts.combos !== undefined) ? !!opts.combos : !!map.combos;
   // Rotating items: a per-MAP property, not a menu option — it belongs to the
   // art (radially symmetric subjects only), not to how a player wants to play.
