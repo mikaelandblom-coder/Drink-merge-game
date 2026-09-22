@@ -296,6 +296,10 @@ html, body {
 #confirm-no,
 #confirm-new-no,
 #backup-import,
+/* Play offline: "Remove saved maps" is a destructive sibling of a brass
+   primary, and each row's small Save is one of ten — neither should shout. */
+#offline-clear,
+.off-save,
 /* The bug panel holds FIVE buttons; with the new brass material all shouting at
    once it read as a wall of gold. Only "Copy code" is the panel's purpose — the
    dismiss and the three sound-check diagnostics are secondary, and demoting
@@ -317,12 +321,14 @@ html, body {
 @media (hover: hover) {
   .play-btn.ghost:hover,
   #menu:hover, #confirm-no:hover, #confirm-new-no:hover, #backup-import:hover,
+  #offline-clear:hover, .off-save:hover,
   #bug-close:hover, #bug-beep1:hover, #bug-beep2:hover, #bug-fixsound:hover {
     filter: none; color: var(--foam); border-color: #8a6a3c;
   }
 }
 .play-btn.ghost:active,
 #menu:active, #confirm-no:active, #confirm-new-no:active, #backup-import:active,
+#offline-clear:active, .off-save:active,
 #bug-close:active, #bug-beep1:active, #bug-beep2:active, #bug-fixsound:active {
   transform: translateY(2px);
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, .6), 0 1px 4px rgba(0, 0, 0, .35);
@@ -953,11 +959,11 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
 .devtools-links a:hover { color: var(--foam); border-color: #8a6a3c; }
 
 /* Backup & transfer panel on the welcome screen */
-#backup-box, #credits-box { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+#backup-box, #credits-box, #offline-box { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 /* Opaque backing (matching .map-card) rather than `background:none`: these
    toggles sit over #welcome-art, where a transparent pill with a dim border and
    dim text was effectively invisible against the busier parts of the art. */
-#backup-toggle, #credits-toggle {
+#backup-toggle, #credits-toggle, #offline-toggle {
   background: linear-gradient(180deg, rgba(38, 25, 12, .86), rgba(10, 6, 3, .86));
   border: 1px solid var(--line); color: var(--brass);
   font-family: inherit; font-size: 12px; letter-spacing: .05em;
@@ -965,15 +971,17 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
   box-shadow: inset 0 1px 0 rgba(255, 226, 170, .13), 0 2px 8px rgba(0, 0, 0, .4);
   transition: transform .09s ease, color .15s ease, border-color .15s ease;
 }
-#backup-toggle:hover, #credits-toggle:hover { color: var(--foam); border-color: #8a6a3c; }
-#backup-toggle:active, #credits-toggle:active { transform: translateY(1px); }
-@media (prefers-reduced-motion: reduce) { #backup-toggle, #credits-toggle { transition: none; } }
-#backup-panel {
+#backup-toggle:hover, #credits-toggle:hover, #offline-toggle:hover { color: var(--foam); border-color: #8a6a3c; }
+#backup-toggle:active, #credits-toggle:active, #offline-toggle:active { transform: translateY(1px); }
+@media (prefers-reduced-motion: reduce) { #backup-toggle, #credits-toggle, #offline-toggle { transition: none; } }
+#backup-panel, #offline-panel {
   width: 100%; display: flex; flex-direction: column; gap: 10px;
   background: rgba(10, 6, 3, .82); border: 1px solid #3d2d1a;
   border-radius: 14px; padding: 14px 16px;
 }
-#backup-panel[hidden] { display: none; }
+/* The explicit [hidden] rules are REQUIRED, not belt-and-braces — see the
+   Credits note below for why. */
+#backup-panel[hidden], #offline-panel[hidden] { display: none; }
 .backup-hint { font-size: 11px; line-height: 1.5; color: #9a7a52; }
 #backup-code {
   /* The one place selection must work (copying a code out by hand) — the
@@ -988,6 +996,36 @@ canvas { display: block; position: relative; z-index: 1; touch-action: none; bor
 .backup-btns button { flex: 1; font-size: 13px; padding: 8px 0; }
 #backup-status { font-size: 11px; min-height: 14px; color: var(--brass); }
 #backup-status.err { color: #ff8a8a; }
+
+/* Play offline (offline.js). The pill, the card and the two footer buttons all
+   come from the groups above; only the map list and the progress bar are new. */
+#offline-status { font-size: 11px; line-height: 1.5; min-height: 14px; color: var(--brass); }
+#offline-bar {
+  height: 5px; border-radius: 999px; overflow: hidden;
+  background: rgba(0, 0, 0, .45); border: 1px solid #3d2d1a;
+}
+#offline-bar[hidden] { display: none; }
+#offline-fill {
+  height: 100%; width: 0;
+  background: linear-gradient(90deg, var(--brass-lo), var(--brass-hi));
+  transition: width .18s ease;
+}
+@media (prefers-reduced-motion: reduce) { #offline-fill { transition: none; } }
+#offline-maps { display: flex; flex-direction: column; gap: 2px; }
+.off-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 4px 0; border-bottom: 1px solid rgba(61, 45, 26, .5);
+}
+.off-row:last-child { border-bottom: 0; }
+.off-name  { font-size: 12px; color: #c8a870; }
+.off-right { flex-shrink: 0; }
+/* A saved map shows a mark, not a dead button: a disabled control reads as
+   broken on a phone (see the mode toggles in CLAUDE.md). The green is its own
+   literal, not --neon: --neon is the pink focus/highlight colour, and "this is
+   safely on your device" is the one place in this UI that wants a go signal. */
+.off-ok      { font-size: 11px; color: #6fd39a; }
+.off-working { font-size: 11px; color: var(--brass); }
+.off-save    { font-size: 11px; padding: 4px 12px; }
 
 /* Credits panel — shares the toggle button + card look with Backup & transfer.
    The explicit [hidden] rule is REQUIRED, not belt-and-braces: the UA's
