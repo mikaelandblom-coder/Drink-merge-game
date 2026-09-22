@@ -337,6 +337,13 @@ html, body {
   font-size: 12px; color: var(--neon); letter-spacing: .04em;
   opacity: .85;
 }
+/* Offline, and this map has nothing saved (offline.js markCards). It sits in
+   the same slot as .map-saved and must NOT read like it at a glance, so it is
+   amber rather than --neon: one is good news, the other is a caution. */
+.map-warn {
+  font-size: 12px; color: #e8a33d; letter-spacing: .04em;
+  opacity: .9; line-height: 1.4;
+}
 
 /* Per-map option toggles (table size, combo multipliers) */
 .map-options { display: flex; flex-wrap: wrap; gap: 9px 16px; }

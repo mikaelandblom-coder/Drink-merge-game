@@ -1069,10 +1069,25 @@ header, which is the only path that gets a whole mp3 onto the device.
   back in.
 - **An unsaved map, offline, still opens** — the asset fetch 504s, every draw
   path already tolerates a missing sprite, and it plays on the fallback
-  glass/liq colours with no backdrop and no music. No errors, but it is a poor
-  experience, so the panel is the thing to point Mai at before a trip. A
-  warning on the card when offline-and-unsaved is the obvious next step if it
-  ever matters.
+  glass/liq colours with no backdrop and no music. That is the right failure
+  (it beats a dead Play button), but a confusing one to walk into, so
+  `OFFLINE.markCards()` puts an amber line on each unsaved card while there is
+  no network: *"Not saved for offline — plays with no art or music"*. Three
+  things about it:
+  - **It runs only when offline.** `showWelcome()` calls it on every menu
+    rebuild — coming back from a run, a backup import, any `Progress.onChange`
+    — so with a network it must cost nothing, and it is one `navigator.onLine`
+    test and a return. `onLine` FALSE is the reliable half of that flag (true
+    can still be a captive portal), and false is the only half this needs.
+  - **It listens for `online`/`offline` too.** Airplane mode gets switched on
+    mid-session more often than not — she is already looking at the menu when
+    the doors close — so the cards follow it live rather than only on a reload.
+  - **It carries a generation counter.** It is async and fire-and-forget, and
+    `showWelcome()` can replace `#map-cards` while an earlier pass is still
+    awaiting a cache lookup; without the counter that pass would write its
+    warnings into detached nodes and the live cards would get none.
+  - Amber, not `--neon`: it lands in the same slot as `.map-saved` ("Run in
+    progress"), and one is good news while the other is a caution.
 - **No web manifest, deliberately (for now).** Offline play needs none — the
   worker covers a normal Safari tab and her existing home-screen icon alike.
   Adding one with `display: standalone` would change how that icon launches

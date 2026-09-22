@@ -193,8 +193,64 @@ const OFFLINE = (function () {
     if (hasCaches) await caches.delete(ASSET_CACHE);
   }
 
+  // ------------------------------------------- the warning on a menu card --
+  // Offline, a map with nothing saved still OPENS — every draw path tolerates a
+  // missing sprite, so it plays on the fallback glass/liq colours with no
+  // backdrop and no music. That is the right failure (it beats a dead button),
+  // but it is a confusing one to walk into, so the card says so first.
+  //
+  // It runs ONLY when there is no network: online this is one `navigator.onLine`
+  // test and a return, so the menu rebuild — which happens on every trip back
+  // from a run, and on every Progress change — pays nothing for it. `onLine`
+  // false is the reliable half of that flag (true can still mean a captive
+  // portal), and false is the only half this needs.
+  let markGen = 0;
+  async function markCards() {
+    const cards = document.querySelectorAll('.map-card[data-map]');
+    if (!cards.length) return;
+    // A generation counter, because this is async and fire-and-forget:
+    // showWelcome() can rebuild #map-cards while an earlier pass is still
+    // awaiting, and that pass holds references to cards no longer in the page.
+    const gen = ++markGen;
+    if (!(hasCaches && hasSW && armed) || navigator.onLine !== false) {
+      clearCardWarnings();
+      return;
+    }
+    for (const card of cards) {
+      const map = MAPS.find(m => m.id === card.dataset.map);
+      if (!map) continue;
+      const s = await mapState(map);
+      if (gen !== markGen) return;           // a newer pass owns the DOM now
+      setCardWarning(card, !s.saved);
+    }
+  }
+
+  function clearCardWarnings() {
+    document.querySelectorAll('.map-warn').forEach(el => el.remove());
+  }
+
+  function setCardWarning(card, on) {
+    const body = card.querySelector('.map-body');
+    if (!body) return;
+    let el = body.querySelector('.map-warn');
+    if (!on) { if (el) el.remove(); return; }
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'map-warn';
+      // Above the option toggles, in the same slot the "Run in progress" line
+      // uses — the two are both "what you need to know before you press Play".
+      body.insertBefore(el, body.querySelector('.map-options') || body.firstChild);
+    }
+    el.textContent = "Not saved for offline — plays with no art or music";
+  }
+
+  // Airplane mode is toggled MID-SESSION more often than not (she is already on
+  // the menu when the plane doors close), so the cards must follow it live.
+  addEventListener('online',  () => markCards());
+  addEventListener('offline', () => markCards());
+
   return { register, mapUrls, coreUrls, mapState, coreState, saveMap, saveUrls,
-           clearSaved, playableMaps, resetWorker,
+           clearSaved, playableMaps, resetWorker, markCards,
            get available() { return hasCaches && hasSW && armed; } };
 })();
 
@@ -279,6 +335,7 @@ OFFLINE.register();
     busy = false;
     allBtn.disabled = clrBtn.disabled = false;
     await refresh();
+    OFFLINE.markCards();
     if (failed) status.textContent += ` ${failed} file(s) could not be saved — try again on a better connection.`;
   }
 
@@ -292,6 +349,7 @@ OFFLINE.register();
     if (busy) return;
     await OFFLINE.clearSaved();
     await refresh();
+    OFFLINE.markCards();
     status.textContent = 'Saved maps removed. The menu still works offline.';
   };
 })();
