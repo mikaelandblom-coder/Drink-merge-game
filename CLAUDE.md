@@ -1050,7 +1050,37 @@ header, which is the only path that gets a whole mp3 onto the device.
   already being downloaded anyway; the menu's measured 511 KB first paint is
   untouched.
 - Measured: one map **4–8 MB**, all ten **52 MB**, and a fresh save of
-  everything took 1.8s on the dev server.
+  everything took 1.8s on the dev server. On a real connection it is minutes,
+  which is why it can be cancelled — below.
+
+### Cancelling a download, and why it keeps what it got
+
+**The AbortSignal is threaded into the `fetch`, not merely checked between
+files.** 52 MB over a phone connection means the thing a cancel most often has
+to interrupt is a single 6 MB mp3 already in flight, and a loop-level check
+alone would leave Cancel looking ignored until that file finished. Measured
+against a server that stalls mid-body for 8s: the panel is back in **90ms**.
+A partial body is never cached — an abort mid-transfer rejects the `cache.put`
+along with the fetch.
+
+**Cancelling is not losing.** `saveUrls` skips URLs already in the cache, so a
+cancelled download is resumable rather than wasted: restarting Hawaii after a
+cancel re-fetched **8 of its 48 URLs**, and a "Save every map" stopped after
+1.2s kept **7 of 10 maps** whole.
+
+**Cancel REPLACES the two footer buttons rather than relabelling one**, and no
+control is ever disabled — the per-map Save buttons are hidden while a download
+runs (`#offline-maps.busy`) instead. Two reasons, both already written down
+elsewhere in this file: a disabled control reads as broken on a phone (the mode
+toggles), and a Save that silently no-ops because another save is running is
+exactly that. Relabelling the Save button in place would also change what a
+control means under a finger already on its way down.
+
+**`refresh()` runs BEFORE `setBusy(false)`**, inside a `try/finally`. It rewrites
+the status line and every row from what is actually on the device, so an idle
+footer shown before it lands flashes over a list still reading "Saving…" — and
+the `finally` is what stops a refresh that throws stranding the panel with a
+Cancel button and no download to cancel.
 
 ### The things that would bite
 

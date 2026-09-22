@@ -151,12 +151,22 @@ const OFFLINE = (function () {
   // ------------------------------------------------------------ downloads --
   // Sequential on purpose. A phone on hotel wi-fi gains nothing from six
   // parallel 3MB fetches, and one at a time is what makes the progress line
-  // mean something.
-  async function saveUrls(urls, onStep) {
+  // mean something — and it is what lets a cancel land between two files with
+  // everything before it already on the device.
+  //
+  // `signal` (an AbortSignal) is threaded into the FETCH, not merely checked
+  // between files: 52MB of maps over a phone connection means the one thing a
+  // cancel most often has to interrupt is a single 6MB mp3 in flight, and a
+  // loop-level check alone would make Cancel do nothing until it finished.
+  // A partial body is never cached — an abort mid-transfer rejects the
+  // cache.put along with the fetch.
+  async function saveUrls(urls, onStep, signal) {
     if (!hasCaches) throw new Error('This browser cannot save the game offline.');
     const cache = await caches.open(ASSET_CACHE);
     let done = 0, bytes = 0, failed = 0;
+    const stopped = () => ({ bytes, failed, done, aborted: true });
     for (const u of urls) {
+      if (signal && signal.aborted) return stopped();
       try {
         const already = await caches.match(u);
         if (already) {                                // already here — skip the bytes
@@ -164,7 +174,7 @@ const OFFLINE = (function () {
         } else {
           // no-cache revalidates rather than re-downloading an unchanged file,
           // and NO Range header — so this is a full 200 the cache will accept.
-          const res = await fetch(u, { cache: 'no-cache' });
+          const res = await fetch(u, { cache: 'no-cache', signal });
           if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
           // Clone BEFORE the put: cache.put consumes the body, and the original
           // response is what goes in, headers and all, so inspect() can read
@@ -174,19 +184,23 @@ const OFFLINE = (function () {
           bytes += (await probe.blob()).size;
         }
       } catch (e) {
+        // An abort arrives here as a rejected fetch/put. It is a choice the
+        // player made, not a failure to report.
+        if (signal && signal.aborted) return stopped();
         failed++;
         console.warn('[offline] could not save', u, e);
       }
       done++;
       if (onStep) onStep(done, urls.length, bytes);
     }
-    return { bytes, failed };
+    return { bytes, failed, done, aborted: false };
   }
 
   // The shared art rides along with every map save. Already-cached URLs are
-  // skipped, so it is paid for once and the second map is just its own files.
-  function saveMap(map, onStep) {
-    return saveUrls([...coreUrls(), ...mapUrls(map)], onStep);
+  // skipped, so it is paid for once and the second map is just its own files —
+  // which is also what makes a cancelled download resumable rather than wasted.
+  function saveMap(map, onStep, signal) {
+    return saveUrls([...coreUrls(), ...mapUrls(map)], onStep, signal);
   }
 
   async function clearSaved() {
@@ -275,13 +289,29 @@ OFFLINE.register();
   const fill   = document.getElementById('offline-fill');
   const allBtn = document.getElementById('offline-all');
   const clrBtn = document.getElementById('offline-clear');
+  const cxlBtn = document.getElementById('offline-cancel');
   let busy = false;
+  let ctrl = null;   // the AbortController for the download in flight
 
   const mb = b => (b / 1048576).toFixed(b < 10485760 ? 1 : 0) + ' MB';
 
   function setProgress(done, total) {
     bar.hidden = false;
     fill.style.width = (total ? Math.round(100 * done / total) : 0) + '%';
+  }
+
+  // While a download runs, Cancel REPLACES the two footer buttons and the rows'
+  // Save buttons are hidden. Nothing is merely disabled: a dead control reads
+  // as broken on a phone (CLAUDE.md, the mode toggles), and a Save that
+  // silently does nothing because another save is running is exactly that.
+  // Cancel is its own button rather than the Save button relabelled, so no
+  // control changes meaning under a finger already on its way down.
+  function setBusy(on) {
+    busy = on;
+    allBtn.hidden = clrBtn.hidden = on;
+    cxlBtn.hidden = !on;
+    cxlBtn.textContent = 'Cancel download';
+    list.classList.toggle('busy', on);
   }
 
   async function refresh() {
@@ -312,9 +342,9 @@ OFFLINE.register();
 
   async function runSave(maps) {
     if (busy) return;
-    busy = true;
-    allBtn.disabled = clrBtn.disabled = true;
-    let failed = 0;
+    ctrl = new AbortController();
+    setBusy(true);
+    let failed = 0, stopped = false;
     try {
       for (let i = 0; i < maps.length; i++) {
         const m = maps[i];
@@ -324,18 +354,26 @@ OFFLINE.register();
           setProgress(done, total);
           status.textContent = `Saving ${m.label} — ${done} of ${total} files (${mb(bytes)})` +
             (maps.length > 1 ? ` · map ${i + 1} of ${maps.length}` : '');
-        });
+        }, ctrl.signal);
         failed += r.failed;
+        if (r.aborted) { stopped = true; break; }
       }
     } catch (e) {
       status.textContent = 'Could not save: ' + e.message;
     }
     bar.hidden = true;
     fill.style.width = '0%';
-    busy = false;
-    allBtn.disabled = clrBtn.disabled = false;
-    await refresh();
+    ctrl = null;
+    // refresh() rewrites the status line and the rows from what is actually on
+    // the device, so anything to add about this run has to be appended AFTER
+    // it — and the panel stays in its working state until it has, or a cancel
+    // flashes an idle footer over a list still reading "Saving…".
+    // try/finally: a refresh that throws must not strand the panel busy, with
+    // Cancel showing and no download to cancel.
+    try { await refresh(); } finally { setBusy(false); }
     OFFLINE.markCards();
+    if (stopped) status.textContent += ' Download stopped — every file already saved is kept, ' +
+      'and starting again picks up where it left off.';
     if (failed) status.textContent += ` ${failed} file(s) could not be saved — try again on a better connection.`;
   }
 
@@ -345,6 +383,13 @@ OFFLINE.register();
   };
 
   allBtn.onclick  = () => runSave(OFFLINE.playableMaps());
+  cxlBtn.onclick  = () => {
+    if (!ctrl) return;
+    ctrl.abort();
+    // The fetch in flight unwinds asynchronously, so say so rather than leaving
+    // a button that looks ignored for the moment that takes.
+    cxlBtn.textContent = 'Stopping…';
+  };
   clrBtn.onclick  = async () => {
     if (busy) return;
     await OFFLINE.clearSaved();
