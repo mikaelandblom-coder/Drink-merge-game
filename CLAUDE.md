@@ -1053,6 +1053,46 @@ header, which is the only path that gets a whole mp3 onto the device.
   everything took 1.8s on the dev server. On a real connection it is minutes,
   which is why it can be cancelled — below.
 
+### The size is measured, never written down
+
+"Is this small enough to do now?" has to be answerable BEFORE the download
+starts, so every row carries what that map's art and music weigh and the footer
+button reads **Save every map (52 MB)**.
+
+- **A size list generated into the repo was the wrong answer**, tempting as it
+  is. It would be a second copy of a fact the files already carry, and it would
+  rot the first time art was regenerated without re-running whatever produced
+  it — the same reasoning that has the card strips read the horizon out of
+  `config/hitboxes.js` rather than keeping their own. `ensureSizes()` asks the
+  server instead, with **HEAD**: headers only, so ~600 bytes stands in for a
+  6 MB track. Measured on the full set: **145 HEADs, 423ms**, total 52 MB
+  against a real 52.0 MB.
+- **Sizes are remembered per GAME_VERSION** (`mm_offline_sizes_v1`). A deploy
+  can change a file at an unchanged path (`compress_backgrounds.py` rewrites
+  `.webp` in place), so tying them to the build is what stops a stale number
+  outliving its file. A second visit to the panel costs **0 requests**, and a
+  fully-saved device never asks at all — a cached response's own
+  `Content-Length` is the same number for free.
+- **The footer shows what is LEFT to fetch, not what a full set weighs.** With
+  Saigon already saved it reads 45 MB, because that is the number the decision
+  turns on. When nothing is left the button is HIDDEN rather than reading
+  "(0 MB)" — the status line already says 10 of 10.
+- **A number is shown only when the whole of it is known.** Offline with
+  nothing measured, the only sizes to hand are the cached ~30 KB card strips,
+  and a row reading "0.0 MB" for a 6 MB map is worse than a row reading
+  nothing. A 404 counts as a KNOWN zero, though, not a gap: a map whose art has
+  not been deployed yet costs nothing to skip, and treating it as unknown would
+  suppress the total for every other map too.
+- **The panel paints before it measures.** `openAndSize()` renders off what is
+  already known, then sizes, then renders again; the button says "(checking
+  size…)" in between. Awaiting a hundred-odd HEADs first would be a blank panel
+  on a phone.
+- **`refresh()` gathers everything before writing anything.** `toDownload()`
+  walks ~157 cache entries, so computing it between the row render and the
+  button label left the total a visible beat behind the rows it belongs to.
+- Verified at 430/390/360/320px: the two footer buttons still fit side by side
+  with the longest label, nothing clipped, no horizontal scroll.
+
 ### Cancelling a download, and why it keeps what it got
 
 **The AbortSignal is threaded into the `fetch`, not merely checked between

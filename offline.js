@@ -122,6 +122,79 @@ const OFFLINE = (function () {
 
   function playableMaps() { return MAPS.filter(m => !m.locked); }
 
+  // ------------------------------------------------------------ file sizes --
+  // "Is this small enough to do now?" has to be answerable BEFORE the download
+  // starts, and a file's size is not knowable from config — so it is measured,
+  // never written down. A size list generated into the repo would be a second
+  // copy of a fact the files already carry, and it would rot the first time art
+  // was regenerated without re-running whatever produced it (the same reason
+  // the card strips read the horizon out of config/hitboxes.js rather than
+  // keeping their own).
+  //
+  // A HEAD returns the headers alone, so ~600 bytes stands in for a 6MB track.
+  // Sizes are then remembered per GAME_VERSION: a deploy can change a file at
+  // an unchanged path (compress_backgrounds.py rewrites .webp in place), so
+  // tying them to the build is what stops a stale number outliving its file.
+  const SIZE_STORE = 'mm_offline_sizes_v1';
+  const HEAD_PARALLEL = 6;
+  let sizes = (function () {
+    try {
+      const raw = JSON.parse(localStorage.getItem(SIZE_STORE) || 'null');
+      if (raw && raw.v === GAME_VERSION && raw.s) return raw.s;
+    } catch {}
+    return {};
+  })();
+
+  function rememberSizes() {
+    try { localStorage.setItem(SIZE_STORE, JSON.stringify({ v: GAME_VERSION, s: sizes })); }
+    catch {}
+  }
+
+  const lenOf = res => parseInt(res.headers.get('content-length') || '', 10) || 0;
+
+  // Fill in any size we do not have yet. Cheap to call again — it only asks
+  // about URLs that are neither cached nor already measured, so a second visit
+  // to the panel costs nothing and a fully-saved device costs nothing ever.
+  async function ensureSizes(urls) {
+    if (!hasCaches || navigator.onLine === false) return;
+    const todo = [];
+    for (const u of urls) {
+      if (sizes[u] != null) continue;          // 0 is a KNOWN size, not a gap
+      const hit = await caches.match(u);
+      if (hit) { const n = lenOf(hit); if (n) { sizes[u] = n; continue; } }
+      todo.push(u);
+    }
+    if (!todo.length) return;
+    let i = 0;
+    await Promise.all(Array.from({ length: Math.min(HEAD_PARALLEL, todo.length) }, async () => {
+      while (i < todo.length) {
+        const u = todo[i++];
+        try {
+          const r = await fetch(u, { method: 'HEAD' });
+          const n = parseInt(r.headers.get('content-length') || '', 10);
+          // A 404 is a KNOWN zero, not a gap: a map whose art has not been
+          // deployed yet costs nothing to not download, and treating it as
+          // unknown would suppress the total for every other map too. Only a
+          // failed REQUEST (no network) leaves a real hole.
+          sizes[u] = (r.ok && n > 0) ? n : 0;
+        } catch { /* no network — leave it unknown so the label can say nothing */ }
+      }
+    }));
+    rememberSizes();
+  }
+
+  // What pressing a button would actually FETCH: the files not already here.
+  // `unknown` is how many of those we could not size, so a caller can say "~"
+  // rather than quietly under-reporting.
+  async function toDownload(urls) {
+    let bytes = 0, unknown = 0;
+    for (const u of urls) {
+      if (await caches.match(u)) continue;
+      if (sizes[u] != null) bytes += sizes[u]; else unknown++;
+    }
+    return { bytes, unknown };
+  }
+
   // ---------------------------------------------------------- cache state --
   // Content-Length off the cached RESPONSE HEADERS, never the body: summing
   // ten maps by reading their blobs would pull ~50MB through memory just to
@@ -141,12 +214,33 @@ const OFFLINE = (function () {
   // A map's own files only — the shared art below is counted ONCE, in
   // coreState(), rather than ten times over.
   async function mapState(map) {
-    const s = await inspect(mapUrls(map));
+    const urls = mapUrls(map);
+    const s = await inspect(urls);
     s.saved = s.have === s.total;
+    // A row shows ONE number in both states, and it always means the same
+    // thing: what this map's own art and music weigh. Saved, that is what is on
+    // the device; unsaved, it is the measured total — so the number does not
+    // change meaning the moment you press the button next to it.
+    if (!s.saved) {
+      let bytes = 0, unknown = 0;
+      for (const u of urls) {
+        if (sizes[u] != null) bytes += sizes[u];
+        else if (!(await caches.match(u))) unknown++;
+      }
+      s.bytes = bytes;
+      s.unknown = unknown;
+    }
     return s;
   }
 
   async function coreState() { return inspect(coreUrls()); }
+
+  // Every file a full download touches, shared art included and counted once.
+  function allUrls() {
+    const out = new Set(coreUrls());
+    for (const m of playableMaps()) for (const u of mapUrls(m)) out.add(u);
+    return [...out];
+  }
 
   // ------------------------------------------------------------ downloads --
   // Sequential on purpose. A phone on hotel wi-fi gains nothing from six
@@ -263,8 +357,9 @@ const OFFLINE = (function () {
   addEventListener('online',  () => markCards());
   addEventListener('offline', () => markCards());
 
-  return { register, mapUrls, coreUrls, mapState, coreState, saveMap, saveUrls,
-           clearSaved, playableMaps, resetWorker, markCards,
+  return { register, mapUrls, coreUrls, allUrls, mapState, coreState, saveMap,
+           saveUrls, clearSaved, playableMaps, resetWorker, markCards,
+           ensureSizes, toDownload,
            get available() { return hasCaches && hasSW && armed; } };
 })();
 
@@ -306,25 +401,44 @@ OFFLINE.register();
   // silently does nothing because another save is running is exactly that.
   // Cancel is its own button rather than the Save button relabelled, so no
   // control changes meaning under a finger already on its way down.
+  // Working state and "is there anything left to save" are decided in two
+  // different places — setBusy() and refresh() — and runSave() calls refresh()
+  // while still busy, so neither may write the buttons directly or the final
+  // refresh flashes an idle footer under a live Cancel. One expression owns it.
+  let hasWork = true;
+  function applyFooter() {
+    allBtn.hidden = busy || !hasWork;
+    clrBtn.hidden = busy;
+    cxlBtn.hidden = !busy;
+  }
   function setBusy(on) {
     busy = on;
-    allBtn.hidden = clrBtn.hidden = on;
-    cxlBtn.hidden = !on;
     cxlBtn.textContent = 'Cancel download';
     list.classList.toggle('busy', on);
+    applyFooter();
   }
 
-  async function refresh() {
+  // `sized` false means the sizes have not been measured yet, so the labels say
+  // so instead of showing a total that is really "everything we happen to know".
+  async function refresh(sized) {
     const maps = OFFLINE.playableMaps();
+    // Everything is gathered BEFORE anything is written. toDownload() walks
+    // ~157 cache entries, so computing it between the row render and the button
+    // label left the total a visible beat behind the rows it belongs to.
     const states = await Promise.all(maps.map(m => OFFLINE.mapState(m)));
     const core = await OFFLINE.coreState();
+    const left = await OFFLINE.toDownload(OFFLINE.allUrls());
     let savedCount = 0, savedBytes = 0;
     list.innerHTML = maps.map((m, i) => {
       const s = states[i];
       if (s.saved) { savedCount++; savedBytes += s.bytes; }
+      // All of it or none of it. Offline with nothing measured, the only
+      // sizes to hand were the cached 30KB card strips, and a row that reads
+      // "0.0 MB" for a 6MB map is worse than a row that reads nothing.
+      const size = (!s.unknown && s.bytes) ? mb(s.bytes) : '';
       const right = s.saved
-        ? `<span class="off-ok">Saved${s.bytes ? ' · ' + mb(s.bytes) : ''}</span>`
-        : `<button class="off-save" data-id="${m.id}">Save</button>`;
+        ? `<span class="off-ok">Saved${size ? ' · ' + size : ''}</span>`
+        : `<button class="off-save" data-id="${m.id}">Save${size ? ' · ' + size : ''}</button>`;
       return `<div class="off-row" data-row="${m.id}">
                 <span class="off-name">${m.label}</span>
                 <span class="off-right">${right}</span>
@@ -338,6 +452,18 @@ OFFLINE.register();
       ? `The menu already works with no internet. ${savedCount} of ${maps.length} maps saved` +
         (onDisk ? ` (${mb(onDisk)} on this device).` : '.')
       : `The menu already works with no internet. No maps saved yet — save the ones you want to play.`;
+
+    // The footer answers "can I afford this right now": what is LEFT to fetch,
+    // not what a full set weighs. With three maps already here it is the other
+    // seven plus whatever shared art is missing, which is the number the
+    // decision actually turns on.
+    hasWork = left.bytes > 0 || left.unknown > 0;
+    allBtn.textContent =
+      !hasWork                        ? 'Save every map'
+      : !sized                        ? 'Save every map (checking size…)'
+      : (!left.unknown && left.bytes) ? `Save every map (${mb(left.bytes)})`
+      :                                 'Save every map';
+    applyFooter();
   }
 
   async function runSave(maps) {
@@ -370,16 +496,26 @@ OFFLINE.register();
     // flashes an idle footer over a list still reading "Saving…".
     // try/finally: a refresh that throws must not strand the panel busy, with
     // Cancel showing and no download to cancel.
-    try { await refresh(); } finally { setBusy(false); }
+    try { await refresh(true); } finally { setBusy(false); }
     OFFLINE.markCards();
     if (stopped) status.textContent += ' Download stopped — every file already saved is kept, ' +
       'and starting again picks up where it left off.';
     if (failed) status.textContent += ` ${failed} file(s) could not be saved — try again on a better connection.`;
   }
 
+  // Opening the panel renders immediately off what is already known (instant,
+  // and on a repeat visit that is everything), then measures anything still
+  // unsized and renders once more. Not awaited before the first paint: a
+  // hundred-odd HEADs on a phone would otherwise be a blank panel.
+  async function openAndSize() {
+    await refresh(false);
+    await OFFLINE.ensureSizes(OFFLINE.allUrls());
+    if (!panel.hidden && !busy) await refresh(true);
+  }
+
   document.getElementById('offline-toggle').onclick = () => {
     panel.hidden = !panel.hidden;
-    if (!panel.hidden) refresh();
+    if (!panel.hidden) openAndSize();
   };
 
   allBtn.onclick  = () => runSave(OFFLINE.playableMaps());
@@ -393,7 +529,7 @@ OFFLINE.register();
   clrBtn.onclick  = async () => {
     if (busy) return;
     await OFFLINE.clearSaved();
-    await refresh();
+    await refresh(true);
     OFFLINE.markCards();
     status.textContent = 'Saved maps removed. The menu still works offline.';
   };
