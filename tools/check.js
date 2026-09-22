@@ -148,12 +148,22 @@ function preflight() {
 
   // GAME_VERSION rides along with a buster bump: it is what Mai reads off the
   // welcome screen to confirm she is current, so a silent one is a lie.
+  const vNow = gameVersion(fs.readFileSync(path.join(ROOT, 'config/constants.js'), 'utf8'));
+  const vWas = gameVersion(git('show', `${base}:config/constants.js`));
   const bumped = [...now.keys()].some(f => now.get(f) !== null && now.get(f) !== was.get(f));
   if (bumped) {
-    const vNow = gameVersion(fs.readFileSync(path.join(ROOT, 'config/constants.js'), 'utf8'));
-    const vWas = gameVersion(git('show', `${base}:config/constants.js`));
     if (vNow === vWas) note(`?v= was bumped but GAME_VERSION is still ${vNow}`);
     else pass(`GAME_VERSION ${vWas} -> ${vNow}`);
+  }
+
+  // The service worker is the one served file with no <script> tag to carry a
+  // buster: offline.js registers it as `sw.js?v=<GAME_VERSION>`, and sw.js reads
+  // that query to name its shell cache. So GAME_VERSION is its cache-buster, and
+  // a changed worker under an unchanged one ships new routing code over a cache
+  // still named for the old build.
+  if (changed.includes('sw.js') && vNow === vWas) {
+    note(`sw.js changed but GAME_VERSION is still ${vNow} — it is what names the ` +
+         `offline shell cache (see offline.js). Bump it.`);
   }
 }
 

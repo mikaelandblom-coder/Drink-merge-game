@@ -337,6 +337,10 @@ function showWelcome() {
   // coolCb.checked = localStorage.getItem('mm_cool') === '1';
   // coolCb.onchange = () => localStorage.setItem('mm_cool', coolCb.checked ? '1' : '0');
   wireWelcomeEvents();
+  // Offline: flag the cards whose map has nothing saved (offline.js). Async and
+  // deliberately not awaited — with a network it is one navigator.onLine test
+  // and a return, so a menu rebuild costs nothing for it.
+  if (typeof OFFLINE !== 'undefined') OFFLINE.markCards();
   document.getElementById('welcome').style.display = 'flex';
   document.getElementById('wrap').style.display = 'none';
   document.getElementById('over').style.display = 'none';

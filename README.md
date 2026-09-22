@@ -36,6 +36,13 @@ sound theme:
 | Farm | Sprout Valley |
 | Cần Thơ | Floating Market |
 
+## Playing offline
+
+The game keeps a copy of itself on your device, so it works with no internet —
+on a plane, on the metro, anywhere with no signal. Visiting once is enough for
+the menu; open **Play offline** at the bottom of the menu and hit **Save** on
+the maps you want to take with you (art and music, about 4–8 MB each).
+
 ## Game modes
 
 - **Combo multipliers** — fast successive merges stack a score multiplier.
