@@ -670,9 +670,10 @@ function updateXpBar() {
   setXpFill(info.into / info.need * 100);
 }
 
-// 1 XP per shot — called from makeDrink's shot path (game.js), which covers
-// both live pointer shots and test-mode TT.shoot.
-function xpOnShot(state) {
+// One XP point. Called from makeDrink's shot path (game.js) — covering live
+// pointer shots and test-mode TT.shoot — in every mode but rapid fire, which
+// earns by time played instead (RF_XP_MS, stepPhysics).
+function earnXp(state) {
   state.runXp++;
   const r = Progress.addXp(ACTIVE_MAP.id, 1);
   if (r.leveled) levelUpFx(); else updateXpBar();

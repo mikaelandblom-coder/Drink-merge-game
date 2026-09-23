@@ -327,6 +327,7 @@ art, and the open tuning questions. The rules that bite if you don't know them:
   `LAUNCHER_LIFT` are ONE measurement against the XP bar: move them together.
 - **`cannonMargin()` is pinned to the widest thing the mode can deal (and the
   cradle art)**, never the loaded tier, or the carriage twitches every shot.
+- **XP is 1 per 3s of play, not 1 per shot** (`RF_XP_MS`) — see "XP & levels".
 - `sceneBusy()` is always true in rapid; the aim line is standing state
   (`drawRapidAim`); the launcher art is shared chrome, fetched only for this mode.
 
@@ -426,6 +427,11 @@ tokens exist so a retune is one edit rather than five.
 
 Every shot earns **1 XP** on every map/mode — shots ≈ time played, so no mode
 is the "optimal" way to level (deliberate; don't add merge/score bonuses).
+**Rapid fire is the one exception, and it keeps the same principle:** its
+launcher fires itself (up to ~170 shots a minute), so per-shot XP made it
+several times the fastest way to level and paid XP for doing nothing. It earns
+**1 XP per 3s of play** instead (`RF_XP_MS`, frame-counted in `stepPhysics`, so
+a pause or a backgrounded tab earns nothing) — Mikael's call, 2026-09-23.
 Each map has its own level; the **total player level** (welcome header) is the
 sum of map levels. Per-level cost doubles every 7 levels:
 `cost(n→n+1) = round(XP_A · 2^(n/7))`, no cap. **Only raw XP is stored**
@@ -647,8 +653,9 @@ for: score, upcoming tiers, the Happy Hour queue, and the save lifecycle.
   item chain that shrank under the save (`makeDrink` indexing past `ITEMS`).
 - `state.combo` is deliberately not saved (the window is 1.4s), and coins still
   flying to the bag are folded into the saved score exactly as `checkOver` does.
-- XP needs nothing: `xpOnShot` commits per shot, so suspending can neither lose
-  nor double-count it. `runXp` is restored only for the game-over recap line.
+- XP needs nothing: `earnXp` commits each point as it is earned, so suspending
+  can neither lose nor double-count it (rapid drops at most the <3s towards its
+  next time-based point). `runXp` is restored only for the game-over recap line.
 - **`SUSPEND.persistEnabled = false` in test mode gates CLEARS as well as
   writes** — startGame clears on every start, so without that guard merely
   loading `?test=1` and calling `TT.start` would delete a real parked run.

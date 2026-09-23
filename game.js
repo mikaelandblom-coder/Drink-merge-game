@@ -298,6 +298,15 @@ function rfReloadMs() {
 // grace — see checkOver for why stacking the two was wrong.
 const RF_OVER_MS       = 800;
 
+// XP in rapid is earned per TIME PLAYED, not per shot (Mikael, 2026-09-23).
+// Everywhere else a shot is a decision, so shots ≈ time played and 1 XP a shot
+// keeps every mode equal. Rapid breaks that: the launcher fires itself, up to
+// ~170 shots a minute once the ramp is done, which made it several times the
+// fastest way to level and paid XP for not touching the screen at all. 3s is
+// about the pace of a thoughtful classic shot. Frame-counted like the cadence,
+// so a pause, the score panel or a backgrounded tab earns nothing.
+const RF_XP_MS         = 3000;
+
 // ms until the next automatic shot, given how far into the ramp the run is.
 function rfCadence() {
   const t = Math.max(0, Math.min(1, (state.shotsFired - RF_RAMP_FROM) / RF_RAMP_SHOTS));
@@ -332,9 +341,11 @@ const state = {
   // the RF_* block above). Unused in every other mode.
   rfTimer:    0,
   rfReload:   0,
+  rfXpMs:     0,    // game time toward the next rapid-fire XP point
   nextCustomerAtShot: HH_FIRST_SHOT,
-  // XP earned this run (1/shot; committed to storage per shot by progress.js —
-  // this counter only feeds the game-over "+N XP" recap)
+  // XP earned this run (1/shot, or 1 per RF_XP_MS in rapid; committed to
+  // storage as it is earned by progress.js — this counter only feeds the
+  // game-over "+N XP" recap)
   runXp: 0,
   // Bumped by every resetState, so a timer set during one run can tell it has
   // outlived it (the classic reload in fireShot, ui.js).
@@ -412,8 +423,9 @@ function makeDrink(x, y, tier, shot = false, growIn = false, kind = 'drink') {
   b.plugin = { tier, kind, item: it, born: performance.now(), merging: false, ghost };
   // Every real shot (pointer or TT.shoot) counts for Happy Hour arrivals AND
   // earns 1 XP (progress.js) — merge/receipt spawns never come through here
-  // with shot=true, so nothing else can farm XP.
-  if (shot) { countShot(); xpOnShot(state); }
+  // with shot=true, so nothing else can farm XP. Except in rapid fire, whose
+  // shots fire THEMSELVES: there XP is earned per time played (RF_XP_MS).
+  if (shot) { countShot(); if (!RAPID_FIRE) earnXp(state); }
   if (growIn) {
     // Merge products appear INSIDE a packed pile. A full-size body materialising
     // there gets separated by Matter's position solver in one violent shove —
@@ -464,6 +476,7 @@ function resetState() {
   resetCannon();                                    // ui.js — steering state
   state.rfTimer = RAPID_FIRE ? RF_CADENCE_START : 0;
   state.rfReload = 0;
+  state.rfXpMs = 0;
   rollFreshTiers();
   BUGLOG.run();    // fresh bug-report ring for the new run (buglog.js)
   idleFrames = 0;  // ensure the fresh board draws even if we were idle
@@ -908,6 +921,8 @@ function stepPhysics() {
   // than in loop()) is what lets TT.step() drive the mode synchronously.
   if (RAPID_FIRE && !state.gameOver) {
     updateCannon();                    // ui.js — one 60Hz frame of steering
+    state.rfXpMs += FRAME_MS;          // XP by time played — see RF_XP_MS
+    if (state.rfXpMs >= RF_XP_MS) { state.rfXpMs -= RF_XP_MS; earnXp(state); }
     if (state.rfReload > 0) {
       state.rfReload -= FRAME_MS;
       // canShoot flips with RF_LOAD_MS still on the clock: that tail is the

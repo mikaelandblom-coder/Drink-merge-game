@@ -8,6 +8,10 @@
 > **Status:** it began as a playtest build ("not deployed"), but it is on
 > `main` since the 2026-09-22 merge and every map card offers it. The tuning
 > notes below are still the open questions.
+>
+> **XP is per time played, not per shot** (2026-09-23): 1 XP per 3s
+> (`RF_XP_MS`), since a self-firing launcher would otherwise level several
+> times faster than any other mode. See "XP & levels" in CLAUDE.md.
 
 
 A per-map checkbox that answers "rounds take too long" (raised 2026-08-23: Mai

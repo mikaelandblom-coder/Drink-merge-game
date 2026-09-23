@@ -513,6 +513,7 @@ its fix (all from the 2026-09-23 review):
 - the classic 500ms reload cannot roll the next run's queue after "Play again";
 - Continue after quitting MID-reload deals the next drink, not the fired one;
 - a bug report from a rapid run records `rapid`;
+- rapid fire earns XP per `RF_XP_MS` of play, not per shot (classic stays 1/shot);
 - with no `ctx.roundRect` (iPadOS 15) the frame finishes and coins still land;
 - three trips to the background still leave ONE render loop;
 - `saveScore` survives a storage that refuses writes;

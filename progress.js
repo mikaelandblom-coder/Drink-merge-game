@@ -3,7 +3,9 @@
 //
 // XP rules (agreed 2026-07-17):
 //   - 1 XP per shot, on EVERY map/mode — shots track time played, so no
-//     mode/map is the "optimal" way to level; play what you enjoy.
+//     mode/map is the "optimal" way to level; play what you enjoy. Rapid
+//     fire's shots fire themselves, so it earns 1 XP per 3s of play instead
+//     (RF_XP_MS in game.js) — the same idea, measured directly.
 //   - Each map has its own level (derived from raw XP, never stored). The
 //     total player level is the sum of the map levels — playing all maps is
 //     what pushes the big number.
@@ -178,7 +180,7 @@ const Progress = (() => {
     },
 
     // Returns level info after the add, plus `leveled` when a boundary was
-    // crossed (1 XP per shot means at most one level per call).
+    // crossed (1 XP per call means at most one level per call).
     addXp(mapId, n = 1) {
       const before = P.level(mapId);
       data.maps[mapId] = (data.maps[mapId] || 0) + n;

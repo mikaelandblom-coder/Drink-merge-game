@@ -452,6 +452,27 @@ async function regressions(browser) {
          `next was ${parked.coming}`);
   }
 
+  // XP tracks time played. A shot is a decision in classic, so it earns 1 XP;
+  // rapid's launcher fires itself, so it earns 1 per RF_XP_MS instead — and
+  // must NOT also earn per shot, or it levels several times faster.
+  const xp = await page.evaluate(async () => {
+    await TT.start('hawaii', { seed: 1, rapid: true });
+    const per = (typeof RF_XP_MS === 'undefined') ? 3000 : RF_XP_MS;
+    TT.step(Math.round(10 * per / FRAME_MS) + 2);    // 10 x RF_XP_MS of frames (+2 for float drift)
+    if (state.gameOver) return { over: true };
+    const rapid = { xp: state.runXp, shots: state.shotsFired };
+    await TT.start('hawaii', { seed: 1 });
+    for (let i = 0; i < 4; i++) { TT.shoot(210, 100); TT.step(30); }
+    return { rapid, classic: state.runXp };
+  });
+  if (xp.over) fail('XP probe: the rapid run ended before 10 x RF_XP_MS — pick a longer-lived setup');
+  else if (xp.rapid.xp === 10 && xp.rapid.shots > 10 && xp.classic === 4) {
+    pass(`XP: rapid earns 1 per RF_XP_MS of play (10 for ${xp.rapid.shots} shots), classic 1 per shot`);
+  } else {
+    fail(`XP: rapid ${xp.rapid.xp} XP for ${xp.rapid.shots} shots over 10 x RF_XP_MS ` +
+         `(want 10), classic ${xp.classic} for 4 shots (want 4)`);
+  }
+
   // A bug report from a rapid run must replay AS rapid.
   const rapidMeta = await page.evaluate(async () => {
     await TT.start('hawaii', { seed: 1, rapid: true });
