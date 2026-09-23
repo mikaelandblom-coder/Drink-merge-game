@@ -67,8 +67,8 @@ game.js               — Physics engine, state object, merge logic, render loop
 style.css             — All CSS
 index.html            — Shell: loads scripts in order (constants → hitboxes →
                          items → maps → sounds → soundmap → scores → buglog →
-                         suspend → progress → audio → fx → render → offline →
-                         ui → welcome → game)
+                         suspend → progress → audio → fx → render → ui →
+                         offline → welcome → game)
 process_assets.py     — Asset pipeline: source images → game-ready PNGs
 compress_backgrounds.py — Background/chrome PNG → WebP (~-91%). Separate from
                          process_assets.py because backgrounds need no keying,
@@ -88,6 +88,10 @@ vendor/             — Third-party code, committed rather than fetched:
                          run the asset pipeline, serve the game and render it.
                          Remote-only; a local checkout is untouched. See
                          "Working in a cloud session" below.
+docs/                 — Long-form notes for individual features, moved out of this
+                         file to keep it small: rapid-fire, map-cards, offline,
+                         rotating-items, ambient-fx. Each keeps a rules summary
+                         HERE with a link; the doc is the full record.
 tools/
   README.md           — Manuals for the three editors below (hitbox, sprite,
                          sound). READ THE RELEVANT SECTION before editing a tool
@@ -96,7 +100,8 @@ tools/
                          `node tools/shot.js out.png --map=kyoto --bytes`. The
                          way to verify a UI change, and the way to measure a
                          page's byte cost.
-  check.js            — Regression checks, ~13s, exits non-zero. Seeded board
+  check.js            — Regression checks, ~20s, exits non-zero. Runs in CI on
+                         every PR (.github/workflows/check.yml). Seeded board
                          digests across every map × mode (goldens in
                          tools/golden/) + one probe per fixed bug + a deploy
                          preflight for the `?v=` /
@@ -291,305 +296,81 @@ in localStorage and passed into `startGame(map, {size, combos, happyHour})`:
   editing") so this doesn't recur — it defaults to 256 px, which is exactly
   right for this use.
 
-## Rapid fire (quick mode) — PLAYTEST BUILD, not deployed
+## Rapid fire (quick mode) — full notes in [docs/rapid-fire.md](docs/rapid-fire.md)
 
-A per-map checkbox that answers "rounds take too long" (raised 2026-08-23: Mai
-happily plays a map for 30 minutes, other people want something much shorter).
-**The launcher fires itself** on a cadence that accelerates with the shot count,
-so a run ends on its own instead of lasting as long as the player's skill does.
-A random-steering bot dies in **~6 minutes** — against the 30 a map can absorb
-in classic.
+A per-map checkbox: **the launcher fires itself** on a cadence that accelerates
+with the shot count, so a run ends on its own (~6 min, against the 30 a map can
+absorb in classic). It began as a playtest build but is on `main` since the
+2026-09-22 merge. The doc has the steering model, every measurement, the launcher
+art, and the open tuning questions. The rules that bite if you don't know them:
 
-It is a change to WHEN a shot happens, not to what a shot is — `fireShot` in
-ui.js is shared with the classic release-to-shoot gesture, so the two can never
-disagree. **Verified: classic play is bit-for-bit unchanged** (seeded 8-shot runs
-on hawaii/kyoto/melody, identical board digests before and after).
+- **It changes WHEN a shot happens, never what a shot is.** `fireShot` (ui.js) is
+  shared with classic's release-to-shoot, and classic must stay bit-for-bit
+  unchanged — the board digests in `tools/check.js` are how you know.
+- **The cadence is counted in FRAMES inside `stepPhysics`, never wall time**, so
+  `TT.step()` plays the mode deterministically and a pause can neither bank time
+  nor skip a shot. The cradle's empty/reload pause is frame-counted the same way.
+- **The bot is a proxy for TERMINATION, never for feel.** The first tuning killed
+  a random-steering bot in 3 minutes and Mai found it unplayable. `RF_DROP_MAX`
+  is 4 (classic's deal) for that reason; don't tune "feel" against a bot.
+- **Game over is per-body DWELL** in the danger zone (`plugin.overSince`,
+  `RF_OVER_MS`), with no speed test — the board never settles in rapid. The dwell
+  REPLACES the 1.5s birth grace; stacking them was a bug.
+- **Combos are forced on, and the per-throw combo reset is skipped** (the chain
+  is governed by `COMBO_WINDOW` alone). `scoreKey` folds rapid + combo into one
+  variant part (`mm_s_<map>__rapid`).
+- **Mutually exclusive with Happy Hour.** `startGame` lets HH win the tie; the menu
+  UNTICKS the other box rather than disabling it (a disabled box reads as broken
+  on a phone). Only the combo box is disabled, because it is pinned, not excluded.
+- **`loadedDrinkWY()` (render.js) is where the loaded drink is** — the preview and
+  the spawn both read it, or a shot visibly jumps. `LAUNCHER_DY` and
+  `LAUNCHER_LIFT` are ONE measurement against the XP bar: move them together.
+- **`cannonMargin()` is pinned to the widest thing the mode can deal (and the
+  cradle art)**, never the loaded tier, or the carriage twitches every shot.
+- `sceneBusy()` is always true in rapid; the aim line is standing state
+  (`drawRapidAim`); the launcher art is shared chrome, fetched only for this mode.
 
-### The player still aims — the cannon chases the finger
+Four things it changed for **every** mode, all deliberate:
 
-`CANNON` (ui.js) is a carriage that springs toward the finger with momentum, and
-**the residual offset between the two IS the shot angle**. That is not a new
-mechanic: `updateAim` has always lerped `LAUNCH` toward the finger at 0.35/frame
-and fired along `finger − LAUNCH`, so classic play already aims by releasing
-during the catch-up transient. Rapid just never stops. One rule gives all three
-behaviours:
-
-| input | result |
-|-------|--------|
-| moving fast | the carriage lags → a tilted shot |
-| held still | it catches up, offset decays → straight up |
-| finger past the table edge | the carriage clamps, the finger doesn't → a **held** angle |
-
-That third row is the one worth protecting. Pure velocity-derived tilt cannot
-hold an angle at all (you would have to keep moving), and the edge is exactly
-where a sustained angle is wanted — firing into the far corner. It needs
-`setPointerCapture` so the finger can track outside the canvas; without that,
-edge tilt caps at the launcher's own margin.
-
-- **`RF_TILT_MAX` (0.70 rad ≈ 40°) is a hard bound**: at full tilt the vertical
-  component is still `cos(0.70) = 0.76` of the speed, so a rapid shot can never
-  be horizontal or backwards however hard the player swipes.
-- **`cannonMargin()` is pinned to the widest tier the mode can deal**, not the
-  tier currently loaded. Classic's per-tier margin only matters while a finger
-  is down; in rapid the carriage sits parked against an edge and would twitch
-  sideways on every shot as the queue dealt a different-sized item.
-
-### Two things measured, both of which caught the first build out
-
-**`RF_DROP_MAX` is the strongest lever on run length — much stronger than the
-cadence.** A wider spread makes two neighbouring drinks less likely to match, so
-the board stops clearing itself. Against a random-steering bot: 3 tiers → the run
-*never ended* (9 min, 134 drinks still on the field); 4 → ~4.4 min; 5 → ~3 min;
-6 → ~2.2 min. The first build set it to 3 on the assumption that narrowing the
-deal would stop the board filling with big items — it made merges so easy that
-nothing ever accumulated.
-
-Shipped at **4**, the same deal classic uses — see the bot-proxy warning below
-for why the measured optimum (5) was the wrong choice anyway.
-
-### The bot is a proxy for TERMINATION, never for feel (learned 2026-08-23)
-
-Every number above came from a random-steering bot, and the first shipped tuning
-was chosen to kill that bot in ~3 minutes. Mai then played it: *"way too quick,
-not able to play strategically at all."*
-
-The mistake is worth stating plainly, because the tooling makes it easy to
-repeat: **a random bot dies of chaos, not of time pressure.** It never plans, so
-it cannot tell you whether a person has time to. Tuning against it optimised the
-one quantity it can measure and silently wrecked the one it cannot.
-
-Two things fell out of re-reading the numbers with that in mind:
-
-- **The ramp SHAPE mattered more than the ceiling.** On the shipped build the
-  beat was 0.77s by shot 30 and 0.35s by shot 60 — full speed arrived about a
-  minute in, so the strategic phase barely existed. `RF_RAMP_FROM` now holds the
-  opening beat for the first 12 shots and `RF_RAMP_SHOTS` stretches the ramp to
-  110: 2.2s / 1.9s / 1.4s / 0.9s at shots 1 / 30 / 60 / 90, and ~168s before it
-  is fully frantic.
-- **Being handed a big drink you did not plan for is what stops a player
-  building anything** — and the bot had no plans to ruin, which is exactly why
-  `RF_DROP_MAX` 5 measured well and played badly.
-
-Rapid is still not the mode Mai wants (she is happy with 30-minute classic runs,
-and this was built for the people who are not). Her feedback is not a demand to
-make it slow; it is evidence that the early game gave *nobody* a foothold.
-
-**Rapid needs its own game-over test.** The classic rule wants a drink over the
-danger line AND at rest (`speed < 0.15`), but a shot every 0.35–2.2s keeps the
-whole board permanently jostling, so almost nothing settles — a run reached 90
-drinks and 4 minutes with no end in sight, a jammed board the game could not see
-was jammed. Rapid asks how long a drink has **dwelt** in the zone instead
-(`plugin.overSince`, `RF_OVER_MS` = 800), with no speed test. Tracking dwell per
-body (rather than just dropping the speed test) is what stops a drink knocked
-BACK into the zone ending the run the instant it arrives.
-
-**The dwell REPLACES the 1.5s birth grace; it must not stack with it.** The
-first build ran the birth check first, so a drink could sit behind the line for
-1.5 + 1.2 = **2.7s** — which read on a phone as the game being slow to notice
-(Mikael, 2026-08-23). The birth grace exists to let a shot cross the zone it is
-launched from, and the dwell already does that job: a shot clears the line in
-~55ms (90 world px at speed 27), so even at 800ms the dwell is ~15× the transit
-at full tilt. Measured after the fix: a drink settling in the zone ends the run
-in **817ms**, and classic still takes its full 1500ms.
-
-### The rest
-
-- **Combos are forced ON, and the per-throw reset is dropped.** `fireShot` does
-  `state.combo = 0` on every classic throw; at rapid's cadence against a 1.4s
-  `COMBO_WINDOW` that would stop a chain surviving even one shot, leaving the
-  forced combos very nearly inert. Letting the window alone govern the chain is
-  what turns the cadence into something that *sustains* a streak. Because combos
-  are pinned, `scoreKey` folds rapid and combo into one variant part
-  (`mm_s_<map>__rapid`) rather than multiplying them.
-- **Mutually exclusive with Happy Hour**, and not merely by taste: HH's
-  tap-to-serve gesture lives exactly where rapid's steering drag does. HH wins
-  the tie in `startGame` so a stale rapid preference can't disable a mode the
-  player did tick.
-- **The cadence is counted in FRAMES, not wall time.** `stepPhysics()` is one
-  60Hz frame for both `loop()` and `TT.step()`, so `TT.step()` alone plays the
-  mode deterministically — and there is no `performance.now()` stamp for
-  `setPaused` to be wrong about, so the score panel's freeze can neither bank
-  free time nor skip a shot. (`plugin.overSince` IS such a stamp and is pushed
-  forward with the rest.)
-- `sceneBusy()` returns true for the whole mode: the charge ring is always
-  filling, so the idle-frame skip must not park the loop between shots.
-- **The aim line is standing state** and is always drawn (`drawRapidAim`), since
-  there is no press to reveal it. The mode still needs *some* warning of when
-  the shot leaves, or the cadence reads as random and feels unfair rather than
-  fast — see the charge readout below.
-- **`loadedDrinkWY()` (render.js) is where the loaded drink is, and BOTH the
-  preview and the spawn read it.** They used to disagree: the preview sat at the
-  cradle's throat while `fireShot` spawned the body at `LAUNCH.y - physR - 4`,
-  ~20px lower — and since field drinks are drawn BEHIND the launcher art, a shot
-  visibly dropped back behind the cradle for a frame before flying (Mikael,
-  2026-08-23). Rapid now spawns at full spring compression, i.e. exactly where
-  the drink was drawn on the frame before firing, so the spring releasing is the
-  only movement. Measured at a 0.01px gap. Classic keeps its original expression
-  to the letter and is untouched.
-- **The cradle stands EMPTY between shots** (`RF_RELOAD_MS` + `RF_LOAD_MS`,
-  frame-counted like the cadence). The first build rolled the next tier inside
-  `fireShot`, so the next drink appeared in the cradle on the very frame the
-  last one left it and the launcher read as *a picture of what is coming* rather
-  than a thing that shoots (Mikael, 2026-08-23). The pause is capped at
-  `RF_RELOAD_FRAC` of the beat as well as in ms — 170ms is right at the start of
-  a run but is half the cycle once the ramp reaches 350ms, and a cradle empty
-  half the time reads as broken rather than busy. The drink then scales in over
-  `RF_LOAD_MS` so it arrives rather than blinking in. Purely visual: verified by
-  all 35 board digests being unchanged.
-- **The charge readout is the launcher itself, not a gauge.** The spring winds
-  up: the head compresses toward its hub (`RF_SQUASH`, cubed so nearly all the
-  travel is in the last third of the beat) and the loaded drink rides down with
-  it, then both snap back on the shot. The aim line brightens into the beat as a
-  second cue, sitting where the player is already looking. The first build drew
-  a ring around the cradle instead, and it **buried the art it was reporting
-  on** while fighting the XP bar for the same strip of screen (Mikael, on a
-  phone, 2026-08-23). Two cues, neither of them a new element.
-
-### A sprite's scale tracks its BODY, not its age (fixed 2026-08-23)
-
-`render()` used to draw **every** drink growing from 0.6 to full over 200ms off
-`plugin.born`. Only merge products actually grow — `makeDrink`'s `growIn` flag
-is what sets `plugin.scale`, and `stepPhysics` advances it — so a *shot*, whose
-body is full size from birth, was drawn at 60% of its own hitbox for 200ms. It
-read as the item shrinking the instant it left the launcher.
-
-`const growth = d.plugin.scale || 1` makes the sprite track the body exactly.
-
-**This changes classic too**, and deliberately: every shot on every map loses a
-200ms grow-in pop that never matched its physics. It is visual only — all 25
-non-rapid board digests are unchanged — but it IS a thing Mai could notice, so
-it is written down here rather than buried in the rapid-fire section.
-
-### Two things rapid fire changed for every mode
-
+- **A sprite's scale tracks its BODY, not its age** (`d.plugin.scale || 1`). Only
+  merge products grow in; a shot used to be drawn at 60% for 200ms. Visual only
+  — but Mai could notice it, so it is written down.
 - **Coins clear faster when the screen is crowded** (`COIN_RUSH_*`, render.js).
-  In late rapid fire a merge lands every few hundred ms and the coins stop
-  reading as a reward and become a curtain over the table. `updateCoins` scales
-  the whole flight — including each coin's negative stagger, since the speed-up
-  is applied before the `t < 0` test — by the live number in flight, so it eases
-  off again as the crowd drains. Measured on ten 18-coin merges 350ms apart:
-  peak on screen **136 → 65**, and 2.0s → **0.6s** to fall back under 20. A
-  normal burst never reaches `COIN_RUSH_FROM` and is untouched.
-  Tune it against a realistic crowd, not one big `spawnCoins` call: a single
-  call is capped at ~20 coins, and a synthetic 140-coin burst is dominated by
-  its own stagger, which sent the first tuning after the wrong lever.
-- **The quit confirm now FREEZES the run**, like the score panel. It was left
-  running because it was judged "rare or terminal" — it is neither. It is the
-  only pause this game has, and people use it as one when they need to put the
-  phone down (Mikael, 2026-08-23). Rapid made that reasoning plainly wrong,
-  since the cannon keeps firing on its own and a run dies behind the overlay,
-  but `checkOver`'s danger-line grace was counting in every other mode too. Both
-  exits unfreeze explicitly: a `paused` that outlived the run would freeze the
-  NEXT one at birth.
+  Tune it against a realistic crowd of overlapping bursts, never one big call.
+- **The quit confirm FREEZES the run**, like the score panel — it is the only
+  pause this game has. Both exits unfreeze explicitly: a `paused` that outlived
+  the run would freeze the next one at birth.
+- **The loaded drink sits IN the launcher art in rapid only**; classic's spawn
+  expression is untouched.
 
-### Open, for after the playtest
+### Map cards wear the map's own art — full notes in [docs/map-cards.md](docs/map-cards.md)
 
-- **The 4th checkbox costs Kyoto its single row of toggles** — CLAUDE.md's note
-  about 17px boxes was written for exactly this. It wraps cleanly to two rows at
-  360/390/430px (verified, nothing clipped), but the real fix is that Classic /
-  Happy Hour / Rapid are **mutually exclusive** and want a segmented mode
-  control rather than N checkboxes.
-  Until then, **neither mode box is ever disabled**: ticking one UNTICKS the
-  other (`syncModeToggles` in welcome.js). A disabled box is a dead end — you
-  have to work out for yourself which other control is holding it down, and on a
-  phone it just reads as broken (Mikael, 2026-08-23). The COMBO box is still
-  disabled under either mode, and that is a different thing: it is not excluded
-  by the mode, it is PINNED by it, so showing the pinned value is honest.
-- **Is the spring wind-up loud enough on a small screen?** It replaced the
-  charge ring for good reasons, but it is a subtler cue by design. If it proves
-  too quiet, the next thing to try is the aim line (brightness, or dashes that
-  march) rather than putting a gauge back on the launcher.
+Every menu card is topped by a strip cut from the map's OWN background master —
+no art is generated for the menu. **One rule places it on every map:**
+`card_band()` in `compress_backgrounds.py`, a full-width band `CARD_BAND` (120)
+world-px tall ending at the map's horizon, slid down until it fits the frame.
+The script writes `assets/images/<map>/card.webp` and `card:` in config/maps.js
+points at it; a map with no `card:` gets the plain header, so this never blocks
+a map from shipping.
 
-### The launcher art — two sprites, because only the head turns
+- **The horizon is READ OUT of config/hitboxes.js**, never copied — so for a new
+  map, trace the boundary FIRST, then run the script. A moved hitboxes.js makes
+  every card stale; a map with no traced horizon is skipped with a note.
+- **A shallow horizon slides the band down; it never shrinks it** (Mage Tower's
+  strip takes in some of the table — that is the rule working).
+- **The strips are `<img loading="lazy">`, not CSS backgrounds** — only an `<img>`
+  can defer, and that is what makes ~300 KB of card art affordable against a
+  ~510 KB menu. To cut bytes, drop `CARD_W` before `CARD_Q`. Never point a card
+  at a map's full `bg:`.
+- **`.map-art` sizes with `aspect-ratio`, and the header still wins** (flex
+  automatic minimum size) — don't replace it with a fixed height, or the
+  Continue/New run stack clips on a 320px phone.
+- The scrim ends at the card body's colour, not transparent, so every backdrop
+  stays legible and there is no seam.
 
-`assets/images/shared/launcher-head.png` + `-base.png`: a brass cradle on a
-spring, and the plate it is mounted on. **Shared chrome, not map art** — the
-same reasoning as the coin and the moneybag, since it has to sit on a tiki bar
-and in a mage tower alike. Generated white-on-transparent as one sheet
-(`assets/source/shared/launcher.png`).
+## Cool mode (30 fps cap) — built but SHELVED
 
-- **It is two sprites because a one-piece launcher tips over when it tilts.**
-  The head rotates about the point where its spring meets the hub; the plate
-  never rotates at all.
-- **The cut is a `boxes` entry, not a grid.** The generator drew the cradle
-  already standing on its own base plate, and the spring runs down BEHIND that
-  plate's rim — so the boundary between the two parts is a horizontal cut
-  partway through one drawn object, and `split_alpha_grid` has no gutter to
-  find. `handle_boxes` takes explicit source rectangles instead. The head is cut
-  at y=500, just above where the plate first flares.
-- **`max_height` scales the whole SHEET by one factor, never each sprite to the
-  same height.** These parts are drawn assembled: capping each to 256px
-  independently resized them 3% relative to each other, which is enough to leave
-  the cradle sitting proud of its hub.
-- **The head is drawn at 0.45× the shot's tilt** (`LAUNCHER_TILT_K`). At the
-  full 40° a horseshoe pivoting down at its spring swings clear off its own
-  plate and reads as having fallen over — the head sprite is wider than the base
-  to begin with. The aim line carries the true direction; the art only has to
-  lean into it. 0.6 still overhung; the range was rendered to pick this.
-- **`LAUNCHER_DY` and `LAUNCHER_LIFT` are one measurement, and it is against
-  the XP BAR.** The horizontal bar occupies the bottom ~42 world px of the
-  stage, and a plate whose hub sits on LAUNCH has its lower third behind it —
-  the second half of the phone-test clutter. −22 clears it with margin on every
-  map (the bar's geometry is map-independent), and the loaded drink is raised by
-  the matching amount so it still sits in the cradle's throat rather than in
-  front of it. Move one and the other must move.
-- **`cannonMargin()` accounts for the ART, not the drink.** The cradle is wider
-  than anything it can hold, so in rapid the carriage has to stop before the
-  cradle would hang off the table.
-
-### Map cards wear the map's own art
-
-Every card in the menu is topped by a strip of the map it plays — the tiki bar's
-sunset, Kyoto's lantern alley, Napoli's oven — with the name, level badge and
-Play button sitting on it. **No art was generated for the menu.** The strip is a
-crop of the same background master the map plays on, and **one rule places it on
-every map alike** — `card_band()` in `compress_backgrounds.py`:
-
-> a full-width band **`CARD_BAND` (120) world-px tall, ending at the map's
-> horizon, slid along until it fits inside the frame.**
-
-So a card shows painted backdrop wherever there is enough of it, and the horizon
-is where to put the band *when there is room* — there is no per-map case, and
-adding a map means adding a row to `CARDS`, nothing else. The script writes
-`assets/images/<map>/card.webp` (`CARD_W`, `CARD_Q` size it) and `card:` in
-config/maps.js points at it. A map with no `card:` falls back to the plain
-header the cards used to have, so this can never block a map from shipping.
-
-- **The horizon is READ OUT of config/hitboxes.js, not written down again.** It
-  is dragged in the hitbox editor, so a copy here would silently drift and the
-  strip would start including table. That also fixes the ORDER for a new map:
-  trace its boundary first, then run `compress_backgrounds.py`. The script
-  treats a moved `config/hitboxes.js` as making every card stale, so re-running
-  it after a re-trace is all that's needed; a map with no traced horizon yet is
-  skipped with a note rather than guessed at.
-- **A shallow horizon slides the band down; it does not shrink it.** Mage
-  Tower's horizon is 67.5, so its strip is the top 120px and takes in ~50px of
-  the arcane slab. That is the rule working, not an exception to it. The other
-  reading — keep the band strictly above the horizon and let it shrink — would
-  crop a 6:1 vista down to a keyhole on exactly the maps with the least backdrop
-  to spare, and needs a second rule for what to do about the leftover card
-  height. What a card wants is a full-width strip of the map's own art; not
-  showing an EMPTY play surface is why the horizon is the anchor.
-- **The strips are `<img loading="lazy">`, not CSS backgrounds, and that is the
-  whole reason they're affordable.** Ten cards is ~300 KB of art against a menu
-  that loads in ~510 KB; only an `<img>` can defer. Measured on the built page:
-  first paint 511 KB → **709 KB** (Chrome's lazy lookahead pulls 7 of the 10 on
-  a phone), a full scroll to the bottom 810 KB. A one-map SESSION barely moves
-  (~5.5 → ~5.8 MB), because the map's own background and BGM dominate — it is
-  only a menu-bouncer who pays. If that ever needs cutting, drop `CARD_W` from
-  840 (2× a 420px card) before touching `CARD_Q`: it is a dark, scrimmed,
-  decorative strip, and area beats quality here.
-- **`.map-art` sizes itself with `aspect-ratio: 420/120`, but the header still
-  wins.** It is a flex item in a column flex container, so its automatic minimum
-  size keeps a card with the two-button Continue/New run stack from clipping on
-  a narrow phone — verified at a 320px viewport, where the strip grows to fit
-  instead. Don't replace this with a fixed height.
-- The scrim (`.map-art::after`) is bottom-heavy and ends at the card body's own
-  colour rather than at transparent, so ten very different backdrops (a noon
-  farm, a night market) all stay legible under brass text and the strip hands
-  off to the body with no seam.
-
-**Cool mode (30 fps cap) — built but SHELVED.** The welcome-screen checkbox is
+The welcome-screen checkbox is
 commented out in index.html (with its wiring in welcome.js), and startGame pins
 `coolMode = false`. The game.js machinery is intact: it halves the render rate
 but keeps the physics step size (twice the substeps per frame), so game speed
@@ -661,7 +442,10 @@ real run length.)
   Level-ups celebrate LIVE (medal pulse + `levelUp()` chime in audio.js) so
   they never compete with the game-over new-best fanfare.
 - **Storage safety:** localStorage is mirrored to IndexedDB (`mm-progress` db,
-  richer copy wins per map at startup) + `navigator.storage.persist()`.
+  richer copy wins per map at startup) + `navigator.storage.persist()`. The
+  mirror carries the `mm_s_*` score boards too (since 2026-09-23 — they used to
+  be localStorage-only), restored by the same union merge a backup code uses
+  (`mergeBoards`); `saveScore` refreshes it via `Progress.mirrorSoon()`.
   **Backup codes** (`MM1.<checksum>.<base64url>`, welcome-screen "Backup &
   transfer") carry XP + all `mm_s_*` score boards across devices; import
   merges by MAX / union — a code can only ever add progress.
@@ -692,154 +476,43 @@ Distinct from the dev-only `drawHitboxes` (the `h`-key / `?hitbox` overlay).
 
 ## Rotating items (`spin:`) — OPT-IN PER MAP, on for Napoli only
 
-A map can set `spin: true` in config/maps.js to have its items drawn at their
-real physics angle instead of the tiny idle wobble. **Only Napoli (the pizzeria
-map) sets it**, which is the map it was built for on 2026-08-16 — every subject
-in `PIZZA_ITEMS` is a disc, ring or ball, so rotation reads as items being
-shoved around a table rather than as art falling over. Turning it on for a map
-whose art has a "this way up" is the failure mode, not a tuning question.
+Full notes, measurements and the pixel-diff verification:
+[docs/rotating-items.md](docs/rotating-items.md). The rules:
 
-**It is purely cosmetic and cannot change gameplay.** The circle bodies have
-always rotated — Matter gives them default inertia and collisions impart angular
-velocity. All this does is decide whether `drawDrink` reads `body.angle` or
-throws it away. Physics, scores and seeded runs are untouched by the flag.
-Verified by pixel-diffing a rendered board against a reimplementation of the old
-`drawDrink`: **0 differing subpixels** across kyoto/melody/hawaii/teddy/cantho.
-
-- **Rotation comes from the accumulated ANGLE, not from spin speed.** Measured on
-  a 14-shot board: instantaneous `angularVelocity` peaks around 0.008 rad/step
-  (~0.07 turns/sec — nothing visibly spins like a top), but the *accumulated*
-  angle reaches 276° with a mean of ~48°. So items gradually turn as they get
-  shoved around, which is what a top-down table should look like. No gain or
-  fudge factor is applied, and none is needed — don't add one.
-- **Circle items ONLY.** `makeDrink` locks capsule inertia (`Body.setInertia`
-  `Infinity`) so a horizontal sprite can never drift off its stadium hitbox, and
-  the capsule shadow is baked at the authored `cap.rot`. `drawnSpin` (game.js)
-  returns `undefined` for any item with `.cap`, so a spin map may mix shapes
-  safely — the capsules just won't turn. Don't "fix" this by unlocking them.
-- **`spin: true` covers the MAP'S OWN CHAIN — never shared art.** Happy Hour
-  injects `RECEIPT_ITEMS` into every map, and those four sprites are a printed
-  slip, a roll, a stack and a clipboard with a clip at the top: unmistakable
-  "this way up" art. They are circles with no `.cap`, so the capsule exclusion
-  above did not catch them and Napoli spun them (reported 2026-08-19). The flag
-  is a claim a map author made about art in THEIR items list; it cannot speak
-  for art a mode adds to every map alike. `drawnSpin` therefore tests
-  `plugin.kind === 'drink'` — the KIND, not the receipt chain by name, so any
-  future shared chain is right by default. Verified by pixel-diff: all five
-  receipt tiers render **0 differing subpixels** between body angle 0, +120° and
-  −80°, against a control pizza item that moves 10,578.
-- **`drawnSpin(d)` is the single source of truth for "is this rotation drawn?"**
-  Both the render loop and `sceneBusy()` go through it. They must agree: if the
-  loop drew a rotation `sceneBusy` ignored, an item would freeze mid-turn and
-  jump on the next wake; if `sceneBusy` held the loop awake for a rotation the
-  loop discards, a settled receipt would pin the game at 60fps for a turn nobody
-  can see. Both were real — the second one shipped, and this is what fixed it.
-- **The shadow never spins.** It keeps the idle wobble it always had but sits in
-  its own `save`/`restore` outside the rotation: the light is overhead, so a
-  squashed shadow ellipse turning with the item reads as the lamp orbiting the
-  table. This restructuring is what the pixel-diff above was verifying.
-- **`sceneBusy()` gained an `angularVelocity` test, gated through `drawnSpin`.**
-  A body can be linearly still while still turning; without this it would freeze
-  mid-turn when the board settles and jump on the next wake. The threshold
-  (0.0015 rad/step) leaves under 3° of un-drawn rotation at the measured
-  ~0.97/step decay. Gated so every other map's idle behaviour is unchanged —
-  and, since 2026-08-19, so that a body whose rotation is NOT drawn (a receipt,
-  a capsule) can no longer hold the loop awake.
-- **`?spin=1` forces it on for any map, `?spin=0` off** — for judging a
-  candidate map's art before committing `spin:` to config. Worth doing: tried on
-  Cần Thơ, the upright rice-paper rolls tilt like they're falling over. Rotation
-  needs radially symmetric subjects (pizzas, plates, wheels, records), which is
-  exactly why this is a per-MAP art property and not a menu option.
+- `spin: true` in config/maps.js draws items at their real physics angle. **Only
+  Napoli sets it** — its art is all discs, rings and balls. Turning it on for art
+  with a "this way up" is the failure mode, not a tuning question. Judge a
+  candidate map with `?spin=1` / `?spin=0` before committing the flag.
+- **It is purely cosmetic.** The bodies always rotated; the flag only decides
+  whether `drawDrink` draws `body.angle`. No gain or fudge factor — rotation
+  comes from the accumulated angle, and needs none.
+- **Circle items only** — capsules keep their locked inertia (don't "fix" that).
+- **It covers the MAP'S OWN chain, never shared art**: `drawnSpin` tests
+  `plugin.kind === 'drink'`, so Happy Hour's receipts never spin.
+- **`drawnSpin(d)` is the single source of truth** for both the render loop and
+  `sceneBusy()`. If they disagree an item freezes mid-turn, or a settled body
+  pins the loop at 60fps for a turn nobody can see — both happened.
+- **The shadow never spins** (overhead light); it sits in its own save/restore.
 
 ## Ambient background motion (fx.js)
 
-A map can declare `fx:` in config/maps.js to get a few drifting details over its
-art — the plumbing for "leaves blowing in the wind" on a future map.
+**Built and working, used by NO map** — full notes in
+[docs/ambient-fx.md](docs/ambient-fx.md). Two presets ship: `sakura` (falling
+petals) and `money` (banknotes on the wind, untuned, placeholder art). The rules:
 
-**Built and working, but NO map currently uses it.** Two presets ship:
-
-| preset | axis | what it is |
-|--------|------|------------|
-| `sakura` | `y` | falling cherry blossom (22 petals) |
-| `money`  | `x` | banknotes blowing across on the wind (14) — for the planned LUXURY map; **untuned**, since there's no map to judge it against yet, and its bill art is a placeholder |
-
-**The layer is clipped to the HORIZON by default, and that is the central
-lesson.** `sakura` was first built covering the whole stage and tried on Kyoto
-on 2026-08-08; Mikael's verdict was that it "feels mostly distracting". Kyoto is
-the worst case for a full-stage effect: pale petals crossing a big, dark,
-near-empty lacquer tray are the highest-contrast moving thing on screen, sitting
-exactly where the player is aiming — and this is a precision aiming game. The
-lesson is NOT "ambient motion is bad", it's that **ambient motion belongs in the
-backdrop, never on the play surface**. `band` now enforces that: `'horizon'`
-(default) clips to the map's horizon, or pass a 0..1 fraction of stage height.
-
-Kyoto's `fx:` is still commented out even though the band removes that specific
-objection — turning it back on is Mikael's call, not a cleanup. Ask first.
-
-A map whose play surface is busy or light-coloured is a friendlier host than
-Kyoto's empty dark tray either way.
-
-**It is a CSS-animated DOM layer (`#stage-fx`), not canvas particles, and that
-is the whole design.** The render loop parks itself after 20 idle frames
-(`idleFrames` in game.js) — the single biggest heat saving in the game. A canvas
-particle would have to force `sceneBusy()` true forever to keep moving, putting
-the game back at a constant 60fps draw for the sake of background garnish. CSS
-keyframes drift on the compositor while the JS loop is fully parked, so the
-effect costs the loop *nothing*. Don't "unify" this into `drawParticles`.
-
-- **Stacking is load-bearing**: `#stage-fx` sits AFTER `#stage-bg` (same
-  z-index, later in the DOM, so petals cross the table art) and BEFORE the
-  canvas (z1, so drinks are always in front). `pointer-events:none` — the
-  canvas above owns every tap.
-- **Animate transform/opacity ONLY.** Anything else (width, `left`,
-  `background-position`) repaints on the main thread and gives back the saving.
-- **The art is an inline SVG data URI**, not a PNG: no `process_assets.py`
-  entry, no AI generation spent, nothing added to the per-map download.
-- **fx.js has its OWN PRNG and must keep it.** `setMapFx` runs from
-  `loadMapAssets`, i.e. inside `startGame` and BEFORE `rollFreshTiers()` draws
-  the opening tiers. Test mode replaces `Math.random` with a seeded generator,
-  so calling it here would silently change every seeded run (`TT.start(map,
-  {seed})`) on any map with an `fx`. Verified: seeded tiers are stable.
-- **Sizes are px against the 420×620 world**, scaled by `--fx-k`, which
-  `fitCanvas()` feeds the same display scale it gives the canvas — otherwise
-  particles would be ~2× larger, relatively, on a phone than on a desktop.
-- **`band` reads the LIVE `HORIZON` global, not `map.horizon`.** startGame
-  resolves the horizon for the active size variant at game.js:720, ten lines
-  before it calls `loadMapAssets` — reading the map field instead would ignore a
-  size variant's own horizon.
-- **Wind is authored as cross-axis TRAVEL (% of the band), not an angle.** The
-  pass is a plain `translate` along one axis, tilted by a static `rotate` on a
-  wrapper whose `transform-origin` is the START of the path (so entry = start
-  and exit = start + travel, exactly). Travel, not degrees, because the angle
-  that produces a given drift depends on the band's aspect — and drift is what
-  decides whether a particle is on screen at all. Picking entry and wind
-  independently left only 7 of 18 petals visible at the sparsest moment
-  (measured); now each picks its entry, then a wind that keeps it in frame.
-- **The two axes need DIFFERENT cross-axis allowances** (`FX_CROSS_INSET`). For
-  a fall the cross axis is the full stage width, so overshooting the sides is
-  free — that's how a petal blows in from off-screen. For a crosswind it's the
-  band's *height*, which is short: a particle at its edge is either wasted
-  outside the band or sliced by the hard clip at the horizon mid-flight.
-- **`fx-fall`'s fade is deliberately ASYMMETRIC, `fx-fly`'s is not.** A fall's
-  two ends aren't alike: the top of the band is the top of the stage, a real
-  frame edge where fading over a clip is invisible, while the bottom is the
-  horizon — an invisible line in open art where a half-faded sprite is visibly
-  sliced. With a symmetric fade, petals were still ~25% opaque as they crossed
-  it (measured). `fx-fly` exits at the real left/right frame edges, so it stays
-  symmetric, which also makes `dir:-1` look identical to `dir:1`.
-  Fading in the keyframes rather than masking `#stage-fx` keeps every particle
-  independently composited.
-- **Petal proportions**: taller than wide, with the notch only slightly below
-  the lobes. A wide petal with a deep notch reads as a HEART at the 7–16px
-  these draw at (the first pass did).
-- **Preset numbers are band-relative**, so retuning `band` means retuning `dur`,
-  `size` and `travel` with it — `sakura`'s originals were authored against the
-  full 620px stage and, confined to ~24% of it, crawled at a ~50° near-diagonal.
-- Cleared and rebuilt per map load, so a map without `fx:` can't inherit the
-  previous map's particles. Framing-agnostic: Kyoto's two size variants share it
-  with no per-size tuning, since particles cross the whole band rather than
-  anchoring to a painted feature.
-- `prefers-reduced-motion: reduce` hides the layer.
+- **Ambient motion belongs in the backdrop, never on the play surface.** The
+  layer clips to the horizon by default (`band`). Sakura over Kyoto's whole
+  stage was judged "mostly distracting" — this is a precision aiming game.
+- **Kyoto's `fx:` stays commented out; turning it back on is Mikael's call.
+  Ask first.**
+- **It is a CSS-animated DOM layer (`#stage-fx`), not canvas particles** — that is
+  the whole design: it drifts on the compositor while the render loop is parked.
+  Don't "unify" it into `drawParticles`. Animate transform/opacity ONLY.
+- **fx.js has its OWN PRNG and must keep it** — it runs before the opening tiers
+  are rolled, so `Math.random` there would change every seeded run.
+- Stacking is load-bearing: after `#stage-bg`, before the canvas,
+  `pointer-events:none`. `band` reads the LIVE `HORIZON`. Hidden under
+  `prefers-reduced-motion`.
 
 ## Volume (press-and-hold the sound buttons)
 
@@ -984,119 +657,42 @@ for: score, upcoming tiers, the Happy Hour queue, and the save lifecycle.
 
 ## Playing with no network — the offline copy (sw.js + offline.js)
 
-Mai opened the game on a plane in airplane mode and got nothing at all
-(2026-09-22): a static site is still a site, and none of it had ever been on
-the device. `sw.js` is a service worker that keeps a copy; `offline.js`
-registers it and runs the **Play offline** panel on the menu, where a map is
-saved for a flight.
+`sw.js` keeps a copy of the game on the device; `offline.js` registers it and
+runs the menu's **Play offline** panel, where a map is saved for a flight. Full
+notes and measurements: [docs/offline.md](docs/offline.md).
 
-**Two caches, two rules, and the split is the whole design.** Everything else
-follows from it:
+**Two caches, two rules, and the split is the whole design:**
 
 | cache | holds | rule |
 |-------|-------|------|
 | `mm-shell-<GAME_VERSION>` | index.html, style.css, every script, the menu/XP chrome, the icons | **network-first** |
-| `mm-assets-v1` | everything under `assets/` — backdrops, sprites, card strips, BGM | **cache-first**, refreshed in the background while online |
+| `mm-assets-v1` | everything under `assets/` — backdrops, sprites, card strips, BGM | **cache-first**, re-checked in the background at most every 12h |
 
-- **The shell is network-first so this project's `?v=` discipline keeps
-  meaning exactly what it means today.** Being online always means running the
-  newest deploy; a cached build can never pin an old one while there is a
-  connection. Verified by editing a served file on disk between two online
-  loads and seeing the second one change.
-- **The asset cache is deliberately NOT version-keyed.** A deploy must not
-  throw away the 50-odd MB somebody downloaded for a flight. Art regenerated
-  in place (`compress_backgrounds.py` rewrites a `.webp` at the same path)
-  lands on the next ONLINE load, via the background revalidate — one visit
-  behind, which is the price of not re-downloading a map every deploy.
-- **`GAME_VERSION` is the worker's cache-buster.** offline.js registers it as
-  `sw.js?v=<GAME_VERSION>` and sw.js reads its own query to name the shell
-  cache, so the existing ritual — bump GAME_VERSION and every `?v=` in the same
-  commit — versions the offline copy too, with no new step to forget.
-  `tools/check.js` now says so if `sw.js` changes without it, since sw.js is
-  the one served file with no `<script>` tag to carry a buster.
-- **The shell list is SCRAPED OUT OF index.html by the worker on install**, not
-  written down in sw.js. A hardcoded copy would be a second list of every
-  script tag and would drift the first time a file was added — the same failure
-  `CUSTOMER_SPRITES.length` already exists to prevent. `assets/audio/` and
-  `tools/` are excluded from the scrape.
-- **Every URL the panel saves is derived from `MAPS`/`ITEMS`**, so a new map or
-  a new tier is covered the moment it lands in config, with nothing to update
-  in offline.js.
-
-### Range requests are handled by hand, and they are not optional
-
-`<audio>` asks for `Range: bytes=0-`. The Cache API ignores the header and
-hands back the whole response, and Safari will not play a 200 where it asked
-for a 206 — so without `sliceRange()` in sw.js, offline BGM is silent on the
-one device this was built for. Measured with the server killed: `readyState 4`,
-the full 312s duration, `Content-Range: bytes 100-199/2624877` on a probe.
-
-The same header is why the download button exists at all rather than relying on
-play-and-it's-cached: a 206 cannot be put in a cache, so **a map you play saves
-its art but never its music.** The panel's Save fetches each file with no Range
-header, which is the only path that gets a whole mp3 onto the device.
-
-### What is saved when
-
-- **One visit is enough for the MENU.** The worker precaches the shell on
-  install, so the cards, scores and XP all come up with no network.
-- **A map you play saves its art as it loads**, through the asset rule — but
-  not its BGM (above), so a played map still shows as unsaved in the panel.
-  That is honest rather than a bug.
-- **Save fetches the lot**: both table framings, the card strip, the tier
-  chain, the music, plus the shared art every map draws (coin, bag, launcher,
-  receipts, the 18-face Happy Hour cast) and **every map's card strip** — the
-  cards are lazy `<img>`s, so offline the four below the fold came up blank
-  until this was added. Paid once, on the first save, when megabytes are
-  already being downloaded anyway; the menu's measured 511 KB first paint is
-  untouched.
-- Measured: one map **4–8 MB**, all ten **52 MB**, and a fresh save of
-  everything took 1.8s on the dev server.
-
-### The things that would bite
-
-- **It is OFF on the dev server unless `?offline=1`.** `serve.py` sends
-  `Cache-Control: no-cache` precisely because a stale `config/*.js` is
-  indistinguishable from "my edit didn't work" — and a cache-first worker would
-  hand back yesterday's PNG after a `process_assets.py` run, which is that same
-  bug with a longer fuse. `?test=1` never registers either, so `TT` runs and
-  `tools/check.js` digests always play the files on the server.
-- **`?nosw=1` is the panic button** — open that link once and the worker and
-  its cached build are gone, then the page reloads clean and rebuilds from the
-  network. It leaves the saved MAPS alone: a bad deploy is a code problem, and
-  throwing away 50 MB someone downloaded for a flight is not a proportionate
-  fix. ("Remove saved maps" in the panel is for when that IS what you want.)
-  The reload drops the query, which is what stops it running again on the way
-  back in.
-- **An unsaved map, offline, still opens** — the asset fetch 504s, every draw
-  path already tolerates a missing sprite, and it plays on the fallback
-  glass/liq colours with no backdrop and no music. That is the right failure
-  (it beats a dead Play button), but a confusing one to walk into, so
-  `OFFLINE.markCards()` puts an amber line on each unsaved card while there is
-  no network: *"Not saved for offline — plays with no art or music"*. Three
-  things about it:
-  - **It runs only when offline.** `showWelcome()` calls it on every menu
-    rebuild — coming back from a run, a backup import, any `Progress.onChange`
-    — so with a network it must cost nothing, and it is one `navigator.onLine`
-    test and a return. `onLine` FALSE is the reliable half of that flag (true
-    can still be a captive portal), and false is the only half this needs.
-  - **It listens for `online`/`offline` too.** Airplane mode gets switched on
-    mid-session more often than not — she is already looking at the menu when
-    the doors close — so the cards follow it live rather than only on a reload.
-  - **It carries a generation counter.** It is async and fire-and-forget, and
-    `showWelcome()` can replace `#map-cards` while an earlier pass is still
-    awaiting a cache lookup; without the counter that pass would write its
-    warnings into detached nodes and the live cards would get none.
-  - Amber, not `--neon`: it lands in the same slot as `.map-saved` ("Run in
-    progress"), and one is good news while the other is a caution.
-- **No web manifest, deliberately (for now).** Offline play needs none — the
-  worker covers a normal Safari tab and her existing home-screen icon alike.
-  Adding one with `display: standalone` would change how that icon launches
-  (no address bar, no reload), and that is a change to Mai's setup to make on
-  purpose, with her, not as a side effect of this.
-- iOS evicts script-writable storage for sites left untouched for weeks;
-  `progress.js` already calls `navigator.storage.persist()`, which is the
-  defence, and a player who plays regularly never trips it.
+- **Shell network-first** keeps the `?v=` discipline meaning what it always did:
+  online always runs the newest deploy.
+- **The asset cache is NOT version-keyed** — a deploy must not throw away 50 MB
+  saved for a flight. Art regenerated in place lands within `RECHECK_MS` (12h).
+- **The revalidate is THROTTLED, and must stay so** (`x-mm-checked` stamp +
+  the per-worker `checking` set). It used to fire on every cache hit, and each
+  of Safari's ranged audio requests set off a download of the whole mp3.
+- **`GAME_VERSION` is the worker's cache-buster** (registered as
+  `sw.js?v=<GAME_VERSION>`), so the usual bump versions the offline copy too;
+  `tools/check.js` flags a changed sw.js without one.
+- **The shell list is SCRAPED out of index.html on install**, never hardcoded.
+  **A half-failed UPDATE fails the install on purpose** (keeping the old worker
+  and its complete cache); a first install keeps a partial shell.
+- **Range requests are served by hand** (`sliceRange`) — Safari won't play a 200
+  where it asked for a 206, so without it offline BGM is silent. And a 206 can't
+  be cached, which is why a PLAYED map saves its art but not its music; the
+  panel's Save (no Range header) is the only path that stores a whole mp3.
+- **OFF on the dev server unless `?offline=1`**, and never under `?test=1`.
+- **`?nosw=1` is the panic button**: removes the worker and its cached build,
+  keeps saved maps, reloads clean.
+- Offline, an unsaved map still opens with no art/music; `OFFLINE.markCards()`
+  warns on the card (only when offline, live on `online`/`offline`, with a
+  generation counter against a menu rebuild mid-pass).
+- **No web manifest, deliberately** — `display: standalone` would change how
+  Mai's home-screen icon launches; that is a change to make with her.
 
 ---
 
@@ -1295,8 +891,8 @@ golden digests are worth anything. Anything that needs to advance game time must
 go through `TT.step`.
 
 Notes: high-score saves are stubbed in test mode (localStorage boards stay
-clean); map ids are `hawaii/saigon/kyoto/mage/teddy/melody` (TT.start errors
-list them); two spawned bodies only merge if placed overlapping (use
+clean); map ids are `hawaii/saigon/kyoto/mage/teddy/melody/paris/farm/cantho/
+pizza` (TT.start errors list them); two spawned bodies only merge if placed overlapping (use
 `ITEMS[t].physR`); the coin-bag NUMBER eases toward the true score — run a few
 extra `TT.step()`s before a screenshot if it must match. `stepPhysics()` in
 game.js is the shared per-frame simulation — keep loop() and TT.step in sync

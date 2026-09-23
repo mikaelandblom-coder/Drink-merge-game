@@ -1,0 +1,43 @@
+# Runs tools/check.js — seeded board digests across every map x mode, one
+# probe per fixed bug, and the deploy preflight — on every PR and every push to
+# main. It is the same command as a local run (see "Regression checks" in
+# tools/README.md), just with a browser Playwright installs for itself.
+name: checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # the preflight diffs against origin/main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Outside the repo, like the cloud session hook: no package.json or
+      # node_modules at the root ("no build step, no framework").
+      - name: Install Playwright + Chromium
+        run: |
+          npm install --prefix "$HOME/.cache/mm-dev" --no-audit --no-fund playwright
+          "$HOME/.cache/mm-dev/node_modules/.bin/playwright" install --with-deps chromium
+
+      - name: Serve the game
+        run: |
+          python3 serve.py 5500 > /tmp/serve.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf -o /dev/null http://localhost:5500/index.html && exit 0
+            sleep 0.5
+          done
+          cat /tmp/serve.log
+          exit 1
+
+      - name: tools/check.js
+        run: NODE_PATH="$HOME/.cache/mm-dev/node_modules" node tools/check.js
