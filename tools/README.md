@@ -519,7 +519,8 @@ its fix (all from the 2026-09-23 review):
 - `saveScore` survives a storage that refuses writes;
 - a score board lost from localStorage comes back from the IndexedDB mirror;
 - a cached map's assets are not refetched in the background on every hit;
-- a half-failed service-worker UPDATE is rejected and the old offline copy kept.
+- a half-failed service-worker UPDATE is rejected and the old offline copy kept;
+- the offline panel shows what saving every map will download, matching the files on disk.
 
 - **Probe behaviour, never source.** A grep for the fixed line would pass again
   the moment someone rewrote the fix in another shape.

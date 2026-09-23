@@ -148,6 +148,64 @@ const OFFLINE = (function () {
 
   async function coreState() { return inspect(coreUrls()); }
 
+  // ------------------------------------------------- what a save will cost --
+  // The panel used to say what was already ON the device, never what a save
+  // would DOWNLOAD — and that is the number you want before you tap "Save
+  // every map" on hotel wi-fi. A file's size is asked for with a HEAD request:
+  // headers only, no body, so measuring ~150 files costs a few KB. Sizes are
+  // remembered for the page's lifetime, so reopening the panel asks again only
+  // for what it never got an answer for.
+  //
+  // Not a precomputed manifest on purpose: that would be a second list of
+  // every asset, which drifts the first time art is regenerated — the same
+  // reason the URL lists above are derived from config.
+  const sizeOf = new Map();   // absolute url -> bytes
+
+  async function headSize(u) {
+    try {
+      // The worker ignores non-GET requests, so this always reaches the network.
+      const r = await fetch(u, { method: 'HEAD', cache: 'no-cache' });
+      const n = r.ok ? parseInt(r.headers.get('content-length') || '', 10) : NaN;
+      if (n > 0) sizeOf.set(u, n);
+    } catch { /* offline or blocked: this file's size stays unknown */ }
+  }
+
+  // A few at a time: ~150 at once would queue behind the browser's
+  // per-host connection limit anyway, and hold up the card art.
+  async function pool(items, n, fn) {
+    let i = 0;
+    await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
+      while (i < items.length) await fn(items[i++]);
+    }));
+  }
+
+  // Bytes still to download: per map (its own files plus whatever of the
+  // shared art is not here yet — the first save pays for that) and for every
+  // map at once, where each shared file counts once. `unknown` counts files
+  // whose size could not be learned, so a total is never shown as exact when
+  // it is not.
+  async function downloadSizes() {
+    const maps = playableMaps();
+    const core = coreUrls();
+    const all  = [...new Set([...core, ...maps.flatMap(mapUrls)])];
+    const here = new Set();
+    await Promise.all(all.map(async u => { if (await caches.match(u)) here.add(u); }));
+    const missing = all.filter(u => !here.has(u) && !sizeOf.has(u));
+    if (navigator.onLine !== false) await pool(missing, 6, headSize);
+    const need = urls => {
+      let bytes = 0, unknown = 0;
+      for (const u of new Set(urls)) {
+        if (here.has(u)) continue;
+        const n = sizeOf.get(u);
+        if (n) bytes += n; else unknown++;
+      }
+      return { bytes, unknown };
+    };
+    const perMap = {};
+    for (const m of maps) perMap[m.id] = need([...core, ...mapUrls(m)]);
+    return { perMap, all: need(all) };
+  }
+
   // ------------------------------------------------------------ downloads --
   // Sequential on purpose. A phone on hotel wi-fi gains nothing from six
   // parallel 3MB fetches, and one at a time is what makes the progress line
@@ -250,7 +308,7 @@ const OFFLINE = (function () {
   addEventListener('offline', () => markCards());
 
   return { register, mapUrls, coreUrls, mapState, coreState, saveMap, saveUrls,
-           clearSaved, playableMaps, resetWorker, markCards,
+           clearSaved, playableMaps, resetWorker, markCards, downloadSizes,
            get available() { return hasCaches && hasSW && armed; } };
 })();
 
@@ -277,7 +335,40 @@ OFFLINE.register();
   const clrBtn = document.getElementById('offline-clear');
   let busy = false;
 
-  const mb = b => (b / 1048576).toFixed(b < 10485760 ? 1 : 0) + ' MB';
+  // One decimal under 10 MB, whole numbers above — decided on the ROUNDED
+  // value, or 9.97 MB prints as "10.0 MB" next to another map's "10 MB".
+  // A no-break space, so a narrow button can never strand "MB" on a line.
+  const mb = b => { const v = b / 1048576; return (v < 9.95 ? v.toFixed(1) : Math.round(v)) + '\u00a0MB'; };
+
+  // "4.2 MB", "at least 4.2 MB" when some sizes are unknown, or '' when
+  // nothing is known — better no number than a wrong one.
+  const cost = n => !n.bytes ? '' : (n.unknown ? 'at least ' : '') + mb(n.bytes);
+
+  // Sizes arrive after the rows are drawn (they take a round of HEAD requests),
+  // so a newer refresh — or a save that re-rendered the list — must win.
+  let sizeGen = 0;
+  async function showSizes() {
+    const gen = ++sizeGen;
+    let s;
+    try { s = await OFFLINE.downloadSizes(); } catch { return; }
+    if (gen !== sizeGen || busy) return;
+    list.querySelectorAll('.off-save').forEach(b => {
+      const c = cost(s.perMap[b.dataset.id] || {});
+      b.textContent = c ? 'Save · ' + c : 'Save';
+    });
+    const c = cost(s.all);
+    const everything = !s.all.bytes && !s.all.unknown;
+    // The total goes on a second, smaller line: at phone width this button is
+    // half the row, and "Save every map · 52 MB" wrapped at an arbitrary word.
+    allBtn.textContent = everything ? 'Every map is saved' : 'Save every map';
+    if (c && !everything) {
+      const sub = document.createElement('span');
+      sub.className = 'btn-sub';
+      sub.textContent = c + ' to download';
+      allBtn.appendChild(sub);
+    }
+    allBtn.disabled = everything;
+  }
 
   function setProgress(done, total) {
     bar.hidden = false;
@@ -303,6 +394,7 @@ OFFLINE.register();
     list.querySelectorAll('.off-save').forEach(b => {
       b.onclick = () => runSave([maps.find(m => m.id === b.dataset.id)]);
     });
+    showSizes();   // fills in the download size on each button, asynchronously
     const onDisk = savedBytes + core.bytes;   // the shared art counts once
     status.textContent = savedCount
       ? `The menu already works with no internet. ${savedCount} of ${maps.length} maps saved` +
@@ -313,6 +405,7 @@ OFFLINE.register();
   async function runSave(maps) {
     if (busy) return;
     busy = true;
+    sizeGen++;     // a size pass still in flight must not relabel mid-save
     allBtn.disabled = clrBtn.disabled = true;
     let failed = 0;
     try {

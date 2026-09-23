@@ -693,6 +693,11 @@ notes and measurements: [docs/offline.md](docs/offline.md).
   be cached, which is why a PLAYED map saves its art but not its music; the
   panel's Save (no Range header) is the only path that stores a whole mp3.
 - **OFF on the dev server unless `?offline=1`**, and never under `?test=1`.
+- **The panel shows what a save will DOWNLOAD** — on each map's Save button and
+  under "Save every map" (52 MB for everything, 2026-09-23). Sizes come from HEAD
+  requests for the files not yet cached (headers only, remembered per page),
+  never a precomputed manifest, which would be a second asset list to drift.
+  A size that can't be learned makes the figure read "at least", never exact.
 - **`?nosw=1` is the panic button**: removes the worker and its cached build,
   keeps saved maps, reloads clean.
 - Offline, an unsaved map still opens with no art/music; `OFFLINE.markCards()`

@@ -577,6 +577,30 @@ async function offlineProbes(browser, errs) {
   await page.goto(`${URL}/?offline=1`, { waitUntil: 'networkidle' });
   await page.evaluate(() => navigator.serviceWorker.ready);
   await page.reload({ waitUntil: 'networkidle' });          // now controlled
+
+  // The panel has to say what a save will DOWNLOAD, and the number must be the
+  // real one: the files not yet on the device, summed off the disk here.
+  await page.click('#offline-toggle');
+  await page.waitForFunction(() => document.querySelector('#offline-all .btn-sub'),
+                             null, { timeout: 15000 }).catch(() => {});
+  const plan = await page.evaluate(async () => {
+    const all = [...new Set([...OFFLINE.coreUrls(), ...OFFLINE.playableMaps().flatMap(OFFLINE.mapUrls)])];
+    const missing = [];
+    for (const u of all) if (!(await caches.match(u))) missing.push(new URL(u).pathname);
+    const sub = document.querySelector('#offline-all .btn-sub');
+    const shown = OFFLINE.downloadSizes ? (await OFFLINE.downloadSizes()).all : { bytes: 0, unknown: 0 };
+    return { missing, shown, label: sub && sub.textContent };
+  });
+  const onDisk = plan.missing.reduce((t, p) =>
+    t + fs.statSync(path.join(ROOT, decodeURIComponent(p))).size, 0);
+  if (plan.label && plan.shown.bytes === onDisk && !plan.shown.unknown) {
+    pass(`offline panel shows the download size of every map (${plan.label})`);
+  } else {
+    fail(`offline panel download size: shows ${JSON.stringify(plan.label)} ` +
+         `(${plan.shown.bytes} bytes, ${plan.shown.unknown} unknown), files on disk ${onDisk}`);
+  }
+  await page.click('#offline-toggle');
+
   await start();                                           // fills the asset cache
   await page.reload({ waitUntil: 'networkidle' });
   fromSW.length = 0;

@@ -71,6 +71,25 @@ play-and-it's-cached: a 206 cannot be put in a cache, so **a map you play saves
 its art but never its music.** The panel's Save fetches each file with no Range
 header, which is the only path that gets a whole mp3 onto the device.
 
+## What a save costs, shown before you tap it
+
+Each unsaved map's button reads `Save · 8.9 MB` and "Save every map" carries
+its total underneath (`52 MB to download`) — the number you want before
+downloading on hotel wi-fi, which the panel originally never showed.
+
+- A map's figure is its own files **plus whatever shared art is not saved yet**
+  (the first save pays for the coin, launcher, receipts and cast), so after one
+  save every other map's figure drops. "Save every map" counts each shared file
+  once.
+- Sizes come from `HEAD` requests (`downloadSizes()` in offline.js), six at a
+  time, only for files not already cached, remembered for the page's life.
+  Not a manifest: that would be a second list of every asset, drifting the
+  first time art is regenerated.
+- A file whose size can't be learned makes the figure read "at least …";
+  offline, no HEADs are sent and the buttons just say "Save".
+- The total sits on its own line because at phone width the button is half
+  the row, and a single-line label wrapped mid-number.
+
 ## What is saved when
 
 - **One visit is enough for the MENU.** The worker precaches the shell on
