@@ -886,6 +886,27 @@ def _alpha_bands(mask: np.ndarray, axis: int,
     return [b for b in merged if b[1] - b[0] >= min_size]
 
 
+def save_png(img: Image.Image, path: Path) -> bool:
+    """Write a PNG only if its PIXELS changed. Returns whether it wrote.
+
+    The same pixels do not encode to the same bytes everywhere: zlib and Pillow
+    differ between Mikael's Windows machine and a Linux cloud container, so a
+    run that changes nothing used to rewrite every sprite (112 files, all
+    pixel-identical) and look exactly like the "something is stale" case the
+    no-op rule in CLAUDE.md warns about. Comparing decoded RGBA keeps a clean
+    run clean on any machine."""
+    if path.exists():
+        try:
+            with Image.open(path) as old:
+                if old.size == img.size and np.array_equal(
+                        np.asarray(old.convert("RGBA")), np.asarray(img.convert("RGBA"))):
+                    return False
+        except Exception:
+            pass   # unreadable or odd file: just overwrite it
+    img.save(path, "PNG")
+    return True
+
+
 def out_path(name: str) -> Path:
     """Output file for an item name, creating its map folder if needed.
     Names carry their folder ('shared/coin'), mirroring the map-based layout
@@ -1059,7 +1080,7 @@ def handle_spritesheet(src: Path, cfg: dict):
             assert cell is not None, f"{src.name}: cell for '{name}' is empty"
             if speck:
                 cell = drop_specks(cell, speck)
-            cell.save(out_path(name), "PNG")
+            save_png(cell, out_path(name))
             print(f"    {name}.png")
         return
 
@@ -1076,9 +1097,9 @@ def handle_spritesheet(src: Path, cfg: dict):
     min_hole   = cfg.get('min_hole_px', MIN_HOLE_PX)
     round_set  = set(cfg.get('round_aura', []))   # item names to give a round aura
     for cell, name in zip(cells, names):
-        remove_white_bg(cell, thresh, fill_holes, min_hole, chroma=chroma,
-                        round_aura=(name in round_set)).save(
-            out_path(name), "PNG")
+        save_png(remove_white_bg(cell, thresh, fill_holes, min_hole, chroma=chroma,
+                                 round_aura=(name in round_set)),
+                 out_path(name))
         print(f"    {name}.png")
 
 
@@ -1086,18 +1107,18 @@ def handle_pair(src: Path, cfg: dict):
     thresh     = cfg.get('white_thresh', WHITE_THRESH)
     left, right = split_pair(Image.open(src), thresh)
     for part, name in zip((left, right), cfg['names']):
-        remove_white_bg(part, thresh).save(out_path(name), "PNG")
+        save_png(remove_white_bg(part, thresh), out_path(name))
         print(f"    {name}.png")
 
 
 def handle_single(src: Path, cfg: dict):
     thresh = cfg.get('white_thresh', WHITE_THRESH)
-    remove_white_bg(Image.open(src), thresh,
-                    cfg.get('fill_holes', False),
-                    cfg.get('min_hole_px', MIN_HOLE_PX),
-                    cfg.get('fill_holes_region'),
-                    chroma=cfg.get('chroma', 'white')).save(
-        out_path(cfg['name']), "PNG")
+    save_png(remove_white_bg(Image.open(src), thresh,
+                             cfg.get('fill_holes', False),
+                             cfg.get('min_hole_px', MIN_HOLE_PX),
+                             cfg.get('fill_holes_region'),
+                             chroma=cfg.get('chroma', 'white')),
+             out_path(cfg['name']))
     print(f"    {cfg['name']}.png")
 
 
@@ -1139,7 +1160,7 @@ def handle_boxes(src: Path, cfg: dict):
         if k < 1.0:
             cell = cell.resize((max(1, round(cell.width * k)),
                                 max(1, round(cell.height * k))), Image.LANCZOS)
-        cell.save(out_path(name), "PNG")
+        save_png(cell, out_path(name))
         print(f"    {name}.png  {cell.width}x{cell.height}")
 
 

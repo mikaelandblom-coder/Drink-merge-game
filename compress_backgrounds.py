@@ -25,6 +25,7 @@ Usage:
 """
 import argparse
 import re
+import subprocess
 from pathlib import Path
 
 from PIL import Image
@@ -157,6 +158,47 @@ def make_card(map_id, src: Path, out: Path, horizon: float, check: bool):
     return (src.stat().st_size, out.stat().st_size)
 
 
+def _git(*args):
+    try:
+        r = subprocess.run(['git', *args], capture_output=True, text=True, timeout=20)
+        return r.stdout if r.returncode == 0 else None
+    except Exception:
+        return None
+
+
+def up_to_date(out: Path, *inputs: Path) -> bool:
+    """Is `out` at least as new as every input?
+
+    File mtimes only mean something for files touched on THIS machine. A fresh
+    clone (every cloud session) stamps files in checkout order, so a WebP can
+    look older than the master it was made from and get re-encoded for nothing
+    -- and a re-encode on another libwebp is a byte diff nobody asked for. So
+    when git says every file involved is tracked and unmodified, compare the
+    times they were last COMMITTED instead; any file with local changes, or no
+    git at all, falls back to mtime, which is exactly right for an edit you
+    just made."""
+    if not out.exists():
+        return False
+    paths = [str(out)] + [str(i) for i in inputs]
+    dirty = _git('status', '--porcelain', '--', *paths)
+    tracked = _git('ls-files', '--', *paths)
+    if dirty == '' and tracked is not None and len(tracked.splitlines()) == len(paths):
+        def committed(p):
+            # When the CONTENT last changed. A pure move (R100) is skipped:
+            # the chrome masters were moved into source/chrome/ after their
+            # WebPs were made, and a move changes no pixel.
+            log = _git('log', '--follow', '--format=@%ct', '--name-status', '--', p) or ''
+            t = 0
+            for line in log.splitlines():
+                if line.startswith('@'):
+                    t = int(line[1:])
+                elif line.strip() and not line.startswith('R100'):
+                    return t
+            return 0
+        return committed(str(out)) >= max(committed(str(i)) for i in inputs)
+    return out.stat().st_mtime >= max(i.stat().st_mtime for i in inputs)
+
+
 def build_cards(force: bool, check: bool):
     horizons = read_horizons()
     wrote = skipped = missing = 0
@@ -176,8 +218,7 @@ def build_cards(force: bool, check: bool):
             missing += 1
             continue
         # Stale if the master OR the horizon moved.
-        newest_in = max(src.stat().st_mtime, HITBOXES.stat().st_mtime)
-        if not force and not check and out.exists() and out.stat().st_mtime >= newest_in:
+        if not force and up_to_date(out, src, HITBOXES):
             total += out.stat().st_size
             skipped += 1
             continue
@@ -190,7 +231,9 @@ def build_cards(force: bool, check: bool):
         wrote += 1
         print('  band y %3.0f..%3.0f (horizon %5.1f) -> %5.1f KB  %s'
               % (y0, y1, horizon, out_b / 1024, out_s))
-    if not check:
+    if check:
+        print('  %d up-to-date' % skipped)
+    else:
         print('  Wrote %d, up-to-date %d, skipped %d — %.0f KB of card art total'
               % (wrote, skipped, missing, total / 1024))
 
@@ -244,8 +287,7 @@ def main():
             print('  missing source (not built yet), skipping: %s' % src_s)
             missing += 1
             continue
-        if (not args.force and not args.check and out.exists()
-                and out.stat().st_mtime >= src.stat().st_mtime):
+        if not args.force and up_to_date(out, src):
             total_src += src.stat().st_size
             total_out += out.stat().st_size
             skipped += 1
@@ -267,8 +309,8 @@ def main():
 
     print('')
     if args.check:
-        print('CHECK: %d encodable, %d missing sources, %.1f MB of PNG input'
-              % (len(TARGETS) - missing, missing, total_src / 1024 / 1024))
+        print('CHECK: %d stale, %d up-to-date, %d missing sources'
+              % (len(TARGETS) - missing - skipped, skipped, missing))
         build_cards(args.force, args.check)
         return
     print('Wrote %d, up-to-date %d, missing sources %d' % (wrote, skipped, missing))
