@@ -96,9 +96,10 @@ tools/
                          `node tools/shot.js out.png --map=kyoto --bytes`. The
                          way to verify a UI change, and the way to measure a
                          page's byte cost.
-  check.js            — Regression checks, ~6s, exits non-zero. Seeded board
+  check.js            — Regression checks, ~13s, exits non-zero. Seeded board
                          digests across every map × mode (goldens in
-                         tools/golden/) + a deploy preflight for the `?v=` /
+                         tools/golden/) + one probe per fixed bug + a deploy
+                         preflight for the `?v=` /
                          GAME_VERSION checklist. `node tools/check.js`,
                          `--deploy` to enforce the preflight, `--update` to
                          regenerate goldens. Manual in tools/README.md.

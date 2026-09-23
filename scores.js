@@ -16,6 +16,17 @@ function fmtScore(n) {
   return String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0');
 }
 
+// A score's NAME is data, never markup. The score lists are built as HTML
+// strings, and a name can arrive from a backup code (progress.js importCode) —
+// which anyone can write, since its checksum is a typo check, not a signature.
+// Unescaped, a name like `<img src=x onerror=...>` ran as script on every game
+// over and every open of the score panel, and rode along in her own backup
+// codes from then on. Escape at every place a name meets innerHTML.
+function escHtml(v) {
+  return String(v).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+
 // Storage format per key: [{name: string, score: number}]
 // Migrates old number-only entries automatically.
 //

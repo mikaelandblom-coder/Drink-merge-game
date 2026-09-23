@@ -133,7 +133,14 @@ function fireShot(state, dirX, dirY) {
     state.rfReload = rfReloadMs();
   } else {
     state.canShoot = false;
-    setTimeout(() => { rollNext(); state.canShoot = true; }, 500);
+    // Only for the run that fired it. "Play again" inside the 500ms used to
+    // let this land on the NEW run and roll its queue on, so the first drink
+    // it had dealt was skipped.
+    const run = state.runId;
+    setTimeout(() => {
+      if (state.runId !== run) return;
+      rollNext(); state.canShoot = true;
+    }, 500);
   }
 }
 
@@ -262,7 +269,7 @@ function showScorePanel(state) {
   const rowsHtml = rows.slice(0, SCORE_MAX).map((e, i) => `
     <div class="score-row${e.live ? ' this-round' : ''}">
       <span class="sr-rank">${i + 1}</span>
-      <span class="sr-name">${e.name}</span>
+      <span class="sr-name">${escHtml(e.name)}</span>
       <span class="sr-val">${fmtScore(e.score)}</span>
     </div>`).join('');
 
@@ -524,7 +531,7 @@ function showGameOver(state, key) {
     const highlight = result.inTop && i === result.rank - 1;
     return `<div class="score-row${highlight ? ' this-round' : ''}">
       <span class="sr-rank">${i + 1}</span>
-      <span class="sr-name">${e.name}</span>
+      <span class="sr-name">${escHtml(e.name)}</span>
       <span class="sr-val">${fmtScore(e.score)}</span>
       ${highlight ? '<span class="sr-you">you</span>' : ''}
     </div>`;

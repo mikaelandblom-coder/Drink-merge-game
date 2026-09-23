@@ -336,6 +336,9 @@ const state = {
   // XP earned this run (1/shot; committed to storage per shot by progress.js —
   // this counter only feeds the game-over "+N XP" recap)
   runXp: 0,
+  // Bumped by every resetState, so a timer set during one run can tell it has
+  // outlived it (the classic reload in fireShot, ui.js).
+  runId: 0,
   // Score to chase: this variant's standing record, read once per run (see
   // resetState) — it can't change while a run is being played. 0 = empty board.
   bestToBeat: 0,
@@ -450,6 +453,7 @@ function resetState() {
   state.gameOver = false; state.canShoot = true;
   state.customers = []; state.shotsFired = 0; state.nextCustomerAtShot = HH_FIRST_SHOT;
   state.runXp = 0;
+  state.runId++;
   // Re-read the board here rather than in startGame: "Play again" comes straight
   // back through resetState, and by then the run that just ended has been saved
   // — so a record set last run is the target this run.
@@ -668,6 +672,26 @@ wireHUD(state);
 let running = false;
 let wob = 0;
 let lastTs = 0;
+// The id of the ONE pending frame request. Every start goes through startLoop,
+// which cancels whatever is pending first, so there can never be two chains.
+// There used to be: a hidden page HOLDS its queued rAF callback rather than
+// dropping it, so backgrounding left one waiting, and coming back ran that one
+// AND the fresh request made on return — one extra loop chain per trip to the
+// background, forever. The extras bailed at the frame-rate gate, so physics
+// never doubled, but they were wasted callbacks piling up on a phone.
+let rafId = 0;
+
+function startLoop() {
+  cancelAnimationFrame(rafId);
+  running = true; lastTs = 0; idleFrames = 0;
+  rafId = requestAnimationFrame(loop);
+}
+
+function stopLoop() {
+  running = false;
+  cancelAnimationFrame(rafId);
+  rafId = 0;
+}
 
 // Debug hitbox overlay: 'h' key or ?hitbox in the URL.
 let showHitbox = /[?&]hitbox/.test(location.search);
@@ -847,7 +871,7 @@ function setPaused(on) {
 
 function loop(ts) {
   if (!running) return;
-  requestAnimationFrame(loop);
+  rafId = requestAnimationFrame(loop);
   // Frozen: no physics, no render, and above all no checkOver. The canvas keeps
   // its last frame, so the board stays visible behind the panel.
   if (paused) return;
@@ -958,7 +982,11 @@ function stepPhysics() {
       if (target > pl.scale) {
         const r = target / pl.scale;
         Body.scale(d, r, r);
-        if (ITEMS[pl.tier].cap) Body.setInertia(d, Infinity);
+        // pl.item, never ITEMS[pl.tier]: a Happy Hour receipt's tier indexes
+        // RECEIPT_ITEMS, and receipt-stack is a capsule. Asking the map's chain
+        // instead left it unlocked wherever the map's own tier 3 is a circle,
+        // so it turned ~30 degrees on Kyoto/Napoli while its art stayed upright.
+        if (pl.item.cap) Body.setInertia(d, Infinity);
         pl.scale = target;
       }
       if (target >= 1) pl.scale = null;
@@ -979,13 +1007,13 @@ document.addEventListener('visibilitychange', () => {
     // Park the run before anything else: iOS discards backgrounded tabs without
     // warning, so this — not the menu button — is the save that usually matters.
     if (onGameScreen) SUSPEND.save();
-    running = false;
+    stopLoop();
     pauseMusicForHide();
     markAudioInterrupted();  // iOS kills the SFX carrier while backgrounded
   } else if (onGameScreen && !running) {
     resumeMusicAfterHide();
     resumeCtx();  // SFX context can come back 'interrupted' from a lock/app switch
-    running = true; lastTs = 0; idleFrames = 0; requestAnimationFrame(loop);
+    startLoop();
   }
 });
 
@@ -1066,11 +1094,7 @@ function startGame(map, opts = {}) {
   SUSPEND.clear(map.id);
   if (opts.resume) SUSPEND.apply(opts.resume);
   idleFrames = 0;
-  if (!running) {
-    running = true;
-    lastTs = 0;
-    requestAnimationFrame(loop);
-  }
+  if (!running) startLoop();
 }
 
 // Both callers (the game-over overlay's Menu button and the in-game ✕ confirm)
@@ -1078,7 +1102,7 @@ function startGame(map, opts = {}) {
 // run has nothing to park and SUSPEND.save() bails on state.gameOver by itself.
 function returnToMenu() {
   SUSPEND.save();
-  running = false;
+  stopLoop();
   if (bgmEl) { bgmEl.pause(); bgmEl.currentTime = 0; }
   showWelcome();
 }

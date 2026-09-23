@@ -461,13 +461,13 @@ every session, each time rediscovering the same things:
 
 ```
 python serve.py 5500                 # it talks to the dev server
-node tools/check.js                  # board digests + an advisory preflight
+node tools/check.js                  # digests + regressions + an advisory preflight
 node tools/check.js --deploy         # preflight becomes a hard failure
-node tools/check.js --only=boards    # or --only=preflight
+node tools/check.js --only=boards    # or --only=preflight / --only=regressions
 node tools/check.js --update         # regenerate the board goldens
 ```
 
-Runs in ~6s and exits non-zero on failure, so it can gate a commit or a deploy.
+Runs in ~13s and exits non-zero on failure, so it can gate a commit or a deploy.
 
 ### Board digests
 
@@ -502,6 +502,23 @@ are 60 live score variants. The risk is never "does the new thing work", it is
   in `../CLAUDE.md`. 9 of 35 scenarios differed on a re-run against completely
   unchanged code, which is how a "reproducible most of the time" harness
   finally became visible.
+
+### Regressions
+
+One behavioural probe per fixed bug, each confirmed to FAIL on the code before
+its fix (2026-09-23 review): a score name from a backup code renders as text,
+not markup; a receipt stack grown in by a merge stays inertia-locked on Kyoto
+and Napoli; the classic 500ms reload cannot roll the next run's queue after
+"Play again"; and three trips to the background still leave ONE render loop.
+
+- **Probe behaviour, never source.** A grep for the fixed line would pass again
+  the moment someone rewrote the fix in another shape.
+- **The loop probe runs on the live page, not `?test=1`** — test mode stops the
+  rAF loop, which is the thing being tested. Headless Chromium never truly
+  hides a page, so `holdRafWhileHidden()` models what a real hidden page does:
+  it HOLDS a queued rAF callback and runs it on return. That hold is exactly
+  what made the extra chains.
+- The reload probe waits ~0.7s of real time, since that timer is wall-clock.
 
 ### Deploy preflight
 

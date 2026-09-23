@@ -20,7 +20,7 @@
  *
  *   node tools/check.js                 # both (preflight informational)
  *   node tools/check.js --deploy        # both, preflight FAILS if unbumped
- *   node tools/check.js --only=boards   # or --only=preflight
+ *   node tools/check.js --only=boards   # or --only=preflight / regressions
  *   node tools/check.js --update        # regenerate the board goldens
  *   node tools/check.js --base=main     # preflight baseline (default origin/main)
  *
@@ -331,6 +331,146 @@ async function boards() {
 }
 
 // ===========================================================================
+// Regressions — one probe per bug that was fixed, run against the real game
+// ===========================================================================
+//
+// Each of these was found by a review (2026-09-23) and reproduced in exactly
+// this form before it was fixed, so each probe FAILS on the old code. They are
+// behavioural, not source greps: a probe that only checked a line of code
+// would pass again the moment someone rewrote the fix in a different shape.
+
+// A hidden page HOLDS its queued rAF callbacks and runs them on return, rather
+// than dropping them. Headless Chromium never really hides, so model that:
+// a callback that fires while "hidden" parks itself until the page is shown.
+function holdRafWhileHidden() {
+  const real = window.requestAnimationFrame.bind(window);
+  window.__hidden = false; window.__held = []; window.__loopTs = [];
+  window.requestAnimationFrame = cb => real(function wrapped(ts) {
+    if (window.__hidden) { window.__held.push(wrapped); return; }
+    if (cb.name === 'loop') window.__loopTs.push(ts);
+    cb(ts);
+  });
+  Object.defineProperty(document, 'hidden', { get: () => window.__hidden });
+  window.__setHidden = h => {
+    window.__hidden = h;
+    document.dispatchEvent(new Event('visibilitychange'));
+    if (!h) { const q = window.__held; window.__held = []; q.forEach(f => real(f)); }
+  };
+}
+
+async function regressions(browser) {
+  console.log('\n[regressions]');
+
+  // --- 1..3 run in test mode --------------------------------------------
+  const page = await browser.newPage();
+  const errs = [];
+  page.on('pageerror', e => errs.push(String(e)));
+  await page.goto(`${URL}/?test=1`, { waitUntil: 'networkidle' });
+  await page.waitForFunction(() => window.TT, { timeout: 15000 });
+
+  // A score NAME is text. A backup code can carry any name (its checksum is a
+  // typo check, not a signature), and both score lists build HTML strings.
+  const xss = await page.evaluate(async () => {
+    await TT.start('hawaii', { seed: 1 });
+    const name = '<img src=x onerror="window.__pwned=1">';
+    const key = currentScoreKey();
+    const had = localStorage.getItem(key);
+    localStorage.setItem(key, JSON.stringify([{ name, score: 5 }]));
+    const shown = [];
+    showScorePanel(state);
+    shown.push(document.querySelector('#sp-list .sr-name').textContent);
+    hideScorePanel();
+    showGameOver(state, key);
+    shown.push(document.querySelector('#finalScore .sr-name').textContent);
+    document.getElementById('over').style.display = 'none';
+    if (had === null) localStorage.removeItem(key); else localStorage.setItem(key, had);
+    await new Promise(r => setTimeout(r, 200));   // give an injected onerror time to fire
+    return { ran: !!window.__pwned, literal: shown.every(t => t === name) };
+  });
+  if (!xss.ran && xss.literal) pass('a score name renders as text, not markup');
+  else fail(`score name rendered as markup (script ran: ${xss.ran}, shown literally: ${xss.literal})`);
+
+  // receipt-stack is a CAPSULE, so a merge that grows one in must re-lock its
+  // inertia like any other capsule. Kyoto and Napoli are the maps whose own
+  // tier 3 is a circle, which is where asking ITEMS[tier] got it wrong.
+  for (const map of ['kyoto', 'pizza']) {
+    const r = await page.evaluate(async map => {
+      await TT.start(map, { seed: 1, happyHour: true });
+      const t = 2, R = RECEIPT_ITEMS[t].physR;
+      TT.spawn(t, 200, 300, 'receipt'); TT.spawn(t, 200 + R * 0.5, 300, 'receipt');
+      TT.step(30);
+      const d = state.drinks.find(d => d.plugin.kind === 'receipt' && d.plugin.tier === 3);
+      if (!d) return null;
+      // Knock it off-centre, hard enough that an unlocked body visibly turns.
+      const s = makeDrink(d.position.x - 80, d.position.y - 12, 0);
+      Body.setVelocity(s, { x: 12, y: 0 });
+      TT.step(90);
+      return { locked: !isFinite(d.inertia), deg: Math.abs(d.angle - (RECEIPT_ITEMS[3].cap.rot || 0)) * 180 / Math.PI };
+    }, map);
+    if (!r) fail(`${map}: the two receipts did not merge into a receipt stack`);
+    else if (r.locked && r.deg < 0.5) pass(`${map}: a grown-in receipt stack stays locked upright`);
+    else fail(`${map}: receipt stack turned ${r.deg.toFixed(1)} deg (inertia locked: ${r.locked})`);
+  }
+
+  // The classic 500ms reload belongs to the run that fired it. "Play again"
+  // inside that window must not roll the NEW run's queue on.
+  const reload = await page.evaluate(async () => {
+    await TT.start('kyoto', { seed: 7 });
+    fireShot(state, 0, -1);
+    resetState();                                  // what "Play again" does
+    const before = [state.nextTier, state.queuedTier];
+    await new Promise(r => setTimeout(r, 700));
+    return { before, after: [state.nextTier, state.queuedTier] };
+  });
+  if (JSON.stringify(reload.before) === JSON.stringify(reload.after)) {
+    pass('a reload timer from the last run leaves the new run\'s queue alone');
+  } else {
+    fail(`the last run's reload rolled the new queue ${JSON.stringify(reload.before)} -> ` +
+         JSON.stringify(reload.after));
+  }
+  await page.close();
+
+  // --- 4: the live loop, so NOT test mode ----------------------------------
+  // Every trip to the background used to add a render-loop chain. Count loop
+  // calls per frame timestamp after three trips: one chain means one call.
+  const live = await browser.newPage();
+  live.on('pageerror', e => errs.push(String(e)));
+  await live.addInitScript(holdRafWhileHidden);
+  await live.goto(`${URL}/`, { waitUntil: 'networkidle' });
+  await live.waitForFunction(() => typeof launchMap === 'function');
+  const chains = await live.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    launchMap(MAPS.find(m => m.id === 'kyoto'), null);
+    await wait(200);
+    for (let i = 0; i < 3; i++) { window.__setHidden(true); await wait(80); window.__setHidden(false); await wait(80); }
+    window.__loopTs = [];
+    await wait(400);
+    const per = {};
+    for (const ts of window.__loopTs) per[ts] = (per[ts] || 0) + 1;
+    returnToMenu();
+    return { frames: Object.keys(per).length, most: Math.max(0, ...Object.values(per)) };
+  });
+  await live.close();
+  if (chains.frames && chains.most === 1) pass('backgrounding three times leaves one render loop');
+  else fail(`after three trips to the background: ${chains.most} loop calls per frame ` +
+            `(${chains.frames} frames sampled)`);
+
+  if (errs.length) fail(`page errors during the regressions:\n        ${errs.join('\n        ')}`);
+}
+
+async function withBrowser(fn) {
+  let chromium;
+  try { ({ chromium } = require('playwright')); }
+  catch {
+    console.error('playwright not found. NODE_PATH should point at ~/.cache/mm-dev/' +
+                  'node_modules (see .claude/hooks/session-start.sh).');
+    process.exit(2);
+  }
+  const browser = await chromium.launch({ executablePath: CHROME });
+  try { await fn(browser); } finally { await browser.close(); }
+}
+
+// ===========================================================================
 
 (async () => {
   const t0 = Date.now();
@@ -338,6 +478,7 @@ async function boards() {
     preflight();
   }
   if (ONLY === 'all' || ONLY === 'boards') await boards();
+  if (!UPDATE && (ONLY === 'all' || ONLY === 'regressions')) await withBrowser(regressions);
   console.log(`\n${failures ? failures + ' FAILED' : 'all checks passed'}` +
               `  (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
   process.exit(failures ? 1 : 0);

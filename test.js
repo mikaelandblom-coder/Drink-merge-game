@@ -84,7 +84,7 @@ if (/[?&]test\b/.test(location.search)) {
     // seed-after-start.
     if (opts.seed !== undefined) installSeed(opts.seed);
     startGame(map, opts);
-    running = false;                    // TT.step drives frames, not rAF
+    stopLoop();                         // TT.step drives frames, not rAF
     if (bgmEl) bgmEl.pause();
     return TT.ready();
   };
@@ -115,8 +115,8 @@ if (/[?&]test\b/.test(location.search)) {
   // Toggle the real rAF loop back on/off (to watch live in a visible pane).
   // While live, wall time and TT.step both move the clock — don't mix.
   TT.live = function (on) {
-    if (on && !running) { running = true; lastTs = 0; idleFrames = 0; requestAnimationFrame(loop); }
-    if (!on) running = false;
+    if (on && !running) startLoop();
+    if (!on) stopLoop();
     return 'live=' + !!on;
   };
 
