@@ -1,5 +1,23 @@
 // All canvas drawing. Depends on: ctx, W, H, ITEMS, persp, ACTIVE_MAP.
 
+// ctx.roundRect is iOS/iPadOS 16+. On 15 — where the iPad Air 2 and mini 4 are
+// stuck — calling it throws partway through render(), after the drinks but
+// before the HUD, and updateCoins never runs: no coin ever reaches the bag, so
+// the score stays at 0 for the whole run. This covers the one form the game
+// uses (a single corner radius) and is a no-op everywhere roundRect exists.
+if (typeof CanvasRenderingContext2D !== 'undefined' &&
+    !CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+    r = Math.max(0, Math.min(+r || 0, Math.abs(w) / 2, Math.abs(h) / 2));
+    this.moveTo(x + r, y);
+    this.arcTo(x + w, y, x + w, y + h, r);
+    this.arcTo(x + w, y + h, x, y + h, r);
+    this.arcTo(x, y + h, x, y, r);
+    this.arcTo(x, y, x + w, y, r);
+    this.closePath();
+  };
+}
+
 // No src here on purpose: loadMapAssets() sets it per map (a map may override
 // either with its own art), so fetching the shared pair at parse time cost
 // 1.3MB on the MENU screen — where neither is drawn — and was then immediately
@@ -137,9 +155,10 @@ function drawLauncher(sl, tilt, charge) {
 // ---------- rapid fire launcher readout ----------
 // Both halves are load-bearing rather than decorative. The aim line is STANDING
 // STATE in rapid — there is no press to reveal it, so it has to be on screen at
-// all times or the player is steering blind. And the ring is the only warning
-// of when the shot leaves: without it the cadence reads as random, which makes
-// the mode feel unfair rather than fast.
+// all times or the player is steering blind. And the charge (the spring winding
+// down, plus this line brightening) is the only warning of when the shot
+// leaves: without it the cadence reads as random, which makes the mode feel
+// unfair rather than fast.
 const RF_REACH = 140;   // world px of drawn aim line
 
 function drawRapidAim(sl, tilt, lift = 0, charge = 0) {

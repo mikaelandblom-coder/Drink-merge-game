@@ -85,7 +85,13 @@ function saveScore(key, score, name = 'you') {
   list.push(entry);
   list.sort((a, b) => b.score - a.score);
   const trimmed = list.slice(0, SCORE_MAX);
-  localStorage.setItem(key, JSON.stringify(trimmed));
+  // Guarded like every other write in the game: this one runs INSIDE the
+  // game-over path, so a full or blocked storage throwing here used to stop
+  // the results overlay from ever appearing. The run still shows its score and
+  // rank; it just isn't remembered.
+  try { localStorage.setItem(key, JSON.stringify(trimmed)); } catch {}
+  // The IndexedDB safety copy carries the boards too (progress.js).
+  if (typeof Progress !== 'undefined') Progress.mirrorSoon();
   const idx = trimmed.indexOf(entry);
   return { rank: idx + 1, inTop: idx !== -1 };
 }

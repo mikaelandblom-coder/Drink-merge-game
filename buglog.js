@@ -63,6 +63,9 @@ const BUGLOG = (() => {
         size: ACTIVE_SIZE || undefined,
         combos: COMBOS_ENABLED || undefined,
         happyHour: HAPPY_HOUR || undefined,
+        // Rapid changes WHEN shots happen and the game-over rule, so a report
+        // without it replays as classic and cannot show the bug.
+        rapid: RAPID_FIRE || undefined,
         date: new Date().toISOString().slice(0, 16),
       };
       shots = []; events = [];

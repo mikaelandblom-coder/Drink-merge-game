@@ -208,6 +208,7 @@ if (/[?&]test\b/.test(location.search)) {
       size: p.meta.size,                      // the ready() promise is ignored
       combos: !!p.meta.combos,
       happyHour: !!p.meta.happyHour,
+      rapid: !!p.meta.rapid,
     });
     for (const b of s.board) {
       const d = makeDrink(b[3], b[4], b[0], false, false, b[1] ? 'receipt' : 'drink');

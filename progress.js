@@ -16,6 +16,10 @@
 //   - mm_xp_v1 in localStorage is the source of truth (one versioned JSON blob).
 //   - Mirrored to IndexedDB (some "clear data" paths / eviction heuristics hit
 //     the two stores differently); on startup the richer copy wins per map.
+//     The high-score boards (mm_s_*) ride in the same mirror and come back by
+//     the same union merge a backup code uses — they used to live in
+//     localStorage alone, so the one loss the mirror exists for took every
+//     board with it.
 //   - navigator.storage.persist() asks the browser to exempt us from eviction.
 //   - Backup codes (MM1.<checksum>.<base64url JSON>) carry XP + high scores
 //     between devices; import merges by MAX so a stale code never erases
@@ -62,7 +66,21 @@ const Progress = (() => {
     });
   }
   const idbRead  = () => idbStore('readonly',  s => s.get(XP_KEY));
-  const idbWrite = () => idbStore('readwrite', s => s.put(JSON.parse(JSON.stringify(data)), XP_KEY)) .catch(() => {});
+  // Every mm_s_* board, read fresh from localStorage at write time.
+  function scoreBoards() {
+    const out = {};
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('mm_s_')) {
+          try { out[k] = JSON.parse(localStorage.getItem(k)); } catch {}
+        }
+      }
+    } catch {}
+    return out;
+  }
+  const idbWrite = () => idbStore('readwrite',
+    s => s.put(JSON.parse(JSON.stringify({ ...data, scores: scoreBoards() })), XP_KEY)).catch(() => {});
 
   // Throttle the mirror: localStorage gets every write (cheap, synchronous);
   // IndexedDB follows at most once per few seconds and on pagehide.
@@ -87,6 +105,7 @@ const Progress = (() => {
       const n = Math.max(0, Math.floor(+v || 0));
       if (n > (data.maps[id] || 0)) { data.maps[id] = n; adopted = true; }
     }
+    if (mergeBoards(mirror.scores)) adopted = true;
     if (adopted) {
       save();
       if (P.onChange) P.onChange();  // welcome.js refreshes visible badges
@@ -115,8 +134,36 @@ const Progress = (() => {
     return h.toString(36).padStart(7, '0').slice(-7);
   }
 
+  // Union a set of score boards into localStorage — shared by the mirror
+  // recovery and backup-code import, so the two can never disagree about what
+  // "merging a board" means. Only ever ADDS entries. Returns boards changed.
+  function mergeBoards(boards) {
+    let boardsUp = 0;
+    for (const [k, list] of Object.entries(boards || {})) {
+      if (!k.startsWith('mm_s_') || !Array.isArray(list)) continue;
+      const cur = getScores(k);
+      const seen = new Set(cur.map(e => e.name + '|' + e.score));
+      let changed = false;
+      for (let e of list) {
+        if (typeof e === 'number') e = { name: 'you', score: e };
+        if (!e || typeof e.score !== 'number') continue;
+        const id = e.name + '|' + e.score;
+        if (!seen.has(id)) { cur.push({ name: String(e.name), score: e.score }); seen.add(id); changed = true; }
+      }
+      if (changed && P.persistEnabled) {
+        cur.sort((a, b) => b.score - a.score);
+        try { localStorage.setItem(k, JSON.stringify(cur.slice(0, SCORE_MAX))); boardsUp++; } catch {}
+      }
+    }
+    return boardsUp;
+  }
+
   const P = {
     persistEnabled: true,
+
+    // A board changed outside progress.js (saveScore at game over): refresh
+    // the IndexedDB copy on the usual throttle.
+    mirrorSoon() { if (P.persistEnabled) scheduleMirror(); },
     onChange: null,       // fired when async recovery/import changes the data
     _data: data,          // live reference for test.js (?test=1) to blank out
 
@@ -166,27 +213,12 @@ const Progress = (() => {
       try { payload = JSON.parse(b64urlDecode(m[2])); }
       catch { throw new Error('Code got damaged in transit — copy and paste it again.'); }
 
-      let mapsUp = 0, boardsUp = 0;
+      let mapsUp = 0;
       for (const [id, v] of Object.entries(payload.xp || {})) {
         const n = Math.max(0, Math.floor(+v || 0));
         if (n > (data.maps[id] || 0)) { data.maps[id] = n; mapsUp++; }
       }
-      for (const [k, list] of Object.entries(payload.scores || {})) {
-        if (!k.startsWith('mm_s_') || !Array.isArray(list)) continue;
-        const cur = getScores(k);
-        const seen = new Set(cur.map(e => e.name + '|' + e.score));
-        let changed = false;
-        for (let e of list) {
-          if (typeof e === 'number') e = { name: 'you', score: e };
-          if (!e || typeof e.score !== 'number') continue;
-          const id = e.name + '|' + e.score;
-          if (!seen.has(id)) { cur.push({ name: String(e.name), score: e.score }); seen.add(id); changed = true; }
-        }
-        if (changed && P.persistEnabled) {
-          cur.sort((a, b) => b.score - a.score);
-          try { localStorage.setItem(k, JSON.stringify(cur.slice(0, SCORE_MAX))); boardsUp++; } catch {}
-        }
-      }
+      const boardsUp = mergeBoards(payload.scores);
       save();
       if (P.onChange) P.onChange();
       return { mapsUp, boardsUp };

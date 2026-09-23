@@ -467,7 +467,7 @@ node tools/check.js --only=boards    # or --only=preflight / --only=regressions
 node tools/check.js --update         # regenerate the board goldens
 ```
 
-Runs in ~13s and exits non-zero on failure, so it can gate a commit or a deploy.
+Runs in ~20s and exits non-zero on failure, so it can gate a commit or a deploy.
 
 ### Board digests
 
@@ -506,10 +506,19 @@ are 60 live score variants. The risk is never "does the new thing work", it is
 ### Regressions
 
 One behavioural probe per fixed bug, each confirmed to FAIL on the code before
-its fix (2026-09-23 review): a score name from a backup code renders as text,
-not markup; a receipt stack grown in by a merge stays inertia-locked on Kyoto
-and Napoli; the classic 500ms reload cannot roll the next run's queue after
-"Play again"; and three trips to the background still leave ONE render loop.
+its fix (all from the 2026-09-23 review):
+
+- a score name from a backup code renders as text, not markup;
+- a receipt stack grown in by a merge stays inertia-locked (Kyoto, Napoli);
+- the classic 500ms reload cannot roll the next run's queue after "Play again";
+- Continue after quitting MID-reload deals the next drink, not the fired one;
+- a bug report from a rapid run records `rapid`;
+- with no `ctx.roundRect` (iPadOS 15) the frame finishes and coins still land;
+- three trips to the background still leave ONE render loop;
+- `saveScore` survives a storage that refuses writes;
+- a score board lost from localStorage comes back from the IndexedDB mirror;
+- a cached map's assets are not refetched in the background on every hit;
+- a half-failed service-worker UPDATE is rejected and the old offline copy kept.
 
 - **Probe behaviour, never source.** A grep for the fixed line would pass again
   the moment someone rewrote the fix in another shape.
@@ -519,6 +528,20 @@ and Napoli; the classic 500ms reload cannot roll the next run's queue after
   it HOLDS a queued rAF callback and runs it on return. That hold is exactly
   what made the extra chains.
 - The reload probe waits ~0.7s of real time, since that timer is wall-clock.
+- **The offline probes need their own browser context** (a worker outlives the
+  page that registered it) and `?offline=1`, since the worker is off on the dev
+  server otherwise. The update probe aborts `style.css` with `ctx.route` to
+  make the new worker's precache half-fail.
+- Probes that write storage (the mirror, the parked run) run in Playwright's
+  fresh profile, so they can never touch a real board.
+
+### In CI
+
+`.github/workflows/check.yml` runs `node tools/check.js` on every PR and every
+push to `main`, against a `serve.py` started in the job. With no
+`/opt/pw-browsers/chromium` there, `check.js` lets Playwright launch the
+Chromium the workflow installed. The preflight stays advisory (no `--deploy`),
+because ordinary PRs are expected to sit unbumped.
 
 ### Deploy preflight
 

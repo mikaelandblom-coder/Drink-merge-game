@@ -33,7 +33,11 @@ const path = require('path');
 const fs   = require('fs');
 const { execFileSync } = require('child_process');
 
-const CHROME = process.env.MM_CHROME || '/opt/pw-browsers/chromium';
+// The cloud container's browser, if this is one; otherwise undefined, which
+// lets Playwright launch the Chromium it installed itself (CI does that —
+// .github/workflows/check.yml).
+const CHROME = process.env.MM_CHROME ||
+  (fs.existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined);
 const ROOT   = path.join(__dirname, '..');
 const GOLDEN = path.join(__dirname, 'golden', 'board-digests.json');
 
@@ -428,7 +432,55 @@ async function regressions(browser) {
     fail(`the last run's reload rolled the new queue ${JSON.stringify(reload.before)} -> ` +
          JSON.stringify(reload.after));
   }
+  // Parked MID-RELOAD (the cradle empty, nextTier still naming the drink just
+  // fired): Continue must deal what was coming next, not the same drink again.
+  const parked = await page.evaluate(async () => {
+    await TT.start('kyoto', { seed: 3 });
+    const fired = state.nextTier, coming = state.queuedTier;
+    fireShot(state, 0, -1);                        // classic: 500ms reload starts
+    SUSPEND.persistEnabled = true;                 // test mode stubs it; one save
+    SUSPEND.save();
+    const p = SUSPEND.load('kyoto');
+    await TT.start('kyoto', { resume: p });
+    SUSPEND.persistEnabled = false;
+    return { fired, coming, dealt: state.nextTier, canShoot: state.canShoot };
+  });
+  if (parked.dealt === parked.coming && parked.canShoot) {
+    pass('Continue after quitting mid-reload deals the next drink, not the fired one');
+  } else {
+    fail(`Continue mid-reload dealt tier ${parked.dealt}; fired ${parked.fired}, ` +
+         `next was ${parked.coming}`);
+  }
+
+  // A bug report from a rapid run must replay AS rapid.
+  const rapidMeta = await page.evaluate(async () => {
+    await TT.start('hawaii', { seed: 1, rapid: true });
+    TT.step(200);
+    return !!BUGLOG.decode(BUGLOG.code()).meta.rapid;
+  });
+  if (rapidMeta) pass('a bug report records rapid fire');
+  else fail('a bug report from a rapid run does not say it was rapid');
   await page.close();
+
+  // No ctx.roundRect (iOS/iPadOS 15): the frame must still finish, or coins
+  // never land and the score sticks at 0.
+  const old = await browser.newPage();
+  old.on('pageerror', e => errs.push('[no roundRect] ' + String(e)));
+  await old.addInitScript(() => { delete CanvasRenderingContext2D.prototype.roundRect; });
+  await old.goto(`${URL}/?test=1`, { waitUntil: 'networkidle' });
+  await old.waitForFunction(() => window.TT, { timeout: 15000 });
+  // TT.step runs render() synchronously, so on the old code the throw lands
+  // here rather than in pageerror — report it as a failure, don't crash.
+  const noRR = await old.evaluate(async () => {
+    await TT.start('hawaii', { seed: 1 });
+    const R = ITEMS[0].physR;
+    TT.spawn(0, 200, 300); TT.spawn(0, 200 + R * 0.5, 300);   // one merge -> coins
+    TT.step(240);
+    return state.coinCount;
+  }).catch(e => String(e).split('\n')[0]);
+  await old.close();
+  if (noRR > 0) pass('without ctx.roundRect the HUD draws and coins still land');
+  else fail(`without ctx.roundRect the frame failed or no coin landed (${noRR})`);
 
   // --- 4: the live loop, so NOT test mode ----------------------------------
   // Every trip to the background used to add a render-loop chain. Count loop
@@ -450,12 +502,90 @@ async function regressions(browser) {
     returnToMenu();
     return { frames: Object.keys(per).length, most: Math.max(0, ...Object.values(per)) };
   });
-  await live.close();
   if (chains.frames && chains.most === 1) pass('backgrounding three times leaves one render loop');
   else fail(`after three trips to the background: ${chains.most} loop calls per frame ` +
             `(${chains.frames} frames sampled)`);
 
+  // A full or blocked localStorage must not throw out of the game-over save.
+  const quota = await live.evaluate(() => {
+    const real = Storage.prototype.setItem;
+    Storage.prototype.setItem = () => { throw new DOMException('full', 'QuotaExceededError'); };
+    try { saveScore('mm_s_probe', 5); return null; }
+    catch (e) { return String(e); }
+    finally { Storage.prototype.setItem = real; }
+  });
+  if (quota === null) pass('saveScore survives a storage that refuses writes');
+  else fail(`saveScore threw with storage full: ${quota}`);
+
+  // High scores ride in the IndexedDB mirror and come back when localStorage
+  // loses them. (Fresh browser profile — nothing real is touched.)
+  await live.evaluate(() => {
+    saveScore('mm_s_hawaii', 4321);
+    dispatchEvent(new Event('pagehide'));          // flushes the mirror now
+  });
+  await live.waitForTimeout(400);
+  await live.evaluate(() => localStorage.removeItem('mm_s_hawaii'));
+  await live.reload({ waitUntil: 'networkidle' });
+  await live.waitForTimeout(400);                  // the async recovery
+  const restored = await live.evaluate(() => getScores('mm_s_hawaii').map(e => e.score));
+  await live.close();
+  if (restored.includes(4321)) pass('a score board lost from localStorage comes back from IndexedDB');
+  else fail(`score board not restored from the IndexedDB mirror (got ${JSON.stringify(restored)})`);
+
+  await offlineProbes(browser, errs);
+
   if (errs.length) fail(`page errors during the regressions:\n        ${errs.join('\n        ')}`);
+}
+
+// The service worker only registers on the dev server with ?offline=1, and it
+// needs a context of its own: a worker outlives the page that registered it.
+async function offlineProbes(browser, errs) {
+  const ctx  = await browser.newContext();
+  const page = await ctx.newPage();
+  page.on('pageerror', e => errs.push('[offline] ' + String(e)));
+  const fromSW = [];
+  ctx.on('request', r => {
+    if (r.serviceWorker() && r.url().includes('/assets/')) fromSW.push(r.url());
+  });
+  const start = async () => {
+    await page.evaluate(() => launchMap(MAPS.find(m => m.id === 'kyoto'), null));
+    await page.waitForTimeout(1200);
+    await page.evaluate(() => returnToMenu());
+  };
+
+  await page.goto(`${URL}/?offline=1`, { waitUntil: 'networkidle' });
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.reload({ waitUntil: 'networkidle' });          // now controlled
+  await start();                                           // fills the asset cache
+  await page.reload({ waitUntil: 'networkidle' });
+  fromSW.length = 0;
+  await start();                                           // everything is cached now
+  if (!fromSW.length) pass('a cached map is served without refetching its assets');
+  else fail(`a cached map refetched ${fromSW.length} asset(s) in the background, e.g. ` +
+            fromSW[0].replace(URL, ''));
+
+  // An UPDATE whose shell precache half-fails must not go live: the previous
+  // worker and its complete shell cache stay.
+  await ctx.route(/\/style\.css/, r => r.abort());
+  const upd = await page.evaluate(async () => {
+    const reg = await navigator.serviceWorker.register('sw.js?v=probe-update');
+    const w = reg.installing || reg.waiting || reg.active;
+    await new Promise(res => {
+      if (!w || w.state === 'redundant' || w.state === 'activated') return res();
+      w.addEventListener('statechange', () => {
+        if (w.state === 'redundant' || w.state === 'activated') res();
+      });
+    });
+    return { state: w && w.state, caches: await caches.keys() };
+  });
+  await ctx.unroute(/\/style\.css/);
+  const keptOld = upd.caches.some(n => n.startsWith('mm-shell-') && n !== 'mm-shell-probe-update');
+  if (upd.state === 'redundant' && keptOld && !upd.caches.includes('mm-shell-probe-update')) {
+    pass('a half-failed shell update is rejected and the previous offline copy kept');
+  } else {
+    fail(`half-failed update: worker ${upd.state}, caches ${JSON.stringify(upd.caches)}`);
+  }
+  await ctx.close();
 }
 
 async function withBrowser(fn) {

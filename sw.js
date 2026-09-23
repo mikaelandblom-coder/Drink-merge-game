@@ -60,9 +60,11 @@ self.addEventListener('install', e => {
 async function precacheShell() {
   const cache = await caches.open(SHELL);
   const urls  = new Set(['./', './index.html']);
+  let scraped = false;
   try {
     const res  = await fetch('./index.html', { cache: 'reload' });
     if (res.ok) {
+      scraped = true;
       const html = await res.clone().text();
       await cache.put('./index.html', res.clone());
       await cache.put('./', res.clone());
@@ -78,11 +80,25 @@ async function precacheShell() {
   for (const u of EXTRA_SHELL) urls.add(u);
   urls.delete('./');            // already put above, and addAll would refetch it
   urls.delete('./index.html');
-  // One at a time, each failure swallowed: addAll is all-or-nothing, and ONE
-  // 404 would leave the whole install with no shell at all.
-  await Promise.all([...urls].map(u =>
-    cache.add(u).catch(() => {})
-  ));
+  // One at a time, so the failures can be COUNTED rather than one of them
+  // aborting the lot the way addAll would.
+  const failed = (await Promise.all([...urls].map(u =>
+    cache.add(u).then(() => false, () => true)
+  ))).filter(Boolean).length + (scraped ? 0 : 1);
+  if (!failed) return;
+  // What a failure means depends on whether there is a build to fall back on.
+  // A FIRST install has nothing to lose, so a partial shell is kept — it is
+  // better than none, and every later online load tops it up (freshFirst puts
+  // what it fetches). But an UPDATE that half-failed must not go live: activate
+  // deletes the previous shell cache, which was complete, and a flaky
+  // connection at deploy time would then have traded a working offline copy
+  // for a broken one. Failing the install keeps the old worker and its cache;
+  // the browser retries the update on a later visit.
+  const older = (await caches.keys()).some(n => n.startsWith('mm-shell-') && n !== SHELL);
+  if (older) {
+    await caches.delete(SHELL);
+    throw new Error('shell precache incomplete (' + failed + ' failed) — keeping the previous build');
+  }
 }
 
 // --------------------------------------------------------------- activate --
@@ -146,9 +162,13 @@ async function freshFirst(req) {
 // with a quiet refresh in the background while there IS a network.
 async function assetFirst(req) {
   const range = req.headers.get('range');
-  const hit   = await caches.match(req);
+  // The asset cache FIRST: the menu chrome also sits in the shell cache (the
+  // install precaches it, unstamped), and a plain caches.match would keep
+  // finding that copy — so its x-mm-checked stamp never showed, and it was
+  // re-downloaded on every single hit.
+  const hit   = await (await caches.open(ASSETS)).match(req) || await caches.match(req);
   if (hit) {
-    if (self.navigator.onLine !== false) revalidate(req);
+    if (self.navigator.onLine !== false && dueForCheck(req.url, hit)) revalidate(req);
     return range ? sliceRange(hit, range) : hit;
   }
   try {
@@ -157,7 +177,7 @@ async function assetFirst(req) {
     // body must never become the cached copy of a whole file anyway. That is
     // why the menu's download button fetches without a Range header.
     if (res && res.ok && res.status === 200) {
-      const copy = res.clone();
+      const copy = stamped(res.clone());   // just fetched = just checked
       caches.open(ASSETS).then(c => c.put(req.url, copy)).catch(() => {});
     }
     return res;
@@ -168,14 +188,41 @@ async function assetFirst(req) {
   }
 }
 
+// How often a cached asset is checked against the network. The refresh used to
+// run on EVERY cache hit, so a cached copy never saved a request — and Safari
+// asks for a track in many ranged pieces (and again as it loops), each of which
+// set off a download of the WHOLE 3-8 MB file. Art regenerated in place still
+// lands, just within a day instead of one visit behind.
+const RECHECK_MS = 12 * 60 * 60 * 1000;
+// URLs already being (or already) checked by this worker — collapses the burst
+// of concurrent ranged hits a single <audio> start makes into one refresh.
+const checking = new Set();
+
+// The last check is stamped ON the cached response (x-mm-checked), so it
+// survives the worker being stopped and restarted, which happens constantly.
+// Entries saved by the offline panel carry no stamp and get checked once.
+function dueForCheck(url, hit) {
+  if (checking.has(url)) return false;
+  const at = +hit.headers.get('x-mm-checked') || 0;
+  return Date.now() - at > RECHECK_MS;
+}
+
 // Fire-and-forget refresh. Fetched by URL (not the original Request) so a
 // media element's Range header can't turn this into an uncacheable 206.
 function revalidate(req) {
-  fetch(req.url).then(res => {
-    if (res && res.ok && res.status === 200) {
-      return caches.open(ASSETS).then(c => c.put(req.url, res));
-    }
-  }).catch(() => {});
+  const url = req.url;
+  checking.add(url);
+  fetch(url).then(res => {
+    if (res && res.ok && res.status === 200) return caches.open(ASSETS).then(c => c.put(url, stamped(res)));
+  }).catch(() => {}).finally(() => checking.delete(url));
+}
+
+// Same response, plus the time it was checked. Content-Length and the rest are
+// kept: offline.js reads sizes off these headers without touching the body.
+function stamped(res) {
+  const h = new Headers(res.headers);
+  h.set('x-mm-checked', String(Date.now()));
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h });
 }
 
 // Serve a byte range out of a full cached response — see the header note.

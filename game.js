@@ -556,9 +556,13 @@ function updateHappyHour() {
 Events.on(engine, 'collisionStart', ev => {
   for (const pair of ev.pairs) {
     const a = pair.bodyA, b = pair.bodyB;
-    if (!a.plugin || !b.plugin) continue;
+    // Every pair clinks, walls included — Matter gives EVERY body a `plugin`
+    // object, so the old `!a.plugin` guard here never skipped anything, and a
+    // drink hitting the boundary has always made its sound. Only items (which
+    // carry a kind) can merge.
     const rvx = a.velocity.x - b.velocity.x, rvy = a.velocity.y - b.velocity.y;
     clink(Math.hypot(rvx, rvy));
+    if (!a.plugin.kind || !b.plugin.kind) continue;
     if (a.plugin.merging || b.plugin.merging) continue;
     // Merges only happen within a kind: the map's drink chain and Happy Hour's
     // receipt chain run in parallel without ever merging into each other.
@@ -803,8 +807,8 @@ let idleFrames = 0;
 function wakeRender() { idleFrames = 0; }
 function sceneBusy() {
   if (showXray) return true;   // keep the diagnostic live while a settled board idles
-  // Rapid fire is never idle by construction: the charge ring is always filling
-  // and the cannon is always steerable, so the idle-frame skip must not park the
+  // Rapid fire is never idle by construction: the launcher's spring is always
+  // winding toward the next shot and the cannon is always steerable, so the idle-frame skip must not park the
   // loop between shots. It costs nothing in practice — the longest gap the mode
   // ever has is RF_CADENCE_START, and a shot is in flight for most of it.
   if (RAPID_FIRE && !state.gameOver) return true;

@@ -59,6 +59,11 @@ const SUSPEND = (() => {
         score: state.coinCount + state.coins.length * 10,
         next: state.nextTier,
         queued: state.queuedTier,
+        // Parked mid-reload: the cradle is empty and nextTier still names the
+        // drink that was JUST fired (the reload is what rolls it on). Saving
+        // that bare would deal the same drink again on Continue, so record the
+        // reload instead and let apply() finish it.
+        reload: state.canShoot ? undefined : 1,
         launchX: r1(LAUNCH.x),
         xp: state.runXp,
         board: state.drinks.map(BUGLOG.snapDrink),
@@ -135,6 +140,7 @@ const SUSPEND = (() => {
       state.beatBest   = state.coinCount > state.bestToBeat;
       state.nextTier   = p.next;
       state.queuedTier = p.queued;
+      if (p.reload) rollNext();   // the roll the interrupted reload would have made
       state.runXp      = p.xp || 0;
       if (p.launchX !== undefined) LAUNCH.x = p.launchX;
       if (RAPID_FIRE) {
